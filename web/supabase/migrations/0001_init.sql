@@ -1,5 +1,10 @@
 -- Trade Intelligence: initial schema.
 -- Run in the Supabase SQL editor, or via `supabase db push` once linked.
+--
+-- Safe to re-run. Postgres has no CREATE POLICY IF NOT EXISTS, so every
+-- policy is dropped first; without that, a second run fails with
+-- 'policy "..." already exists' partway through and leaves you guessing how
+-- much of it applied.
 
 -- ---------------------------------------------------------------------------
 -- profiles: one row per auth.users row, carries the app-level role.
@@ -11,6 +16,15 @@ create table if not exists public.profiles (
   role text not null default 'user' check (role in ('user', 'admin')),
   created_at timestamptz not null default now()
 );
+
+-- A profiles table may already exist from a Supabase starter template or an
+-- earlier attempt, in which case the create above was skipped and its columns
+-- are whatever that other setup made them. Add the ones this app relies on.
+alter table public.profiles
+  add column if not exists email text,
+  add column if not exists full_name text,
+  add column if not exists role text not null default 'user',
+  add column if not exists created_at timestamptz not null default now();
 
 alter table public.profiles enable row level security;
 
@@ -26,16 +40,20 @@ as $$
   );
 $$;
 
+drop policy if exists "profiles: read own row" on public.profiles;
 create policy "profiles: read own row" on public.profiles
   for select using (auth.uid() = id);
 
+drop policy if exists "profiles: admins read all rows" on public.profiles;
 create policy "profiles: admins read all rows" on public.profiles
   for select using (public.is_admin(auth.uid()));
 
+drop policy if exists "profiles: update own row (not role)" on public.profiles;
 create policy "profiles: update own row (not role)" on public.profiles
   for update using (auth.uid() = id)
   with check (auth.uid() = id and role = (select role from public.profiles where id = auth.uid()));
 
+drop policy if exists "profiles: admins update any row" on public.profiles;
 create policy "profiles: admins update any row" on public.profiles
   for update using (public.is_admin(auth.uid()));
 
@@ -77,6 +95,7 @@ create table if not exists public.app_settings (
 
 alter table public.app_settings enable row level security;
 
+drop policy if exists "app_settings: admins only" on public.app_settings;
 create policy "app_settings: admins only" on public.app_settings
   for all using (public.is_admin(auth.uid())) with check (public.is_admin(auth.uid()));
 
@@ -86,6 +105,9 @@ create policy "app_settings: admins only" on public.app_settings
 -- live BTC/gold signals if the cron job is pointed at this database instead
 -- of (or in addition to) the committed SQLite file. Until then, the
 -- dashboard falls back to demo data (see src/lib/demo-data.ts).
+--
+-- There is deliberately no update policy: a published signal is never
+-- rewritten (FR-SIG-004). 0003 enforces that for every role.
 -- ---------------------------------------------------------------------------
 create table if not exists public.signals (
   id bigint generated always as identity primary key,
@@ -102,14 +124,13 @@ create table if not exists public.signals (
 
 alter table public.signals enable row level security;
 
+drop policy if exists "signals: authenticated users read" on public.signals;
 create policy "signals: authenticated users read" on public.signals
   for select using (auth.role() = 'authenticated');
 
+drop policy if exists "signals: admins write" on public.signals;
 create policy "signals: admins write" on public.signals
   for insert with check (public.is_admin(auth.uid()));
-
-create policy "signals: admins update" on public.signals
-  for update using (public.is_admin(auth.uid()));
 
 create index if not exists signals_symbol_timeframe_idx on public.signals (symbol, timeframe, generated_at desc);
 
