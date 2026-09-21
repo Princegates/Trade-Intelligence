@@ -6,7 +6,16 @@ from datetime import datetime, timezone
 from . import config, quality
 from .ingest import binance, twelvedata
 from .signals import engine
-from .storage import db
+from .storage import db, supabase
+
+
+def _mirror(publish, *args, **kwargs):
+    """Push a record to Supabase. SQLite already holds it, so a mirror failure
+    is reported and shrugged off rather than losing the run (NFR-013)."""
+    try:
+        publish(*args, **kwargs)
+    except Exception as exc:
+        print(f"[warn] not mirrored to Supabase ({exc})")
 
 
 def fetch_candles(instrument, timeframe):
@@ -15,6 +24,11 @@ def fetch_candles(instrument, timeframe):
     if instrument["provider"] == "twelvedata":
         return twelvedata.fetch_klines(instrument["provider_symbol"], timeframe, limit=config.CANDLE_FETCH_LIMIT)
     raise ValueError(f"Unknown provider: {instrument['provider']}")
+
+
+def suppress(symbol, timeframe, now, reason, detail):
+    db.record_suppression(symbol, timeframe, now, reason, detail)
+    _mirror(supabase.publish_suppression, symbol, timeframe, now, reason, detail)
 
 
 def process(instrument, timeframe, now):
@@ -28,16 +42,16 @@ def process(instrument, timeframe, now):
     try:
         candles = fetch_candles(instrument, timeframe)
     except Exception as exc:
-        db.record_suppression(symbol, timeframe, now, "FETCH_FAILED", str(exc))
+        suppress(symbol, timeframe, now, "FETCH_FAILED", str(exc))
         return f"[skip] {symbol}/{timeframe}: fetch failed ({exc})"
 
     if not candles:
-        db.record_suppression(symbol, timeframe, now, "NO_DATA", "provider returned nothing (missing API key?)")
+        suppress(symbol, timeframe, now, "NO_DATA", "provider returned nothing (missing API key?)")
         return f"[skip] {symbol}/{timeframe}: no data (missing API key?)"
 
     problem = quality.first_invalid(candles)
     if problem:
-        db.record_suppression(symbol, timeframe, now, "BAD_CANDLE", problem)
+        suppress(symbol, timeframe, now, "BAD_CANDLE", problem)
         return f"[skip] {symbol}/{timeframe}: rejected feed — {problem}"
 
     db.upsert_candles(symbol, timeframe, candles)
@@ -45,7 +59,7 @@ def process(instrument, timeframe, now):
 
     if len(recent) < config.MIN_CANDLES_FOR_SIGNAL:
         detail = f"{len(recent)} closed candles, need {config.MIN_CANDLES_FOR_SIGNAL}"
-        db.record_suppression(symbol, timeframe, now, "INSUFFICIENT_HISTORY", detail)
+        suppress(symbol, timeframe, now, "INSUFFICIENT_HISTORY", detail)
         return f"[skip] {symbol}/{timeframe}: {detail}"
 
     candle_time, price = recent[-1]
@@ -53,28 +67,28 @@ def process(instrument, timeframe, now):
     if quality.is_stale(candle_time, now, timeframe):
         age = now - candle_time
         detail = f"newest closed candle opened {age}s ago"
-        db.record_suppression(symbol, timeframe, now, "STALE_DATA", detail)
+        suppress(symbol, timeframe, now, "STALE_DATA", detail)
         return f"[skip] {symbol}/{timeframe}: stale feed — {detail}"
 
     result = engine.evaluate([c[1] for c in recent])
     reasoning_text = "; ".join(result["reasoning"])
 
-    stored = db.record_signal(
-        symbol,
-        timeframe,
-        generated_at=now,
-        candle_time=candle_time,
-        price=price,
-        verdict=result["verdict"],
-        score=result["score"],
-        reasoning=reasoning_text,
-        evidence_count=result["evidence_count"],
-        strategy_version=config.STRATEGY_VERSION,
-        confidence=result["confidence"],
-    )
+    signal = {
+        "generated_at": now,
+        "candle_time": candle_time,
+        "price": price,
+        "verdict": result["verdict"],
+        "score": result["score"],
+        "reasoning": reasoning_text,
+        "evidence_count": result["evidence_count"],
+        "strategy_version": config.STRATEGY_VERSION,
+        "confidence": result["confidence"],
+    }
 
-    if not stored:
+    if not db.record_signal(symbol, timeframe, **signal):
         return f"[kept] {symbol}/{timeframe}: candle already called, original signal left untouched"
+
+    _mirror(supabase.publish_signal, symbol, timeframe, **signal)
 
     return f"{symbol}/{timeframe}: {result['verdict']} (score {result['score']:+d}) @ {price} — {reasoning_text}"
 
@@ -82,6 +96,9 @@ def process(instrument, timeframe, now):
 def main():
     db.init_db()
     now = int(datetime.now(timezone.utc).timestamp())
+
+    if not supabase.is_configured():
+        print("[info] SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY unset — writing local SQLite only")
 
     for instrument in config.INSTRUMENTS:
         for timeframe in instrument["timeframes"]:

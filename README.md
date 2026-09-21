@@ -85,6 +85,25 @@ account is enough). BTC works with no key.
 3. That's it — `.github/workflows/poll.yml` runs hourly (`workflow_dispatch`
    also lets you trigger it manually) and commits the updated database.
 
+## The web dashboard
+
+`web/` is a Next.js app that reads the same signals. It runs fully browsable
+on sample data until a Supabase project is configured, and says so on screen —
+sample prices are never presented as live ones.
+
+To connect it to the engine:
+
+1. Create a free [Supabase](https://supabase.com/) project and run the files
+   in `web/supabase/migrations/` in order from the SQL editor.
+2. Copy `web/.env.example` to `web/.env.local` and fill in the project URL and
+   anon key.
+3. Add `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to the repo's Actions
+   secrets. The hourly job then mirrors each signal up to Supabase and the
+   dashboard shows real calls instead of samples.
+
+The mirror is optional and best-effort: SQLite stays the source of truth, so
+an unreachable Supabase degrades to a local-only run rather than failing it.
+
 ## What's tracked
 
 | Symbol  | Source     | Timeframes    |

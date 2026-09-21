@@ -47,9 +47,11 @@ create table if not exists public.signal_suppressions (
 
 alter table public.signal_suppressions enable row level security;
 
-drop policy if exists "signal_suppressions: admins read" on public.signal_suppressions;
-create policy "signal_suppressions: admins read" on public.signal_suppressions
-  for select using (public.is_admin(auth.uid()));
+-- Subscribers read these too: a signal that is missing because the feed went
+-- stale has to be visible as such, not just absent (BR-006).
+drop policy if exists "signal_suppressions: authenticated users read" on public.signal_suppressions;
+create policy "signal_suppressions: authenticated users read" on public.signal_suppressions
+  for select using (auth.role() = 'authenticated');
 
 drop policy if exists "signal_suppressions: admins write" on public.signal_suppressions;
 create policy "signal_suppressions: admins write" on public.signal_suppressions

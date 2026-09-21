@@ -28,15 +28,22 @@ export interface DemoSignal {
   verdict: "BUY" | "SELL" | "HOLD";
   score: number;
   reasoning: string[];
+  confidence: number | null;
+  strategyVersion: string;
 }
 
 const now = () => new Date().toISOString();
+
+// "demo" rather than a real version number: these never came from the engine,
+// and the card shows this alongside the verdict.
+const demoLineage = { confidence: null, strategyVersion: "demo" };
 
 export const DEMO_SIGNALS: DemoSignal[] = [
   {
     symbol: "BTCUSDT",
     timeframe: "1h",
     generatedAt: now(),
+    ...demoLineage,
     price: 68420.5,
     verdict: "BUY",
     score: 2,
@@ -50,6 +57,7 @@ export const DEMO_SIGNALS: DemoSignal[] = [
     symbol: "BTCUSDT",
     timeframe: "4h",
     generatedAt: now(),
+    ...demoLineage,
     price: 68390.0,
     verdict: "HOLD",
     score: 0,
@@ -63,6 +71,7 @@ export const DEMO_SIGNALS: DemoSignal[] = [
     symbol: "BTCUSDT",
     timeframe: "1d",
     generatedAt: now(),
+    ...demoLineage,
     price: 68010.25,
     verdict: "SELL",
     score: -2,
@@ -76,6 +85,7 @@ export const DEMO_SIGNALS: DemoSignal[] = [
     symbol: "XAUUSD",
     timeframe: "1h",
     generatedAt: now(),
+    ...demoLineage,
     price: 2378.4,
     verdict: "HOLD",
     score: 1,
@@ -89,6 +99,7 @@ export const DEMO_SIGNALS: DemoSignal[] = [
     symbol: "XAUUSD",
     timeframe: "4h",
     generatedAt: now(),
+    ...demoLineage,
     price: 2381.1,
     verdict: "BUY",
     score: 2,
@@ -102,6 +113,7 @@ export const DEMO_SIGNALS: DemoSignal[] = [
     symbol: "XAUUSD",
     timeframe: "1d",
     generatedAt: now(),
+    ...demoLineage,
     price: 2365.8,
     verdict: "HOLD",
     score: 0,

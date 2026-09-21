@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import type { SignalView } from "@/lib/signals";
+import { isStale, type SignalView } from "@/lib/signals";
 
 function verdictVariant(v: string) {
   if (v === "BUY") return "success" as const;
@@ -9,6 +9,8 @@ function verdictVariant(v: string) {
 }
 
 export function SignalCard({ signal }: { signal: SignalView }) {
+  const stale = isStale(signal);
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -22,10 +24,18 @@ export function SignalCard({ signal }: { signal: SignalView }) {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="mb-3 flex items-center gap-2">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
           <Badge variant={verdictVariant(signal.verdict)}>{signal.verdict}</Badge>
-          <span className="text-xs text-muted-foreground">score {signal.score > 0 ? `+${signal.score}` : signal.score}</span>
+          <span className="text-xs text-muted-foreground">
+            score {signal.score > 0 ? `+${signal.score}` : signal.score}
+          </span>
+          {stale && (
+            <Badge variant="outline" className="border-destructive text-destructive">
+              Stale — feed has not updated
+            </Badge>
+          )}
         </div>
+
         <ul className="space-y-1 text-sm text-muted-foreground">
           {signal.reasoning.map((r, i) => (
             <li key={i} className="flex gap-2">
@@ -34,6 +44,14 @@ export function SignalCard({ signal }: { signal: SignalView }) {
             </li>
           ))}
         </ul>
+
+        <p className="mt-3 border-t pt-2 text-xs text-muted-foreground">
+          {signal.confidence === null
+            ? "Confidence not yet calibrated"
+            : `Confidence ${(signal.confidence * 100).toFixed(0)}%`}
+          {" · "}
+          strategy {signal.strategyVersion}
+        </p>
       </CardContent>
     </Card>
   );

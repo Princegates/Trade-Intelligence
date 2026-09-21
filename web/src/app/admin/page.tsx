@@ -16,7 +16,11 @@ async function countActiveSettings() {
 }
 
 export default async function AdminOverviewPage() {
-  const [users, signals, activeSettings] = await Promise.all([listUsers(), getLatestSignals(), countActiveSettings()]);
+  const [users, { signals }, activeSettings] = await Promise.all([
+    listUsers(),
+    getLatestSignals(),
+    countActiveSettings(),
+  ]);
   const admins = users.filter((u) => u.role === "admin").length;
   const totalProviders = Object.values(SETTINGS_PROVIDERS).flat().length;
 

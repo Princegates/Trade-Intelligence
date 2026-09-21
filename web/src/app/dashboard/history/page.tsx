@@ -12,7 +12,7 @@ function verdictVariant(v: string) {
 
 export default async function HistoryPage({ searchParams }: PageProps<"/dashboard/history">) {
   const params = await searchParams;
-  const latest = await getLatestSignals();
+  const { signals: latest } = await getLatestSignals();
   const pairs = symbolTimeframePairs(latest);
 
   const symbol = typeof params.symbol === "string" ? params.symbol : pairs[0]?.symbol ?? "BTCUSDT";

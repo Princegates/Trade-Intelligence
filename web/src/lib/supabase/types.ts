@@ -6,6 +6,16 @@ export type Role = "user" | "admin";
 export type SettingsCategory = "email" | "sms" | "payments" | "push" | "ai";
 export type Verdict = "BUY" | "SELL" | "HOLD";
 
+// Why the engine declined to publish. Mirrors the reason codes in
+// ../../../../src/run.py; the column is deliberately unconstrained in SQL so
+// the engine can add one without a migration.
+export type SuppressionReason =
+  | "FETCH_FAILED"
+  | "NO_DATA"
+  | "BAD_CANDLE"
+  | "INSUFFICIENT_HISTORY"
+  | "STALE_DATA";
+
 export interface Database {
   public: {
     Tables: {
@@ -73,6 +83,9 @@ export interface Database {
           price: number;
           verdict: Verdict;
           score: number;
+          confidence: number | null;
+          evidence_count: number;
+          strategy_version: string;
           reasoning: string;
         };
         Insert: {
@@ -84,9 +97,33 @@ export interface Database {
           price: number;
           verdict: Verdict;
           score: number;
+          confidence?: number | null;
+          evidence_count?: number;
+          strategy_version?: string;
           reasoning: string;
         };
-        Update: Partial<Database["public"]["Tables"]["signals"]["Insert"]>;
+        // Published signals are immutable; 0002 drops the update policy.
+        Update: never;
+        Relationships: [];
+      };
+      signal_suppressions: {
+        Row: {
+          id: number;
+          symbol: string;
+          timeframe: string;
+          observed_at: string;
+          reason: SuppressionReason;
+          detail: string;
+        };
+        Insert: {
+          id?: number;
+          symbol: string;
+          timeframe: string;
+          observed_at: string;
+          reason: SuppressionReason;
+          detail?: string;
+        };
+        Update: never;
         Relationships: [];
       };
     };
