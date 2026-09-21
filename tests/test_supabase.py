@@ -1,3 +1,5 @@
+import pytest
+
 from src.storage import supabase
 
 
@@ -62,6 +64,26 @@ def test_epoch_timestamps_are_sent_as_utc(monkeypatch):
     row = captured["json"][0]
     assert row["observed_at"] == "2023-11-14T22:13:20+00:00"
     assert row["reason"] == "STALE_DATA"
+
+
+@pytest.mark.parametrize(
+    "configured",
+    [
+        "https://project.supabase.co",
+        "https://project.supabase.co/",
+        "https://project.supabase.co/rest/v1",
+        "https://project.supabase.co/rest/v1/",
+        "  https://project.supabase.co  ",
+    ],
+)
+def test_project_url_is_accepted_however_it_was_pasted(monkeypatch, configured):
+    monkeypatch.setenv("SUPABASE_URL", configured)
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-key")
+    captured = _capture(monkeypatch)
+
+    supabase.publish_suppression("BTCUSDT", "1h", 0, "NO_DATA", "")
+
+    assert captured["url"] == "https://project.supabase.co/rest/v1/signal_suppressions"
 
 
 def test_suppressions_are_appended_not_deduplicated(monkeypatch):

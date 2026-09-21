@@ -21,12 +21,23 @@ TIMEOUT = 15
 SIGNAL_IDENTITY = "symbol,timeframe,candle_time,strategy_version"
 
 
+REST_SUFFIX = "/rest/v1"
+
+
 def _credentials():
     url = os.environ.get("SUPABASE_URL")
     key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
     if not url or not key:
         return None
-    return url.rstrip("/"), key
+
+    # The dashboard shows the project URL bare in Settings, but with /rest/v1
+    # already appended in the API docs, so either is a reasonable thing to
+    # paste. Accept both: the alternative is a request to /rest/v1/rest/v1/...
+    # that 404s with nothing useful to go on.
+    base = url.strip().rstrip("/")
+    if base.endswith(REST_SUFFIX):
+        base = base[: -len(REST_SUFFIX)]
+    return base, key
 
 
 def is_configured():
