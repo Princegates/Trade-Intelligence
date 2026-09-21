@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS candles (
     low REAL NOT NULL,
     close REAL NOT NULL,
     volume REAL NOT NULL,
+    is_complete INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (symbol, timeframe, open_time)
 );
 
@@ -29,8 +30,20 @@ CREATE TABLE IF NOT EXISTS signals (
     price REAL NOT NULL,
     verdict TEXT NOT NULL,
     score INTEGER NOT NULL,
+    confidence REAL,
+    evidence_count INTEGER NOT NULL,
+    strategy_version TEXT NOT NULL,
     reasoning TEXT NOT NULL,
-    UNIQUE(symbol, timeframe, candle_time)
+    UNIQUE(symbol, timeframe, candle_time, strategy_version)
+);
+
+CREATE TABLE IF NOT EXISTS signal_suppressions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    timeframe TEXT NOT NULL,
+    observed_at INTEGER NOT NULL,
+    reason TEXT NOT NULL,
+    detail TEXT NOT NULL DEFAULT ''
 );
 """
 
@@ -52,25 +65,41 @@ def init_db():
 
 
 def upsert_candles(symbol, timeframe, candles):
+    """Candles are upserted, not append-only: a candle legitimately changes
+    while it is forming, and its final values land once it closes."""
     with connect() as conn:
         conn.executemany(
-            """INSERT INTO candles (symbol, timeframe, open_time, open, high, low, close, volume)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """INSERT INTO candles (symbol, timeframe, open_time, open, high, low, close, volume, is_complete)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(symbol, timeframe, open_time) DO UPDATE SET
                  open=excluded.open, high=excluded.high, low=excluded.low,
-                 close=excluded.close, volume=excluded.volume""",
+                 close=excluded.close, volume=excluded.volume,
+                 is_complete=excluded.is_complete""",
             [
-                (symbol, timeframe, c["open_time"], c["open"], c["high"], c["low"], c["close"], c["volume"])
+                (
+                    symbol,
+                    timeframe,
+                    c["open_time"],
+                    c["open"],
+                    c["high"],
+                    c["low"],
+                    c["close"],
+                    c["volume"],
+                    int(c["complete"]),
+                )
                 for c in candles
             ],
         )
 
 
 def get_recent_candles(symbol, timeframe, limit=200):
-    """Returns (open_time, close) tuples, oldest first."""
+    """Returns (open_time, close) tuples for *closed* candles only, oldest
+    first. The forming candle is excluded so indicators never see a value
+    that is still moving (SE-002)."""
     with connect() as conn:
         rows = conn.execute(
-            """SELECT open_time, close FROM candles WHERE symbol=? AND timeframe=?
+            """SELECT open_time, close FROM candles
+               WHERE symbol=? AND timeframe=? AND is_complete=1
                ORDER BY open_time DESC LIMIT ?""",
             (symbol, timeframe, limit),
         ).fetchall()
@@ -78,15 +107,52 @@ def get_recent_candles(symbol, timeframe, limit=200):
     return rows
 
 
-def record_signal(symbol, timeframe, generated_at, candle_time, price, verdict, score, reasoning):
+def record_signal(
+    symbol,
+    timeframe,
+    generated_at,
+    candle_time,
+    price,
+    verdict,
+    score,
+    reasoning,
+    evidence_count,
+    strategy_version,
+    confidence=None,
+):
+    """Insert-only. A published signal is never rewritten (FR-SIG-004), so a
+    re-run over the same closed candle is ignored rather than overwriting the
+    original call. Returns True when a new signal was stored."""
+    with connect() as conn:
+        cur = conn.execute(
+            """INSERT OR IGNORE INTO signals
+               (symbol, timeframe, generated_at, candle_time, price, verdict, score,
+                confidence, evidence_count, strategy_version, reasoning)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                symbol,
+                timeframe,
+                generated_at,
+                candle_time,
+                price,
+                verdict,
+                score,
+                confidence,
+                evidence_count,
+                strategy_version,
+                reasoning,
+            ),
+        )
+        return cur.rowcount == 1
+
+
+def record_suppression(symbol, timeframe, observed_at, reason, detail=""):
+    """Why a candidate signal was not published (SE-010)."""
     with connect() as conn:
         conn.execute(
-            """INSERT INTO signals (symbol, timeframe, generated_at, candle_time, price, verdict, score, reasoning)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-               ON CONFLICT(symbol, timeframe, candle_time) DO UPDATE SET
-                 generated_at=excluded.generated_at, price=excluded.price,
-                 verdict=excluded.verdict, score=excluded.score, reasoning=excluded.reasoning""",
-            (symbol, timeframe, generated_at, candle_time, price, verdict, score, reasoning),
+            """INSERT INTO signal_suppressions (symbol, timeframe, observed_at, reason, detail)
+               VALUES (?, ?, ?, ?, ?)""",
+            (symbol, timeframe, observed_at, reason, detail),
         )
 
 

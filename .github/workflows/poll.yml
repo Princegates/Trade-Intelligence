@@ -24,6 +24,10 @@ jobs:
       - name: Fetch candles and compute signals
         env:
           TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
+          # Optional: mirrors signals to Supabase so the web dashboard shows
+          # them. Without these the run still writes its local SQLite history.
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: python -m src.run
 
       - name: Commit updated database
