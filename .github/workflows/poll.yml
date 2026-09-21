@@ -2,7 +2,12 @@ name: Poll markets and compute signals
 
 on:
   schedule:
-    - cron: "5 * * * *"
+    # Every 15 minutes, so the 15m timeframe's signal never goes stale
+    # (STALENESS_INTERVALS=2 * 900s = 30min tolerance) between runs. 5m
+    # signals will still show "Stale" for part of each 15-minute window —
+    # a genuinely live 5m feed would need to poll every 5 minutes, which
+    # multiplies GitHub Actions minutes and Twelve Data API calls ~3x.
+    - cron: "*/15 * * * *"
   workflow_dispatch: {}
 
 permissions:

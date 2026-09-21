@@ -18,6 +18,7 @@ import {
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import { signOut } from "@/lib/actions/auth";
+import { useSignalsRealtime } from "@/lib/use-signals-realtime";
 
 export interface NavItem {
   href: string;
@@ -45,6 +46,7 @@ function initials(name: string | null, email: string) {
 export function DashboardShell({ title, nav, user, children }: DashboardShellProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { connected } = useSignalsRealtime();
 
   const SidebarContent = (
     <>
@@ -97,6 +99,18 @@ export function DashboardShell({ title, nav, user, children }: DashboardShellPro
               <Menu className="size-5" />
             </button>
             <h1 className="text-lg font-semibold">{title}</h1>
+            {connected && (
+              <span
+                className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2 py-0.5 text-xs text-muted-foreground"
+                title="Updates automatically as new signals are published"
+              >
+                <span className="relative flex size-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75" />
+                  <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
+                </span>
+                Live
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-2">

@@ -21,13 +21,13 @@ INSTRUMENTS = [
         "symbol": "BTCUSDT",
         "provider": "binance",
         "provider_symbol": "BTCUSDT",
-        "timeframes": ["1h", "4h", "1d"],
+        "timeframes": ["5m", "15m", "1h", "4h", "1d"],
     },
     {
         "symbol": "XAUUSD",
         "provider": "twelvedata",
         "provider_symbol": "XAU/USD",
-        "timeframes": ["1h", "4h", "1d"],
+        "timeframes": ["5m", "15m", "1h", "4h", "1d"],
     },
 ]
 
