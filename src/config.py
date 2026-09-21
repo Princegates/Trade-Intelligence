@@ -1,5 +1,16 @@
 """What to track, and how much history the signal engine needs."""
 
+import os
+
+# api.binance.com answers 451 Unavailable For Legal Reasons to US IPs, which
+# is every GitHub Actions runner, so the hourly job cannot use it. api.binance.us
+# serves those IPs and returns the identical kline format. The reverse is also
+# true — Binance.US blocks non-US callers — so running locally from outside the
+# US means setting BINANCE_BASE_URL back to api.binance.com.
+# `or` rather than a get() default: CI sets unconfigured variables to the empty
+# string, which would otherwise override this with "" and fail every fetch.
+BINANCE_BASE_URL = os.environ.get("BINANCE_BASE_URL") or "https://api.binance.us/api/v3/klines"
+
 # Every stored signal records the version that produced it, so a past call can
 # be reproduced from its inputs (FR-SIG-005). Bump this whenever the scoring
 # logic changes; signals from different versions coexist rather than overwrite.

@@ -1,4 +1,8 @@
-"""Binance public REST API — no key required."""
+"""Binance public REST API — no key required.
+
+Which host answers depends on where the caller sits; see BINANCE_BASE_URL in
+src/config.py. Both return the same kline schema, so nothing below changes.
+"""
 
 from datetime import datetime, timezone
 
@@ -6,12 +10,10 @@ import requests
 
 from .. import config
 
-BASE_URL = "https://api.binance.com/api/v3/klines"
-
 
 def fetch_klines(symbol: str, interval: str, limit: int = 200, now: int | None = None):
     params = {"symbol": symbol, "interval": interval, "limit": limit}
-    resp = requests.get(BASE_URL, params=params, timeout=15)
+    resp = requests.get(config.BINANCE_BASE_URL, params=params, timeout=15)
     resp.raise_for_status()
     raw = resp.json()
 
