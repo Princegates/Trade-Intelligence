@@ -3,6 +3,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { getLatestSignals, getSignalHistory, symbolTimeframePairs } from "@/lib/signals";
+import { plainLanguageSummary } from "@/lib/plain-language";
 
 function verdictVariant(v: string) {
   if (v === "BUY") return "success" as const;
@@ -39,7 +40,7 @@ export default async function HistoryPage({ searchParams }: PageProps<"/dashboar
                   <TableHead>Verdict</TableHead>
                   <TableHead>Score</TableHead>
                   <TableHead>Price</TableHead>
-                  <TableHead>Reasoning</TableHead>
+                  <TableHead>What it means</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -53,7 +54,10 @@ export default async function HistoryPage({ searchParams }: PageProps<"/dashboar
                     </TableCell>
                     <TableCell>{s.score > 0 ? `+${s.score}` : s.score}</TableCell>
                     <TableCell>${s.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}</TableCell>
-                    <TableCell className="max-w-md text-sm text-muted-foreground">{s.reasoning.join("; ")}</TableCell>
+                    <TableCell className="max-w-md">
+                      <p className="text-sm text-foreground">{plainLanguageSummary(s)}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{s.reasoning.join("; ")}</p>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

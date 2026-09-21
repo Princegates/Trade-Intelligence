@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DEMO_SIGNALS } from "@/lib/demo-data";
+import { plainLanguageSummary } from "@/lib/plain-language";
 
 const features = [
   {
@@ -83,7 +84,7 @@ export default function HomePage() {
                 <Badge variant={verdictVariant(s.verdict)} className="mb-2">
                   {s.verdict}
                 </Badge>
-                <p className="text-xs text-muted-foreground">{s.reasoning[0]}</p>
+                <p className="text-xs text-muted-foreground">{plainLanguageSummary(s)}</p>
               </CardContent>
             </Card>
           ))}
