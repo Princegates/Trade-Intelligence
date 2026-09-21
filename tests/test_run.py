@@ -61,6 +61,28 @@ def test_rerunning_inside_the_same_candle_keeps_the_original_call(temp_db, monke
     assert len(db.signal_history("BTCUSDT", "1h")) == 1
 
 
+def test_already_called_candle_is_still_mirrored(temp_db, monkeypatch):
+    """Signals computed before Supabase was configured must still reach it,
+    otherwise they stay stranded in SQLite and never appear on the dashboard."""
+    _serve(monkeypatch, _feed(61, NOW))
+    published = []
+    monkeypatch.setattr(
+        run.supabase,
+        "publish_signal",
+        lambda symbol, timeframe, **signal: published.append((symbol, timeframe, signal["candle_time"])),
+    )
+
+    run.process(INSTRUMENT, "1h", NOW)
+    assert len(published) == 1
+
+    message = run.process(INSTRUMENT, "1h", NOW + 1200)
+
+    assert "already called" in message
+    assert len(db.signal_history("BTCUSDT", "1h")) == 1
+    assert len(published) == 2
+    assert published[0] == published[1]
+
+
 def test_stale_feed_suppresses_instead_of_publishing(temp_db, monkeypatch):
     _serve(monkeypatch, _feed(61, NOW))
 

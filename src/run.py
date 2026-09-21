@@ -85,10 +85,17 @@ def process(instrument, timeframe, now):
         "confidence": result["confidence"],
     }
 
-    if not db.record_signal(symbol, timeframe, **signal):
-        return f"[kept] {symbol}/{timeframe}: candle already called, original signal left untouched"
+    stored = db.record_signal(symbol, timeframe, **signal)
 
+    # Mirrored even when SQLite already had it. Signals computed before
+    # Supabase was configured would otherwise stay stranded locally forever,
+    # since the local insert reports "already called" and nothing would ever
+    # carry them up. Publishing is idempotent on the Supabase side too, so a
+    # re-send is a no-op rather than a rewrite.
     _mirror(supabase.publish_signal, symbol, timeframe, **signal)
+
+    if not stored:
+        return f"[kept] {symbol}/{timeframe}: candle already called, original signal left untouched"
 
     return f"{symbol}/{timeframe}: {result['verdict']} (score {result['score']:+d}) @ {price} — {reasoning_text}"
 
