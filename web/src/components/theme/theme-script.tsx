@@ -19,5 +19,16 @@ const script = `(function(){
 })();`;
 
 export function ThemeScript() {
-  return <script dangerouslySetInnerHTML={{ __html: script }} />;
+  // type flips to "text/plain" on the client so React never tries to
+  // re-execute this as a script during client-side rendering/navigation —
+  // it only needs to run once, synchronously, while the server HTML is
+  // being parsed. suppressHydrationWarning covers the resulting type
+  // mismatch between server and client markup.
+  return (
+    <script
+      type={typeof window === "undefined" ? "text/javascript" : "text/plain"}
+      suppressHydrationWarning
+      dangerouslySetInnerHTML={{ __html: script }}
+    />
+  );
 }

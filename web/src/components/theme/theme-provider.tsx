@@ -33,16 +33,15 @@ function writeCookie(name: string, value: string) {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  // Lazy initializers read the same source as the inline script (theme-script.tsx)
-  // so React's first render matches what's already in the DOM.
-  const [theme, setThemeState] = useState<ThemeKey>(() => {
-    const stored = readCookie(THEME_COOKIE);
-    return isThemeKey(stored) ? stored : DEFAULT_THEME;
-  });
-  const [mode, setModeState] = useState<Mode>(() => {
-    const stored = readCookie(MODE_COOKIE);
-    return isMode(stored) ? stored : DEFAULT_MODE;
-  });
+  // Always start from the same default the server rendered — the server
+  // never sees the visitor's cookie, so reading it here on the client's
+  // first render would make that render disagree with the server's and
+  // crash hydration (this bit ThemePicker: its aria-pressed/checkmark read
+  // this state directly). The real value is applied synchronously before
+  // paint in the layout effect below instead, the same trick theme-script.tsx
+  // uses for the data-theme/data-mode DOM attributes.
+  const [theme, setThemeState] = useState<ThemeKey>(DEFAULT_THEME);
+  const [mode, setModeState] = useState<Mode>(DEFAULT_MODE);
 
   const applyTheme = (next: ThemeKey) => {
     setThemeState(next);
@@ -56,14 +55,27 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     document.documentElement.setAttribute("data-mode", next);
   };
 
-  // React's Strict Mode remount in dev clears attributes the inline script
-  // set (they aren't part of React's managed JSX). Re-apply here; no-op in
-  // production and once hydrated in dev.
+  // Runs after hydration but before the browser paints, so there's no
+  // visible flash even though the first render above used the default.
+  // Also re-applies the DOM attributes for React Strict Mode's dev-only
+  // remount, which clears attributes the inline script set (they aren't
+  // part of React's managed JSX). No-op in production once hydrated.
   useLayoutEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    document.documentElement.setAttribute("data-mode", mode);
+    const storedTheme = readCookie(THEME_COOKIE);
+    const storedMode = readCookie(MODE_COOKIE);
+    const resolvedTheme = isThemeKey(storedTheme) ? storedTheme : DEFAULT_THEME;
+    const resolvedMode = isMode(storedMode) ? storedMode : DEFAULT_MODE;
+
+    // Intentional: this is the one-time hydration correction described
+    // above, not derived state that render could compute instead — the
+    // cookie genuinely isn't available during SSR/the first client render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setThemeState(resolvedTheme);
+    setModeState(resolvedMode);
+
+    document.documentElement.setAttribute("data-theme", resolvedTheme);
+    document.documentElement.setAttribute("data-mode", resolvedMode);
     document.documentElement.setAttribute("data-theme-ready", "true");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
