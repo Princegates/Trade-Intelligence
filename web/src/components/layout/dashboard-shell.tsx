@@ -123,14 +123,14 @@ export function DashboardShell({ title, nav, user, children }: DashboardShellPro
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>{user.fullName || user.email}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <form action={signOut}>
-                  <DropdownMenuItem asChild>
-                    <button type="submit" className="w-full">
-                      <LogOut />
-                      Sign out
-                    </button>
-                  </DropdownMenuItem>
-                </form>
+                {/* A <form action={signOut}> submit button here doesn't reliably fire:
+                    Radix closes/unmounts the menu on selection, which can interrupt the
+                    browser's default form submission before it completes. Calling the
+                    Server Action directly from onSelect avoids that. */}
+                <DropdownMenuItem onSelect={() => void signOut()}>
+                  <LogOut />
+                  Sign out
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
