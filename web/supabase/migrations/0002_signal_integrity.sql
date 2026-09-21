@@ -18,8 +18,10 @@ alter table public.signals
 -- ---------------------------------------------------------------------------
 -- Identity now includes the strategy version: re-scoring a candle under new
 -- logic publishes a new signal *alongside* the original rather than editing
--- it. Dropping the update policy makes that immutability structural — no
--- role, admin included, can rewrite a call after publication.
+-- it. Dropping the update policy stops the app's own roles — anon and
+-- authenticated, admins included — from rewriting a published call. It does
+-- NOT stop `service_role`, which carries BYPASSRLS; 0003 closes that gap
+-- with a trigger.
 -- ---------------------------------------------------------------------------
 alter table public.signals
   drop constraint if exists signals_symbol_timeframe_candle_time_key;
