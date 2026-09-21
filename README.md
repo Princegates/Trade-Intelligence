@@ -36,10 +36,33 @@ GitHub Actions (hourly cron)
 - **Signal engine** (`src/signals/`) — each indicator votes bullish (+1),
   bearish (-1), or neutral (0); the combined score decides BUY (≥+2), SELL
   (≤-2), or HOLD, and every vote's reasoning is kept, never just the number.
-- **Storage** (`src/storage/db.py`) — plain SQLite, two tables: `candles`
-  and `signals`. The `.github/workflows/poll.yml` job commits the updated
-  `.db` file back to the repo after each run, so history is just `git log`
-  on that file.
+- **Quality gates** (`src/quality.py`) — impossible candles and stale feeds
+  suppress the signal instead of producing one from bad prices.
+- **Storage** (`src/storage/db.py`) — plain SQLite: `candles`, `signals` and
+  `signal_suppressions`. The `.github/workflows/poll.yml` job commits the
+  updated `.db` file back to the repo after each run, so history is just
+  `git log` on that file.
+
+## Signal integrity
+
+The engine is deliberately conservative about what it is willing to publish:
+
+- **Closed candles only.** Both feeds return the candle that is still
+  forming; it is stored but excluded from indicator input, so a verdict can
+  never change as the bar moves (no repainting).
+- **Published signals are never rewritten.** Re-running over a candle that
+  was already called leaves the original untouched. A change in the scoring
+  logic means bumping `STRATEGY_VERSION`, which publishes a *new* signal
+  alongside the old one rather than editing history.
+- **Every signal records its lineage** — price, score, evidence count and the
+  strategy version that produced it, so a past call can be reproduced.
+- **Silence is explainable.** A missing signal always has a row in
+  `signal_suppressions` giving the reason: `FETCH_FAILED`, `NO_DATA`,
+  `BAD_CANDLE`, `INSUFFICIENT_HISTORY` or `STALE_DATA`.
+- **Confidence is not reported yet.** A percentage derived from the score
+  would only restate how many indicators agreed, which is not the same as how
+  often that agreement has been right. It stays empty until `src/accuracy.py`
+  has enough resolved signals to calibrate it against.
 
 ## Running it locally
 

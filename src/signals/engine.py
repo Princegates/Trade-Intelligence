@@ -1,6 +1,7 @@
 """Combines the indicators into a verdict with reasoning attached — never a
 bare BUY/SELL/HOLD with no explanation of why."""
 
+from .. import config
 from . import indicators as ind
 
 BUY_THRESHOLD = 2
@@ -10,9 +11,11 @@ SELL_THRESHOLD = -2
 def evaluate(closes):
     reasons = []
     score = 0
+    evidence = 0
 
     rsi_val = ind.rsi(closes, 14)
     if rsi_val is not None:
+        evidence += 1
         if rsi_val < 30:
             score += 1
             reasons.append(f"RSI(14) at {rsi_val:.1f} — oversold (<30), bullish")
@@ -24,6 +27,7 @@ def evaluate(closes):
 
     macd_val = ind.macd(closes)
     if macd_val is not None:
+        evidence += 1
         diff = macd_val["macd"] - macd_val["signal"]
         crossed_up = macd_val["prev_macd"] <= macd_val["prev_signal"] and macd_val["macd"] > macd_val["signal"]
         crossed_down = macd_val["prev_macd"] >= macd_val["prev_signal"] and macd_val["macd"] < macd_val["signal"]
@@ -41,6 +45,7 @@ def evaluate(closes):
     sma_fast = ind.sma(closes, 20)
     sma_slow = ind.sma(closes, 50)
     if sma_fast is not None and sma_slow is not None:
+        evidence += 1
         diff = sma_fast - sma_slow
         if diff > 1e-9:
             score += 1
@@ -51,11 +56,27 @@ def evaluate(closes):
         else:
             reasons.append(f"SMA20 equal to SMA50 ({sma_fast:.2f}) — no clear trend")
 
-    if score >= BUY_THRESHOLD:
+    if evidence < config.MIN_EVIDENCE:
+        verdict = "HOLD"
+        reasons.append(
+            f"Only {evidence} of 3 indicators had enough history to report — "
+            "too little evidence for a directional call"
+        )
+    elif score >= BUY_THRESHOLD:
         verdict = "BUY"
     elif score <= SELL_THRESHOLD:
         verdict = "SELL"
     else:
         verdict = "HOLD"
 
-    return {"verdict": verdict, "score": score, "reasoning": reasons}
+    # Confidence stays None until there is a track record to calibrate it
+    # against. A number derived from `score` would only restate how many
+    # indicators agreed, which is not the same thing as how often that
+    # agreement has actually been right (SE-005).
+    return {
+        "verdict": verdict,
+        "score": score,
+        "reasoning": reasons,
+        "evidence_count": evidence,
+        "confidence": None,
+    }

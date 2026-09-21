@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 
 import requests
 
+from .. import config
+
 BASE_URL = "https://api.twelvedata.com/time_series"
 
 INTERVAL_MAP = {
@@ -19,7 +21,13 @@ INTERVAL_MAP = {
 }
 
 
-def fetch_klines(symbol: str, interval: str, limit: int = 200, api_key: str | None = None):
+def fetch_klines(
+    symbol: str,
+    interval: str,
+    limit: int = 200,
+    api_key: str | None = None,
+    now: int | None = None,
+):
     api_key = api_key or os.environ.get("TWELVEDATA_API_KEY")
     if not api_key:
         return None
@@ -39,6 +47,9 @@ def fetch_klines(symbol: str, interval: str, limit: int = 200, api_key: str | No
     if "values" not in data:
         raise RuntimeError(f"Twelve Data error for {symbol}/{interval}: {data}")
 
+    now = now if now is not None else int(datetime.now(timezone.utc).timestamp())
+    duration = config.TIMEFRAME_SECONDS[interval]
+
     candles = []
     for row in reversed(data["values"]):  # API returns newest first
         raw_dt = row["datetime"]
@@ -52,6 +63,7 @@ def fetch_klines(symbol: str, interval: str, limit: int = 200, api_key: str | No
                 "low": float(row["low"]),
                 "close": float(row["close"]),
                 "volume": float(row.get("volume") or 0.0),
+                "complete": open_time + duration <= now,
             }
         )
     return candles

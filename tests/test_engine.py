@@ -54,8 +54,29 @@ def test_flat_indicators_produce_hold(mock_rsi, mock_macd, mock_sma):
     assert result["score"] == 0
 
 
+@patch("src.signals.engine.ind.sma")
+@patch("src.signals.engine.ind.macd")
+@patch("src.signals.engine.ind.rsi")
+def test_single_indicator_is_too_little_evidence_to_call_a_direction(mock_rsi, mock_macd, mock_sma):
+    mock_rsi.return_value = 10.0  # strongly oversold, would score +1 on its own
+    mock_macd.return_value = None  # not enough history
+    mock_sma.side_effect = [None, None]
+
+    result = engine.evaluate(_closes())
+
+    assert result["verdict"] == "HOLD"
+    assert result["evidence_count"] == 1
+    assert "too little evidence" in result["reasoning"][-1]
+
+
 def test_evaluate_runs_end_to_end_on_real_data():
     closes = [100 + i * 0.3 for i in range(80)]
     result = engine.evaluate(closes)
     assert result["verdict"] in {"BUY", "SELL", "HOLD"}
     assert result["reasoning"]
+    assert result["evidence_count"] == 3
+
+
+def test_confidence_is_absent_until_it_can_be_calibrated():
+    result = engine.evaluate(_closes())
+    assert result["confidence"] is None
