@@ -1,0 +1,143 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useState, type ReactNode } from "react";
+import { LineChart, LogOut, Menu, Palette, X } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { ModeToggle } from "@/components/theme/mode-toggle";
+import { ThemePicker } from "@/components/theme/theme-picker";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
+import { signOut } from "@/lib/actions/auth";
+
+export interface NavItem {
+  href: string;
+  label: string;
+  icon: ReactNode;
+}
+
+interface DashboardShellProps {
+  title: string;
+  nav: NavItem[];
+  user: { email: string; fullName: string | null };
+  children: ReactNode;
+}
+
+function initials(name: string | null, email: string) {
+  const source = name?.trim() || email;
+  return source
+    .split(/[\s@.]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((s) => s[0]?.toUpperCase())
+    .join("");
+}
+
+export function DashboardShell({ title, nav, user, children }: DashboardShellProps) {
+  const pathname = usePathname();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const SidebarContent = (
+    <>
+      <Link href="/" className="flex items-center gap-2 px-4 py-5 font-semibold">
+        <LineChart className="size-5 text-primary" />
+        <span>Trade Intelligence</span>
+      </Link>
+      <nav className="flex flex-1 flex-col gap-1 px-3">
+        {nav.map((item) => {
+          const active = pathname === item.href;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={() => setMobileOpen(false)}
+              className={cn(
+                "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              )}
+            >
+              {item.icon}
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
+    </>
+  );
+
+  return (
+    <div className="flex min-h-screen">
+      <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-card md:flex">{SidebarContent}</aside>
+
+      {mobileOpen && (
+        <div className="fixed inset-0 z-50 flex md:hidden">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setMobileOpen(false)} />
+          <aside className="relative z-10 flex w-64 flex-col bg-card">
+            <button className="absolute right-3 top-4 p-1" onClick={() => setMobileOpen(false)} aria-label="Close menu">
+              <X className="size-5" />
+            </button>
+            {SidebarContent}
+          </aside>
+        </div>
+      )}
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex h-16 items-center justify-between border-b border-border px-4 sm:px-6">
+          <div className="flex items-center gap-3">
+            <button className="p-1 md:hidden" onClick={() => setMobileOpen(true)} aria-label="Open menu">
+              <Menu className="size-5" />
+            </button>
+            <h1 className="text-lg font-semibold">{title}</h1>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label="Choose theme">
+                  <Palette className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-80 p-3">
+                <ThemePicker />
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <ModeToggle />
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="ml-1 rounded-full">
+                  <Avatar>
+                    <AvatarFallback>{initials(user.fullName, user.email)}</AvatarFallback>
+                  </Avatar>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>{user.fullName || user.email}</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <form action={signOut}>
+                  <DropdownMenuItem asChild>
+                    <button type="submit" className="w-full">
+                      <LogOut />
+                      Sign out
+                    </button>
+                  </DropdownMenuItem>
+                </form>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </header>
+
+        <main className="flex-1 p-4 sm:p-6">{children}</main>
+      </div>
+    </div>
+  );
+}
