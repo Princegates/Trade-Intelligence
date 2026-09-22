@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 export default function AboutPage() {
@@ -28,7 +29,11 @@ export default function AboutPage() {
             <CardTitle>What it doesn&apos;t do</CardTitle>
             <CardDescription>
               It isn&apos;t financial advice, and it doesn&apos;t place trades for you. It&apos;s a second
-              opinion with its reasoning shown, and a record of how that opinion has performed.
+              opinion with its reasoning shown, and a record of how that opinion has performed. Full{" "}
+              <Link href="/disclaimer" className="underline underline-offset-4 hover:text-foreground">
+                disclaimer here
+              </Link>
+              .
             </CardDescription>
           </CardHeader>
         </Card>
