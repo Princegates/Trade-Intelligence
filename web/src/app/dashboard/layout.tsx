@@ -1,9 +1,11 @@
-import { LayoutDashboard, History, Settings } from "lucide-react";
+import { LayoutDashboard, Bitcoin, Gem, History, Settings } from "lucide-react";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { requireUser } from "@/lib/auth";
 
 const nav = [
   { href: "/dashboard", label: "Overview", icon: <LayoutDashboard className="size-4" /> },
+  { href: "/dashboard/bitcoin", label: "Bitcoin", icon: <Bitcoin className="size-4" /> },
+  { href: "/dashboard/gold", label: "Gold", icon: <Gem className="size-4" /> },
   { href: "/dashboard/history", label: "History", icon: <History className="size-4" /> },
   { href: "/dashboard/settings", label: "Settings", icon: <Settings className="size-4" /> },
 ];
