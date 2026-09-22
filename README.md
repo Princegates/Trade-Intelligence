@@ -82,8 +82,48 @@ account is enough). BTC works with no key.
 1. Create a free [Twelve Data](https://twelvedata.com/) account and API key.
 2. In the repo's Settings → Secrets and variables → Actions, add
    `TWELVEDATA_API_KEY`.
-3. That's it — `.github/workflows/poll.yml` runs hourly (`workflow_dispatch`
-   also lets you trigger it manually) and commits the updated database.
+3. That's it — `.github/workflows/poll.yml` computes signals and commits the
+   updated database. `workflow_dispatch` also lets you trigger it by hand.
+
+## Keeping the feed fresh
+
+**GitHub's `schedule:` will not hold a short interval.** It is best-effort and
+gets dropped under load: measured on this repo, a `*/15` cron fired twice in
+ten hours against forty expected runs. Short timeframes were stale more often
+than not, because nothing was refreshing them.
+
+The workflow therefore also accepts `repository_dispatch`, so an external
+scheduler can drive the real cadence while the built-in cron stays as a free
+backstop. To set one up:
+
+1. Create a **fine-grained** personal access token (Settings → Developer
+   settings → Personal access tokens). Scope it to this repository only, give
+   it **Contents: read and write** — the minimum `repository_dispatch`
+   accepts — and set an expiry you are willing to rotate on.
+2. Point any free scheduler (cron-job.org, UptimeRobot, a Cloudflare Worker
+   cron) at this request on whatever interval you want:
+
+```
+POST https://api.github.com/repos/<owner>/<repo>/dispatches
+Authorization: Bearer <token>
+Accept: application/vnd.github+json
+Content-Type: application/json
+
+{"event_type": "poll"}
+```
+
+A 204 means the run was queued.
+
+The trade-off is that the token lives with a third party, which is why it is
+scoped to one repository and one permission: the worst case is someone
+triggering your poller or pushing to this repo, not reaching the rest of your
+account. Rotate it on the expiry you set.
+
+Pick the interval to match the shortest timeframe in `src/config.py`: a
+timeframe goes stale after `STALENESS_INTERVALS` (2) of its own periods, so 5m
+candles need a run at least every 10 minutes to stay current, 15m every 30,
+and so on. Polling faster also costs proportionally more Twelve Data calls —
+the free tier allows 800 a day, and each run spends one per gold timeframe.
 
 ## The web dashboard
 
