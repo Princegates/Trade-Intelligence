@@ -69,3 +69,16 @@ CANDLE_FETCH_LIMIT = 200
 # overdue. Stale markets get a suppression record instead of a signal, so a
 # closed or broken feed can never masquerade as a live call.
 STALENESS_INTERVALS = 2
+
+# How often to retry a feed that has already gone stale. Gold has no weekend
+# candles, so nothing new ever arrives and every poll would spend a request
+# being told so — about 864 across a Saturday, against a free tier of 800 a
+# day. Retrying on the half hour costs 144 and still notices the market
+# reopening well within an hour.
+STALE_RETRY_SECONDS = 1800
+
+# The slice of each retry period in which an attempt is allowed. Must be at
+# least the polling interval, or a slower poller steps over every window and
+# never retries at all. Ten minutes leaves room for a five-minute poll to
+# drift or be delayed.
+STALE_RETRY_WINDOW = 600

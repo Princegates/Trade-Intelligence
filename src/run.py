@@ -69,6 +69,14 @@ def process(instrument, timeframe, now):
     if newest is not None and newest >= quality.latest_closed_open_time(now, timeframe):
         return f"[current] {symbol}/{timeframe}: latest closed candle already stored"
 
+    # A feed whose newest candle is already stale is usually a closed market
+    # rather than a broken one — gold has no weekend candles at all. Asking
+    # every poll spends a request to be told the same thing, which on a free
+    # data plan exhausts the day's allowance over a weekend. Retry on the
+    # half hour instead; a reopening is still noticed well within the hour.
+    if newest is not None and quality.is_stale(newest, now, timeframe) and not quality.due_for_stale_retry(now):
+        return f"[waiting] {symbol}/{timeframe}: feed stale, holding off until the next retry window"
+
     try:
         candles = fetch_candles(instrument, timeframe)
     except Exception as exc:

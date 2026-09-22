@@ -185,3 +185,54 @@ def test_an_unreadable_mirror_falls_back_to_local_history(temp_db, monkeypatch):
     db.upsert_candles("BTCUSDT", "1h", _feed(2, NOW))
 
     assert run.newest_stored("BTCUSDT", "1h") is not None
+
+
+def test_a_closed_market_is_not_retried_every_poll(temp_db, monkeypatch):
+    """Gold has no weekend candles, so an unthrottled retry spends the whole
+    daily allowance being told there is nothing new."""
+    _serve(monkeypatch, _feed(61, NOW))
+    run.process(INSTRUMENT, "1h", NOW)
+
+    # Days later: the feed is long stale, and this poll is mid-period.
+    much_later = (NOW + 86400 * 2) // 1800 * 1800 + 900
+    monkeypatch.setattr(run, "fetch_candles", lambda i, tf: pytest.fail("should not fetch"))
+
+    message = run.process(INSTRUMENT, "1h", much_later)
+    assert "[waiting]" in message
+
+
+def test_a_closed_market_is_still_retried_in_the_window(temp_db, monkeypatch):
+    """Throttling must not mean never — a reopening has to be noticed."""
+    _serve(monkeypatch, _feed(61, NOW))
+    run.process(INSTRUMENT, "1h", NOW)
+
+    fetches = []
+    in_window = (NOW + 86400 * 2) // 1800 * 1800
+
+    def counting(instrument, timeframe):
+        fetches.append(timeframe)
+        return _feed(61, NOW)
+
+    monkeypatch.setattr(run, "fetch_candles", counting)
+    run.process(INSTRUMENT, "1h", in_window)
+
+    assert len(fetches) == 1
+
+
+def test_a_fresh_feed_is_never_throttled(temp_db, monkeypatch):
+    """The throttle applies to stale feeds only; a live market must not be
+    held off just because the clock is mid-period."""
+    fetches = []
+
+    def counting(instrument, timeframe):
+        fetches.append(timeframe)
+        return _feed(61, NOW + HOUR)
+
+    _serve(monkeypatch, _feed(61, NOW))
+    run.process(INSTRUMENT, "1h", NOW)
+
+    monkeypatch.setattr(run, "fetch_candles", counting)
+    mid_period = NOW + HOUR
+    run.process(INSTRUMENT, "1h", mid_period)
+
+    assert len(fetches) == 1

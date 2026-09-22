@@ -144,13 +144,17 @@ Measured over a simulated day of 5-minute polls, gold costs 31 Twelve Data
 requests rather than 864: 24 for 1h, 6 for 4h, 1 for 1d. That is what keeps
 three gold timeframes inside a free tier of 800 a day.
 
-The exception is a market that is closed. Gold has no weekend candles, so
-nothing new ever arrives and each poll retries — roughly 864 requests across
-a weekend day, which will exhaust the daily allowance and show gold as
-unreachable until it resets. Crypto is unaffected, and gold is genuinely
-closed at the time, so the display is not wrong; it is just noisier and more
-wasteful than it needs to be. Backing off on a market that is closed would
-fix it.
+A closed market is handled separately. Gold has no weekend candles, so
+nothing new ever arrives and an unthrottled poller would keep asking — about
+864 requests across a Saturday, enough to exhaust the day's allowance and
+leave gold unreachable until it reset. A feed already known to be stale is
+therefore retried only in the opening window of each half hour, which costs
+288 instead and still notices the market reopening within thirty minutes.
+
+The throttle is derived from the clock rather than from stored state, so it
+needs no bookkeeping and behaves identically on an ephemeral runner. It
+applies only to feeds that are already stale; a live market is never held
+off.
 
 ## The web dashboard
 
