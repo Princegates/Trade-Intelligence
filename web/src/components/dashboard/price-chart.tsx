@@ -28,10 +28,15 @@ export interface ChartLevel {
 export function PriceChart({
   candles,
   levels = [],
+  liveCandle = null,
   height = 320,
 }: {
   candles: Candle[];
   levels?: ChartLevel[];
+  /** The still-forming candle, streamed from the exchange. Applied on top of
+   * the stored series so the chart moves between closes; never mixed into
+   * `candles`, which are the quality-gated ones the signals used. */
+  liveCandle?: Candle | null;
   height?: number;
 }) {
   const container = useRef<HTMLDivElement>(null);
@@ -108,6 +113,17 @@ export function PriceChart({
     series.current.setData(candles.map((c) => ({ ...c, time: c.time as UTCTimestamp })));
     chart.current?.timeScale().fitContent();
   }, [candles, chartGeneration]);
+
+  // The live candle arrives many times a second. `update` touches only the
+  // last bar, unlike setData which rebuilds the series and would fight the
+  // viewer's zoom and pan on every tick.
+  useEffect(() => {
+    if (!series.current || !liveCandle || candles.length === 0) return;
+    // Ignore a tick for a bar older than what is stored: the stored one has
+    // closed and is authoritative, and redrawing over it would repaint.
+    if (liveCandle.time < candles[candles.length - 1].time) return;
+    series.current.update({ ...liveCandle, time: liveCandle.time as UTCTimestamp });
+  }, [liveCandle, candles, chartGeneration]);
 
   useEffect(() => {
     const target = series.current;

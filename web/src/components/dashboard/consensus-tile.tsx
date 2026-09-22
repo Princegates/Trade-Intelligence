@@ -104,6 +104,7 @@ export function ConsensusTile({
           candlesByTimeframe={candlesByTimeframe}
           levels={chartLevels}
           levelsTimeframe={source?.timeframe}
+          symbol={symbol}
         />
 
         <div className="mt-4 flex flex-wrap gap-1.5 border-t pt-3">

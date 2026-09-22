@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { PriceChart, type ChartLevel } from "@/components/dashboard/price-chart";
 import { CHART_TIMEFRAMES, type Candle } from "@/lib/candle-view";
+import { useLiveCandle } from "@/lib/use-live-candle";
 
 /** The chart plus its timeframe picker.
  *
@@ -14,9 +15,11 @@ export function ChartPanel({
   candlesByTimeframe,
   levels,
   levelsTimeframe,
+  symbol,
 }: {
   candlesByTimeframe: Record<string, Candle[]>;
   levels: ChartLevel[];
+  symbol: string;
   /** Which timeframe's setup the levels describe. Also the one shown first,
    * since that is the chart they were measured against. */
   levelsTimeframe?: string;
@@ -28,9 +31,10 @@ export function ChartPanel({
       : (available.at(-1) ?? ""),
   );
 
-  if (available.length === 0) return null;
-
   const candles = candlesByTimeframe[timeframe] ?? [];
+  const liveCandle = useLiveCandle(symbol, timeframe);
+
+  if (available.length === 0) return null;
 
   return (
     <div className="mt-4">
@@ -52,9 +56,15 @@ export function ChartPanel({
         ))}
       </div>
 
-      <PriceChart candles={candles} levels={levels} />
+      <PriceChart candles={candles} levels={levels} liveCandle={liveCandle} />
 
       <p className="mt-1 text-[11px] text-muted-foreground">
+        {liveCandle && (
+          <span className="mr-1 inline-flex items-center gap-1 font-medium text-emerald-600 dark:text-emerald-400">
+            <span className="inline-block size-1.5 animate-pulse rounded-full bg-current" />
+            live
+          </span>
+        )}
         {timeframe} candles.{" "}
         {levels.length === 0
           ? "No levels to draw."
