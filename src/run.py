@@ -39,22 +39,29 @@ def process(instrument, timeframe, now):
     """
     symbol = instrument["symbol"]
 
-    try:
-        candles = fetch_candles(instrument, timeframe)
-    except Exception as exc:
-        suppress(symbol, timeframe, now, "FETCH_FAILED", str(exc))
-        return f"[skip] {symbol}/{timeframe}: fetch failed ({exc})"
+    # Only spend a request when the provider could actually have something
+    # new. A 1d candle does not change between two polls five minutes apart,
+    # and on a free data plan those wasted calls are the binding constraint.
+    # Evaluation below still runs either way, from candles already stored.
+    newest = db.newest_complete_candle(symbol, timeframe)
+    if newest is None or newest < quality.latest_closed_open_time(now, timeframe):
+        try:
+            candles = fetch_candles(instrument, timeframe)
+        except Exception as exc:
+            suppress(symbol, timeframe, now, "FETCH_FAILED", str(exc))
+            return f"[skip] {symbol}/{timeframe}: fetch failed ({exc})"
 
-    if not candles:
-        suppress(symbol, timeframe, now, "NO_DATA", "provider returned nothing (missing API key?)")
-        return f"[skip] {symbol}/{timeframe}: no data (missing API key?)"
+        if not candles:
+            suppress(symbol, timeframe, now, "NO_DATA", "provider returned nothing (missing API key?)")
+            return f"[skip] {symbol}/{timeframe}: no data (missing API key?)"
 
-    problem = quality.first_invalid(candles)
-    if problem:
-        suppress(symbol, timeframe, now, "BAD_CANDLE", problem)
-        return f"[skip] {symbol}/{timeframe}: rejected feed — {problem}"
+        problem = quality.first_invalid(candles)
+        if problem:
+            suppress(symbol, timeframe, now, "BAD_CANDLE", problem)
+            return f"[skip] {symbol}/{timeframe}: rejected feed — {problem}"
 
-    db.upsert_candles(symbol, timeframe, candles)
+        db.upsert_candles(symbol, timeframe, candles)
+
     recent = db.get_recent_candles(symbol, timeframe, limit=config.CANDLE_FETCH_LIMIT)
 
     if len(recent) < config.MIN_CANDLES_FOR_SIGNAL:

@@ -47,3 +47,22 @@ def test_fresh_feed_is_not_stale():
 
 def test_overdue_feed_is_stale():
     assert quality.is_stale(latest_open_time=0, now=3600 * 4, timeframe="1h") is True
+
+
+def test_latest_closed_candle_is_the_one_before_the_forming_one():
+    # 10:30 into the hour: 10:00 is still forming, 09:00 is the last closed.
+    assert quality.latest_closed_open_time(now=3600 * 10 + 1800, timeframe="1h") == 3600 * 9
+
+
+def test_latest_closed_candle_on_an_exact_boundary():
+    # Exactly 10:00: the 10:00 candle has only just opened.
+    assert quality.latest_closed_open_time(now=3600 * 10, timeframe="1h") == 3600 * 9
+
+
+def test_latest_closed_candle_is_unchanged_across_a_short_poll_interval():
+    # The point of the check: five minutes apart, a daily candle is the same
+    # one, so there is nothing for a second request to return.
+    day = 86400
+    assert quality.latest_closed_open_time(now=day * 5 + 300, timeframe="1d") == quality.latest_closed_open_time(
+        now=day * 5 + 600, timeframe="1d"
+    )

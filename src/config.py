@@ -24,10 +24,13 @@ INSTRUMENTS = [
         "timeframes": ["5m", "15m", "1h", "4h", "1d"],
     },
     {
+        # No 5m/15m: Twelve Data's free tier allows 800 requests a day, and
+        # short timeframes on a 5-minute poll would spend that several times
+        # over. Binance has no comparable cap, so BTC keeps them.
         "symbol": "XAUUSD",
         "provider": "twelvedata",
         "provider_symbol": "XAU/USD",
-        "timeframes": ["5m", "15m", "1h", "4h", "1d"],
+        "timeframes": ["1h", "4h", "1d"],
     },
 ]
 

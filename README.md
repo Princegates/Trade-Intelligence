@@ -122,8 +122,25 @@ account. Rotate it on the expiry you set.
 Pick the interval to match the shortest timeframe in `src/config.py`: a
 timeframe goes stale after `STALENESS_INTERVALS` (2) of its own periods, so 5m
 candles need a run at least every 10 minutes to stay current, 15m every 30,
-and so on. Polling faster also costs proportionally more Twelve Data calls —
-the free tier allows 800 a day, and each run spends one per gold timeframe.
+and so on. Five minutes keeps every current timeframe fresh.
+
+Polling that often does not cost proportionally more provider requests. A run
+only calls a provider when a new candle could actually have closed since the
+last one it stored — a daily candle does not change between two polls five
+minutes apart, so asking again would spend a request to be told the same
+thing. Evaluation still runs every poll, from candles already held.
+
+Measured over a simulated day of 5-minute polls, gold costs 31 Twelve Data
+requests rather than 864: 24 for 1h, 6 for 4h, 1 for 1d. That is what keeps
+three gold timeframes inside a free tier of 800 a day.
+
+The exception is a market that is closed. Gold has no weekend candles, so
+nothing new ever arrives and each poll retries — roughly 864 requests across
+a weekend day, which will exhaust the daily allowance and show gold as
+unreachable until it resets. Crypto is unaffected, and gold is genuinely
+closed at the time, so the display is not wrong; it is just noisier and more
+wasteful than it needs to be. Backing off on a market that is closed would
+fix it.
 
 ## The web dashboard
 

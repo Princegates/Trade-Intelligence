@@ -32,3 +32,14 @@ def is_stale(latest_open_time, now, timeframe):
     duration = config.TIMEFRAME_SECONDS[timeframe]
     overdue = now - (latest_open_time + duration)
     return overdue > config.STALENESS_INTERVALS * duration
+
+
+def latest_closed_open_time(now, timeframe):
+    """When the most recently closed candle opened.
+
+    Lets a run tell whether the provider could have anything new before
+    spending a request on it — a daily candle does not change between two
+    polls five minutes apart.
+    """
+    duration = config.TIMEFRAME_SECONDS[timeframe]
+    return (now // duration) * duration - duration

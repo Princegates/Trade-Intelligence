@@ -107,6 +107,17 @@ def get_recent_candles(symbol, timeframe, limit=200):
     return rows
 
 
+def newest_complete_candle(symbol, timeframe):
+    """open_time of the newest closed candle held locally, or None."""
+    with connect() as conn:
+        row = conn.execute(
+            """SELECT MAX(open_time) FROM candles
+               WHERE symbol=? AND timeframe=? AND is_complete=1""",
+            (symbol, timeframe),
+        ).fetchone()
+    return row[0]
+
+
 def record_signal(
     symbol,
     timeframe,

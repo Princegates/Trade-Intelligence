@@ -61,6 +61,58 @@ def test_rerunning_inside_the_same_candle_keeps_the_original_call(temp_db, monke
     assert len(db.signal_history("BTCUSDT", "1h")) == 1
 
 
+def test_no_request_is_spent_when_no_new_candle_can_have_closed(temp_db, monkeypatch):
+    """The binding constraint on a free data plan is requests, not compute."""
+    fetches = []
+
+    def counting_fetch(instrument, timeframe):
+        fetches.append(timeframe)
+        return _feed(61, NOW)
+
+    monkeypatch.setattr(run, "fetch_candles", counting_fetch)
+
+    run.process(INSTRUMENT, "1h", NOW)
+    assert len(fetches) == 1
+
+    # Five minutes later the same 1h candle is still the newest closed one.
+    run.process(INSTRUMENT, "1h", NOW + 300)
+    assert len(fetches) == 1
+
+
+def test_a_request_is_spent_once_a_new_candle_closes(temp_db, monkeypatch):
+    fetches = []
+
+    def counting_fetch(instrument, timeframe):
+        fetches.append(timeframe)
+        return _feed(61, NOW + HOUR)
+
+    monkeypatch.setattr(run, "fetch_candles", lambda i, tf: _feed(61, NOW))
+    run.process(INSTRUMENT, "1h", NOW)
+
+    monkeypatch.setattr(run, "fetch_candles", counting_fetch)
+    run.process(INSTRUMENT, "1h", NOW + HOUR)
+    assert len(fetches) == 1
+
+
+def test_skipping_the_fetch_still_evaluates_and_mirrors(temp_db, monkeypatch):
+    """Skipping the request must not skip publication — otherwise a signal
+    that failed to mirror once would never get another chance."""
+    _serve(monkeypatch, _feed(61, NOW))
+    published = []
+    monkeypatch.setattr(
+        run.supabase,
+        "publish_signal",
+        lambda symbol, timeframe, **signal: published.append(signal["candle_time"]),
+    )
+
+    run.process(INSTRUMENT, "1h", NOW)
+    monkeypatch.setattr(run, "fetch_candles", lambda i, tf: pytest.fail("should not fetch"))
+    run.process(INSTRUMENT, "1h", NOW + 300)
+
+    assert len(published) == 2
+    assert published[0] == published[1]
+
+
 def test_already_called_candle_is_still_mirrored(temp_db, monkeypatch):
     """Signals computed before Supabase was configured must still reach it,
     otherwise they stay stranded in SQLite and never appear on the dashboard."""
