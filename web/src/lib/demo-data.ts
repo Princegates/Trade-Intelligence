@@ -73,9 +73,11 @@ const DEMO_SIGNAL_SEEDS: DemoSignalSeed[] = [
     verdict: "BUY",
     score: 2,
     reasoning: [
-      "RSI(14) at 42.3 — neutral (30-70)",
+      "Price above a bullishly stacked EMA line (EMA9=68210.40, EMA21=68050.10, EMA50=67820.75, EMA100=67512.30, EMA200=66890.15)",
+      "RSI(14) at 58.2 — neutral (30-70)",
       "MACD 184.20 above signal line (150.40) — bullish",
-      "SMA20 (68110.00) above SMA50 (67420.00) — uptrend",
+      "BOS at 68150.00 — price confirms the prevailing uptrend",
+      "ATR(14) at 145.30 — typical move per candle, used to size the levels below",
     ],
   },
   {
@@ -87,9 +89,11 @@ const DEMO_SIGNAL_SEEDS: DemoSignalSeed[] = [
     verdict: "HOLD",
     score: 0,
     reasoning: [
+      "EMA stack mixed (EMA9=68320.10, EMA21=68300.50, EMA50=68310.75) — no clean trend",
       "RSI(14) at 55.1 — neutral (30-70)",
       "MACD flat against its signal line — no clear direction",
-      "SMA20 (68300.00) above SMA50 (68250.00) — uptrend",
+      "Market structure: range bias, no fresh break this candle",
+      "ATR(14) at 210.60 — typical move per candle, used to size the levels below",
     ],
   },
   {
@@ -101,9 +105,12 @@ const DEMO_SIGNAL_SEEDS: DemoSignalSeed[] = [
     verdict: "SELL",
     score: -2,
     reasoning: [
-      "RSI(14) at 74.8 — overbought (>70), bearish",
+      "Price below a bearishly stacked EMA line (EMA9=67450.20, EMA21=67680.90, EMA50=68120.40, EMA100=68550.10, EMA200=69200.75)",
+      "RSI(14) at 74.8 — overbought (>70)",
       "MACD 320.10 below signal line (410.55) — bearish",
-      "SMA20 (67200.00) below SMA50 (67650.00) — downtrend",
+      "RSI and MACD agree — counted once as momentum, not twice",
+      "Market structure: down bias, no fresh break this candle",
+      "ATR(14) at 380.20 — typical move per candle, used to size the levels below",
     ],
   },
   {
@@ -115,9 +122,11 @@ const DEMO_SIGNAL_SEEDS: DemoSignalSeed[] = [
     verdict: "HOLD",
     score: 1,
     reasoning: [
+      "Price above a bullishly stacked EMA line (EMA9=2379.40, EMA21=2375.10, EMA50=2371.90)",
       "RSI(14) at 58.0 — neutral (30-70)",
       "MACD 1.70 above signal line (1.25) — bullish",
-      "SMA20 (2371.00) below SMA50 (2374.50) — downtrend",
+      "Market structure: range bias, no fresh break this candle",
+      "ATR(14) at 6.80 — typical move per candle, used to size the levels below",
     ],
   },
   {
@@ -129,9 +138,11 @@ const DEMO_SIGNAL_SEEDS: DemoSignalSeed[] = [
     verdict: "BUY",
     score: 2,
     reasoning: [
+      "Price above a bullishly stacked EMA line (EMA9=2382.60, EMA21=2377.20, EMA50=2368.50, EMA100=2359.80, EMA200=2340.10)",
       "RSI(14) at 38.4 — neutral (30-70)",
       "MACD 2.40 above signal line (1.10) — bullish",
-      "SMA20 (2379.00) above SMA50 (2365.00) — uptrend",
+      "BOS at 2379.00 — price confirms the prevailing uptrend",
+      "ATR(14) at 5.40 — typical move per candle, used to size the levels below",
     ],
   },
   {
@@ -143,9 +154,11 @@ const DEMO_SIGNAL_SEEDS: DemoSignalSeed[] = [
     verdict: "HOLD",
     score: 0,
     reasoning: [
+      "EMA stack mixed (EMA9=2366.30, EMA21=2364.80, EMA50=2361.50) — no clean trend",
       "RSI(14) at 49.6 — neutral (30-70)",
       "MACD -0.46 below signal line (-0.19) — bearish",
-      "SMA20 (2368.00) above SMA50 (2360.00) — uptrend",
+      "Market structure: up bias, no fresh break this candle",
+      "ATR(14) at 4.90 — typical move per candle, used to size the levels below",
     ],
   },
 ];

@@ -10,7 +10,7 @@ const features = [
   {
     icon: BarChart3,
     title: "Rule-based signals, not black boxes",
-    description: "RSI, MACD, and moving-average crossovers combine into a BUY/SELL/HOLD verdict — every vote is shown, never a bare number.",
+    description: "Trend, momentum, market structure, and candlestick confirmation each vote, and at least two have to agree before it calls a direction — every vote is shown, never a bare number.",
   },
   {
     icon: ShieldCheck,

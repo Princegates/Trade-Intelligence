@@ -50,23 +50,36 @@ TIMEFRAME_SECONDS = {
     "1w": 604800,
 }
 
-# SMA50 is the longest lookback the engine uses, so this is the floor.
+# The floor for a directional call at all. EMA200 and swing-based structure
+# both want more history than this and simply report themselves unavailable
+# below it — that degrades one category's vote rather than blocking every
+# series for two days while gold's newest timeframes catch up (BR-006: never
+# substitute; here, never manufacture a floor high enough to starve a
+# newly-added series of signals it would otherwise be able to produce).
 MIN_CANDLES_FOR_SIGNAL = 60
 
-# Indicators that must return a value before a directional call is allowed.
+# Categories that must return a value before a directional call is allowed.
 # Below this the engine returns HOLD rather than guessing from thin evidence.
 MIN_EVIDENCE = 2
 
-# Net indicator votes needed to call a direction; below it the answer is HOLD.
-# Backtested over ~840 evaluations of stored BTC candles, ±1 produced 44% of
-# evaluations as directional against 28% at ±2, at an indistinguishable hit
-# rate (54.1% vs 53.8%) — the extra HOLDs at ±2 were withholding calls that
-# were no better or worse, not protecting against bad ones. Note that ~54% is
-# close to a coin flip and is not yet evidence of an edge; see `confidence`.
-BUY_THRESHOLD = 1
+# Net category votes needed to call a direction; below it the answer is HOLD.
+# The four categories are EMA trend, momentum (RSI+MACD, one vote between
+# them), market structure and candlestick confirmation — each -1/0/+1, so
+# ±2 means at least two independent categories agree and none contradicts.
+# This replaces a per-indicator ±1 threshold that was backtested against a
+# different, more easily correlated scoring scheme (RSI, MACD and an SMA
+# cross could all fire from the same underlying move); that backtest no
+# longer applies to categories built to avoid double-counting. ±2 is a
+# considered default, not a re-run backtest — there isn't yet a comparable
+# volume of resolved signals under the new scheme to calibrate against (see
+# `confidence`, and revisit via src/accuracy.py once there is).
+BUY_THRESHOLD = 2
 
-# How many candles to pull per request/store per refresh.
-CANDLE_FETCH_LIMIT = 200
+# How many candles to pull per request/store per refresh. Bumped from 200 so
+# EMA200 has a little room to report a slope, not just a single bootstrapped
+# value — this changes response size, not request count, so it does not
+# touch the quota math above.
+CANDLE_FETCH_LIMIT = 260
 
 # A feed counts as stale once its newest closed candle is this many intervals
 # overdue. Stale markets get a suppression record instead of a signal, so a
@@ -76,9 +89,9 @@ STALENESS_INTERVALS = 2
 # How often to retry a feed that has already gone stale. Gold has no weekend
 # candles, so nothing new ever arrives and every poll would spend a request
 # being told so — 1440 across a Saturday for gold's five timeframes, against
-# a free tier of 800 a day. Retrying on the half hour costs a stale series 96 attempts instead —
-# 480 across gold's five timeframes — and still notices the market reopening
-# well within an hour.
+# a free tier of 800 a day. Retrying on the half hour costs a stale series 96
+# attempts instead — 480 across gold's five timeframes — and still notices
+# the market reopening well within an hour.
 STALE_RETRY_SECONDS = 1800
 
 # The slice of each retry period in which an attempt is allowed. Must be at
@@ -86,3 +99,21 @@ STALE_RETRY_SECONDS = 1800
 # never retries at all. Ten minutes leaves room for a five-minute poll to
 # drift or be delayed.
 STALE_RETRY_WINDOW = 600
+
+# Confirmed swing highs/lows need this many candles clear on each side before
+# they count — a swing is only real once you can see what happened after it.
+# 2 is the standard fractal window: tight enough to find swings on a 5m
+# chart, wide enough not to call every wiggle a turning point.
+SWING_LOOKBACK = 2
+
+# How close two swing highs (or two swing lows) have to be, as a fraction of
+# price, to count as the same pooled level rather than two different ones.
+# 0.15% is roughly a gold ATR tick on a 15m candle — tight enough that this
+# does not lump together levels a real trader would treat as distinct.
+EQUAL_LEVEL_TOLERANCE = 0.0015
+
+# A candle whose range exceeds this many ATRs is treated as an abnormal
+# volatility spike and forces HOLD regardless of what else agrees — a move
+# can score every category correctly and still be too extended to enter
+# safely the moment it happens (spec section 13).
+VOLATILITY_SPIKE_ATR = 2.5

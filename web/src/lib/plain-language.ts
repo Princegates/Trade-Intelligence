@@ -1,7 +1,7 @@
-// Turns the technical reasoning lines (RSI/MACD/SMA jargon) into one plain
-// English sentence anyone can read at a glance. The technical lines
-// themselves are never hidden for good — they're always shown too, just
-// demoted to secondary detail, so the "why" behind the plain summary is
+// Turns the technical reasoning lines (EMA/RSI/MACD/structure jargon) into
+// one plain English sentence anyone can read at a glance. The technical
+// lines themselves are never hidden for good — they're always shown too,
+// just demoted to secondary detail, so the "why" behind the plain summary is
 // still there for anyone who wants it.
 
 export interface SummarizableSignal {
@@ -10,9 +10,11 @@ export interface SummarizableSignal {
 }
 
 // These keywords are the vocabulary src/signals/engine.py (and the matching
-// demo data) already writes into every reasoning line, so counting them is
-// a reliable way to tell how many of the 3 indicators agree, without
-// depending on the exact wording of any one line.
+// demo data) already writes into every directional reasoning line — trend,
+// momentum and market structure all resolve to one of these words when they
+// have something to say — so counting them is a reliable way to gauge how
+// much of the reasoning leans which way, without depending on the exact
+// wording of any one category or how many of them fired.
 const BULLISH_WORDS = /bullish|oversold|uptrend/i;
 const BEARISH_WORDS = /bearish|overbought|downtrend/i;
 

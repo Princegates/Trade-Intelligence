@@ -22,7 +22,7 @@ Scheduled poll (every 5 minutes)
   └─────┬──────┘
         ▼
   ┌────────────┐
-  │  signals   │  RSI(14), MACD(12,26,9), SMA20/50 crossover → verdict + reasoning
+  │  signals   │  EMA stack, RSI+MACD, market structure, candlesticks → verdict + reasoning
   └─────┬──────┘
         ▼
   ┌────────────┐
@@ -33,11 +33,27 @@ Scheduled poll (every 5 minutes)
 - **Ingestion** (`src/ingest/`) — Binance's public klines endpoint needs no
   API key. Twelve Data's free tier needs `TWELVEDATA_API_KEY`; without it,
   gold is skipped gracefully rather than failing the whole run.
-- **Signal engine** (`src/signals/`) — each indicator votes bullish (+1),
-  bearish (-1), or neutral (0); the combined score decides BUY (≥+1), SELL
-  (≤-1), or HOLD, and every vote's reasoning is kept, never just the number.
-  Candlestick patterns (`src/signals/patterns.py`) vote as a fourth
-  indicator, read against the prevailing trend rather than by name.
+- **Signal engine** (`src/signals/`) — four independent categories each vote
+  bullish (+1), bearish (-1) or neutral (0), and a call needs at least two to
+  agree (`BUY_THRESHOLD`): an **EMA stack** (9/21/50/100/200 — is price
+  riding a bullishly or bearishly aligned line, not just crossing one),
+  **momentum** (RSI(14) and MACD(12,26,9) counted *once* between them, since
+  both follow the same underlying move — letting them vote separately would
+  double-count one opinion as two), **market structure**
+  (`src/signals/structure.py` — swing highs/lows, Break of Structure vs.
+  Change of Character, ranging vs. trending), and **candlestick patterns**
+  (`src/signals/patterns.py`, read against the prevailing trend and only
+  counted when the shape actually forms at a swing level — a hammer in the
+  middle of nowhere is reported but does not vote). A handful of
+  false-signal gates (`src/signals/divergence.py`, an ATR volatility spike,
+  a swept liquidity pool) can pull a call back to HOLD after the fact, but
+  never push a HOLD into one — every gate only ever removes a signal, never
+  manufactures one. Every vote's reasoning is kept, never just the number.
+  What this deliberately leaves out: DXY, Treasury yields, Fed/macro
+  calendar, funding rates, open interest, liquidations, and real order-book
+  liquidity — none of that is available on the free feeds this project runs
+  on, and reporting it anyway would mean inventing data rather than reducing
+  confidence when it's missing.
 - **Quality gates** (`src/quality.py`) — impossible candles and stale feeds
   suppress the signal instead of producing one from bad prices.
 - **Storage** (`src/storage/db.py`) — plain SQLite: `candles`, `signals` and
@@ -204,5 +220,16 @@ pytest
 
 - Push/Telegram alerts, once the signal logic has a track record worth
   paging yourself over (see `src/accuracy.py`).
-- More indicators (Bollinger Bands, ATR) if the current three prove
-  insufficient in practice.
+- Re-derive `BUY_THRESHOLD` from a real backtest once the confluence engine
+  has accumulated a comparable volume of resolved signals to the one that
+  justified the old per-indicator threshold — it is currently a considered
+  default, not a measured one (see the comment in `src/config.py`).
+- Feed the higher-timeframe read into a lower timeframe's own evaluation, so
+  "never let a 5-minute move override an established daily trend" is
+  enforced inside the engine itself rather than only at the dashboard's
+  consensus tile (`web/src/lib/consensus.ts`), which already weights longer
+  timeframes more heavily and requires cross-timeframe agreement.
+- Anything needing data this project doesn't have for free — DXY, Treasury
+  yields, a macro/event calendar, funding rates, open interest,
+  liquidations, real order-book liquidity, spread — stays out of scope
+  until there's a free source for it, rather than approximated or invented.

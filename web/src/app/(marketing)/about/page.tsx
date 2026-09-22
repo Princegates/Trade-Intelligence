@@ -16,9 +16,10 @@ export default function AboutPage() {
           <CardHeader>
             <CardTitle>What it does</CardTitle>
             <CardDescription>
-              RSI, MACD, and moving-average crossovers each vote bullish, bearish, or neutral. The combined
-              score becomes a BUY/SELL/HOLD verdict, and every vote&apos;s reasoning is kept, not just the
-              number.
+              An EMA stack, momentum (RSI+MACD), market structure, and candlestick confirmation each vote
+              bullish, bearish, or neutral — and at least two have to agree before it calls a direction at
+              all. Every vote&apos;s reasoning is kept, not just the number, and a handful of false-signal
+              checks can pull a call back to wait-and-see, never the other way around.
             </CardDescription>
           </CardHeader>
         </Card>
