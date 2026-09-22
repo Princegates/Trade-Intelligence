@@ -1,7 +1,8 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { breakoutPlans, type Consensus } from "@/lib/consensus";
-import { PriceChart, type ChartLevel } from "@/components/dashboard/price-chart";
+import { ChartPanel } from "@/components/dashboard/chart-panel";
+import type { ChartLevel } from "@/components/dashboard/price-chart";
 import type { Candle } from "@/lib/candles";
 
 const money = (n: number) => `$${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
@@ -26,7 +27,13 @@ function Level({ label, value, tone }: { label: string; value: string; tone?: st
  * The levels are never averaged — they are taken whole from the heaviest
  * timeframe that agrees, and that timeframe is named, so the numbers always
  * describe one real setup. */
-export function ConsensusTile({ consensus, candles = [] }: { consensus: Consensus; candles?: Candle[] }) {
+export function ConsensusTile({
+  consensus,
+  candlesByTimeframe = {},
+}: {
+  consensus: Consensus;
+  candlesByTimeframe?: Record<string, Candle[]>;
+}) {
   const { verdict, agreement, opinions, source, note, symbol } = consensus;
   const levels = source?.levels ?? null;
   const directional = verdict !== "HOLD" && levels?.entry != null && levels?.stop != null;
@@ -93,14 +100,11 @@ export function ConsensusTile({ consensus, candles = [] }: { consensus: Consensu
           )
         )}
 
-        {candles.length > 0 && (
-          <div className="mt-4">
-            <PriceChart candles={candles} levels={chartLevels} />
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              {source ? `${source.timeframe} candles` : "candles"} — the levels above, drawn where they sit.
-            </p>
-          </div>
-        )}
+        <ChartPanel
+          candlesByTimeframe={candlesByTimeframe}
+          levels={chartLevels}
+          initialTimeframe={source?.timeframe}
+        />
 
         <div className="mt-4 flex flex-wrap gap-1.5 border-t pt-3">
           {opinions.map((o) => (

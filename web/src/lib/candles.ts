@@ -1,15 +1,10 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { CHART_TIMEFRAMES, type Candle } from "@/lib/candle-view";
 
-export interface Candle {
-  /** Seconds since epoch — what lightweight-charts expects. */
-  time: number;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-}
+export { CHART_TIMEFRAMES } from "@/lib/candle-view";
+export type { Candle } from "@/lib/candle-view";
 
 /** Closed candles for one series, oldest first.
  *
@@ -41,6 +36,20 @@ export async function getCandles(symbol: string, timeframe: string, limit = 200)
       close: row.close,
     }))
     .reverse();
+}
+
+/** Every timeframe's candles for one symbol, fetched together so switching
+ * between them is instant rather than a round-trip. Timeframes with nothing
+ * stored are omitted, so the picker only offers what can actually be drawn. */
+export async function getCandlesByTimeframe(
+  symbol: string,
+  timeframes: readonly string[] = CHART_TIMEFRAMES,
+  limit = 150,
+): Promise<Record<string, Candle[]>> {
+  const series = await Promise.all(
+    timeframes.map(async (timeframe) => [timeframe, await getCandles(symbol, timeframe, limit)] as const),
+  );
+  return Object.fromEntries(series.filter(([, candles]) => candles.length > 0));
 }
 
 const TIMEFRAME_SECONDS: Record<string, number> = {

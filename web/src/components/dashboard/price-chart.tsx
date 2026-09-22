@@ -12,7 +12,7 @@ import {
   type UTCTimestamp,
 } from "lightweight-charts";
 
-import type { Candle } from "@/lib/candles";
+import type { Candle } from "@/lib/candle-view";
 
 export interface ChartLevel {
   price: number;

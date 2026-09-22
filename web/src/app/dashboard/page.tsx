@@ -1,7 +1,7 @@
 import { SignalCard } from "@/components/dashboard/signal-card";
 import { ConsensusTile } from "@/components/dashboard/consensus-tile";
 import { buildConsensus } from "@/lib/consensus";
-import { getCandles } from "@/lib/candles";
+import { getCandlesByTimeframe } from "@/lib/candles";
 import { getLatestSignals, getRecentSuppressions } from "@/lib/signals";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -30,8 +30,7 @@ export default async function DashboardOverviewPage() {
   const views = await Promise.all(
     [...bySymbol.entries()].map(async ([symbol, group]) => {
       const consensus = buildConsensus(symbol, signals);
-      const timeframe = consensus.source?.timeframe ?? group[0]?.timeframe ?? "1h";
-      return { symbol, group, consensus, candles: await getCandles(symbol, timeframe) };
+      return { symbol, group, consensus, candlesByTimeframe: await getCandlesByTimeframe(symbol) };
     }),
   );
 
@@ -77,12 +76,12 @@ export default async function DashboardOverviewPage() {
         </Card>
       )}
 
-      {views.map(({ symbol, group, consensus, candles }) => (
+      {views.map(({ symbol, group, consensus, candlesByTimeframe }) => (
         <section key={symbol}>
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">{symbol}</h2>
 
           <div className="mb-4">
-            <ConsensusTile consensus={consensus} candles={candles} />
+            <ConsensusTile consensus={consensus} candlesByTimeframe={candlesByTimeframe} />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
