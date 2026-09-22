@@ -65,9 +65,40 @@ def connect():
         conn.close()
 
 
+# CREATE TABLE IF NOT EXISTS silently does nothing to a table that already
+# exists, so a column added to SCHEMA never reaches the committed database —
+# every run then fails on "no column named ...". Columns added after the
+# first release are listed here and applied on open.
+ADDED_COLUMNS = {
+    "candles": {
+        "is_complete": "INTEGER NOT NULL DEFAULT 0",
+    },
+    "signals": {
+        "confidence": "REAL",
+        "evidence_count": "INTEGER NOT NULL DEFAULT 0",
+        "strategy_version": "TEXT NOT NULL DEFAULT ''",
+        "patterns": "TEXT NOT NULL DEFAULT ''",
+        "entry": "REAL",
+        "stop": "REAL",
+        "target": "REAL",
+        "buy_above": "REAL",
+        "sell_below": "REAL",
+    },
+}
+
+
+def _add_missing_columns(conn):
+    for table, columns in ADDED_COLUMNS.items():
+        present = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+        for name, definition in columns.items():
+            if name not in present:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
+
+
 def init_db():
     with connect() as conn:
         conn.executescript(SCHEMA)
+        _add_missing_columns(conn)
 
 
 def upsert_candles(symbol, timeframe, candles):
