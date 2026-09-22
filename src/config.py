@@ -14,7 +14,15 @@ BINANCE_BASE_URL = os.environ.get("BINANCE_BASE_URL") or "https://api.binance.us
 # Every stored signal records the version that produced it, so a past call can
 # be reproduced from its inputs (FR-SIG-005). Bump this whenever the scoring
 # logic changes; signals from different versions coexist rather than overwrite.
-STRATEGY_VERSION = "1.0.0"
+#
+# 2.0.0: replaced independent per-indicator voting (RSI, MACD, SMA20/50,
+# pattern) with four confluence categories (EMA stack, RSI+MACD combined,
+# market structure, gated candlestick confirmation) and a stricter threshold.
+# A verdict tagged 1.0.0 was never touched by this change — it stays exactly
+# what the old engine called it — but a new candle evaluated under the new
+# logic has to carry a version that actually says so, or nothing downstream
+# (accuracy.py, a future backtest) could tell the two scoring schemes apart.
+STRATEGY_VERSION = "2.0.0"
 
 INSTRUMENTS = [
     {
