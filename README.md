@@ -140,16 +140,25 @@ minutes apart, so asking again would spend a request to be told the same
 thing. Nothing new to fetch also means nothing new to evaluate: the signal
 for that candle was published by the run that first saw it.
 
-Measured over a simulated day of 5-minute polls, gold costs 31 Twelve Data
-requests rather than 864: 24 for 1h, 6 for 4h, 1 for 1d. That is what keeps
-three gold timeframes inside a free tier of 800 a day.
+Measured over a simulated trading day of 5-minute polls, gold costs 415
+Twelve Data requests rather than the 1440 an unconditional poller would
+spend: 288 for 5m, 96 for 15m, 24 for 1h, 6 for 4h and 1 for 1d. Each
+timeframe costs only its own candle rate, which is what lets all five fit
+inside a free tier of 800 a day.
 
 A closed market is handled separately. Gold has no weekend candles, so
-nothing new ever arrives and an unthrottled poller would keep asking — about
-864 requests across a Saturday, enough to exhaust the day's allowance and
-leave gold unreachable until it reset. A feed already known to be stale is
-therefore retried only in the opening window of each half hour, which costs
-288 instead and still notices the market reopening within thirty minutes.
+nothing new ever arrives and an unthrottled poller would keep asking — 1440
+requests across a Saturday, nearly twice the day's allowance, leaving gold
+unreachable until it reset. A feed already known to be stale is therefore
+retried only in the opening window of each half hour, and still notices the
+market reopening within thirty minutes.
+
+Simulated against the real gates, that puts a Saturday at 704 requests and a
+longer closure at 480 a day. The peak is the first closed day rather than the
+quietest: a daily candle is not yet two days overdue, so it has not tripped
+the staleness test and is still asking on every poll. 704 is the number with
+the least headroom under the 800 cap, and the one to re-check before adding
+another gold timeframe.
 
 The throttle is derived from the clock rather than from stored state, so it
 needs no bookkeeping and behaves identically on an ephemeral runner. It
@@ -177,10 +186,10 @@ an unreachable Supabase degrades to a local-only run rather than failing it.
 
 ## What's tracked
 
-| Symbol  | Source     | Timeframes    |
-|---------|------------|---------------|
-| BTCUSDT | Binance    | 1h, 4h, 1d    |
-| XAUUSD  | Twelve Data| 1h, 4h, 1d    |
+| Symbol  | Source      | Timeframes          |
+|---------|-------------|---------------------|
+| BTCUSDT | Binance     | 5m, 15m, 1h, 4h, 1d |
+| XAUUSD  | Twelve Data | 5m, 15m, 1h, 4h, 1d |
 
 Edit `src/config.py` to add or remove instruments/timeframes.
 

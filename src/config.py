@@ -24,13 +24,16 @@ INSTRUMENTS = [
         "timeframes": ["5m", "15m", "1h", "4h", "1d"],
     },
     {
-        # No 5m/15m: Twelve Data's free tier allows 800 requests a day, and
-        # short timeframes on a 5-minute poll would spend that several times
-        # over. Binance has no comparable cap, so BTC keeps them.
+        # All five fit inside Twelve Data's free 800 requests a day. A run
+        # only calls a provider when that timeframe's candle could have
+        # closed, so a series costs its own candle rate rather than one
+        # request per poll: 288 + 96 + 24 + 6 + 1 = 415 on a trading day.
+        # A weekend peaks at 704 on the first closed day, because 1d does not
+        # go stale within a single day and so keeps asking unthrottled.
         "symbol": "XAUUSD",
         "provider": "twelvedata",
         "provider_symbol": "XAU/USD",
-        "timeframes": ["1h", "4h", "1d"],
+        "timeframes": ["5m", "15m", "1h", "4h", "1d"],
     },
 ]
 
@@ -72,9 +75,10 @@ STALENESS_INTERVALS = 2
 
 # How often to retry a feed that has already gone stale. Gold has no weekend
 # candles, so nothing new ever arrives and every poll would spend a request
-# being told so — about 864 across a Saturday, against a free tier of 800 a
-# day. Retrying on the half hour costs 144 and still notices the market
-# reopening well within an hour.
+# being told so — 1440 across a Saturday for gold's five timeframes, against
+# a free tier of 800 a day. Retrying on the half hour costs a stale series 96 attempts instead —
+# 480 across gold's five timeframes — and still notices the market reopening
+# well within an hour.
 STALE_RETRY_SECONDS = 1800
 
 # The slice of each retry period in which an attempt is allowed. Must be at
