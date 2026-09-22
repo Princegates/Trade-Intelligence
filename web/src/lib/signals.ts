@@ -5,7 +5,7 @@ import { DEMO_SIGNALS } from "@/lib/demo-data";
 import type { Database } from "@/lib/supabase/types";
 import type { SignalView, SuppressionView } from "@/lib/signal-view";
 
-export { isStale, TIMEFRAME_SECONDS } from "@/lib/signal-view";
+export { isStale, TIMEFRAME_SECONDS, unresolvedSuppressions } from "@/lib/signal-view";
 export type { SignalView, SuppressionView } from "@/lib/signal-view";
 
 /** Where the numbers on screen came from.

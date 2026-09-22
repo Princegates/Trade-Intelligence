@@ -54,3 +54,27 @@ export function isStale(signal: SignalView, now: number = Date.now()): boolean {
   if (!interval) return false;
   return (now - new Date(signal.generatedAt).getTime()) / 1000 > interval * 2;
 }
+
+/** Suppressions that still explain something.
+ *
+ * A suppression is only news while it is the latest word on that series. Once
+ * a signal arrives for the same instrument and timeframe, the feed recovered
+ * and saying "no signal because the provider returned nothing" is simply
+ * wrong — there is a signal, right there on the page. */
+export function unresolvedSuppressions(
+  suppressions: SuppressionView[],
+  signals: SignalView[],
+): SuppressionView[] {
+  const newestSignal = new Map<string, number>();
+  for (const s of signals) {
+    const key = `${s.symbol}:${s.timeframe}`;
+    const at = new Date(s.generatedAt).getTime();
+    newestSignal.set(key, Math.max(newestSignal.get(key) ?? 0, at));
+  }
+
+  return suppressions.filter((suppression) => {
+    const signalAt = newestSignal.get(`${suppression.symbol}:${suppression.timeframe}`);
+    if (signalAt === undefined) return true;
+    return new Date(suppression.observedAt).getTime() > signalAt;
+  });
+}

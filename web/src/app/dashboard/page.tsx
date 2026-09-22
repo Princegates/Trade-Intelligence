@@ -2,7 +2,7 @@ import { SignalCard } from "@/components/dashboard/signal-card";
 import { ConsensusTile } from "@/components/dashboard/consensus-tile";
 import { buildConsensus } from "@/lib/consensus";
 import { getCandlesByTimeframe } from "@/lib/candles";
-import { getLatestSignals, getRecentSuppressions } from "@/lib/signals";
+import { getLatestSignals, getRecentSuppressions, unresolvedSuppressions } from "@/lib/signals";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -11,14 +11,22 @@ export const dynamic = "force-dynamic";
 
 const SUPPRESSION_COPY: Record<string, string> = {
   FETCH_FAILED: "the provider could not be reached",
-  NO_DATA: "the provider returned nothing",
+  NO_DATA: "the provider returned nothing, which usually means its API key is not set",
   BAD_CANDLE: "the feed sent an impossible candle",
   INSUFFICIENT_HISTORY: "there is not enough closed history yet",
   STALE_DATA: "the feed has gone stale",
 };
 
+// Reasons whose stored detail only restates the sentence above it. The others
+// carry something the reader cannot infer — an error, a count, an age.
+const DETAIL_ADDS_NOTHING = new Set(["NO_DATA"]);
+
 export default async function DashboardOverviewPage() {
-  const [{ source, signals }, suppressions] = await Promise.all([getLatestSignals(), getRecentSuppressions()]);
+  const [{ source, signals }, allSuppressions] = await Promise.all([getLatestSignals(), getRecentSuppressions()]);
+
+  // A suppression is only worth showing while it is still the latest word on
+  // that series; once a signal arrives, the feed recovered.
+  const suppressions = unresolvedSuppressions(allSuppressions, signals);
 
   const bySymbol = new Map<string, typeof signals>();
   for (const s of signals) {
@@ -59,7 +67,9 @@ export default async function DashboardOverviewPage() {
                     {s.symbol} / {s.timeframe}
                   </span>{" "}
                   — no signal because {SUPPRESSION_COPY[s.reason] ?? s.reason.toLowerCase()}
-                  {s.detail && <span className="text-xs"> ({s.detail})</span>}
+                  {s.detail && !DETAIL_ADDS_NOTHING.has(s.reason) && (
+                    <span className="text-xs"> ({s.detail})</span>
+                  )}
                 </li>
               ))}
             </ul>
