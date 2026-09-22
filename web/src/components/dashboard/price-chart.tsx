@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   CandlestickSeries,
   ColorType,
@@ -42,6 +42,12 @@ export function PriceChart({
   // the current levels rather than the ones captured at creation. Written in
   // the effect below, never during render.
   const levelsRef = useRef<ChartLevel[]>(levels);
+
+  // Bumped whenever the chart is rebuilt. The data and level effects depend
+  // on it so they reapply to the new series — otherwise a rebuild with
+  // unchanged candles leaves an empty chart, and unchanged levels leaves it
+  // with no lines.
+  const [chartGeneration, setChartGeneration] = useState(0);
 
   // Create once. Re-creating on every data change would drop the viewer's
   // zoom and pan.
@@ -87,6 +93,8 @@ export function PriceChart({
     });
 
     chart.current = created;
+    setChartGeneration((n) => n + 1);
+
     return () => {
       created.remove();
       chart.current = null;
@@ -99,7 +107,7 @@ export function PriceChart({
     // `time` is a branded UTCTimestamp in v5; ours are already epoch seconds.
     series.current.setData(candles.map((c) => ({ ...c, time: c.time as UTCTimestamp })));
     chart.current?.timeScale().fitContent();
-  }, [candles]);
+  }, [candles, chartGeneration]);
 
   useEffect(() => {
     const target = series.current;
@@ -118,12 +126,17 @@ export function PriceChart({
       }),
     );
 
-    target.applyOptions({});  // nudge the price scale to re-run autoscale
+    target.applyOptions({}); // nudge the price scale to re-run autoscale
 
     return () => {
+      // The chart's own cleanup runs first and destroys the series with it,
+      // so by the time this runs `target` may already be disposed — touching
+      // it then throws "Object is disposed". It is only still ours to tidy
+      // if the series has not been replaced or torn down underneath us.
+      if (series.current !== target) return;
       for (const line of drawn) target.removePriceLine(line);
     };
-  }, [levels]);
+  }, [levels, chartGeneration]);
 
   if (candles.length === 0) {
     return (
