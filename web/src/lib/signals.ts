@@ -79,17 +79,26 @@ function toView(row: SignalRow): SignalView {
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean),
-    levels:
-      row.entry === null && row.buy_above === null
-        ? null
-        : {
-            entry: row.entry,
-            stop: row.stop,
-            target: row.target,
-            buyAbove: row.buy_above,
-            sellBelow: row.sell_below,
-          },
+    levels: toLevels(row),
   };
+}
+
+/** Levels are only usable as a complete set, and a database that predates
+ * migration 0005 returns `undefined` for these columns rather than null — so
+ * normalise both away here rather than letting a half-populated object reach
+ * the UI, where a missing number renders as a crash. */
+function toLevels(row: SignalRow): SignalView["levels"] {
+  const entry = row.entry ?? null;
+  const stop = row.stop ?? null;
+  const target = row.target ?? null;
+  const buyAbove = row.buy_above ?? null;
+  const sellBelow = row.sell_below ?? null;
+
+  const directional = entry !== null && stop !== null && target !== null;
+  const band = buyAbove !== null && sellBelow !== null;
+  if (!directional && !band) return null;
+
+  return { entry, stop, target, buyAbove, sellBelow };
 }
 
 /** A signal whose run is older than two of its own intervals means the cron

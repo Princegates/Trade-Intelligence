@@ -32,28 +32,33 @@ function SignalLevels({
   levels: NonNullable<SignalView["levels"]>;
   verdict: SignalView["verdict"];
 }) {
-  const directional = levels.entry !== null;
+  // A partial set is not renderable, and a signal predating the levels
+  // migration has none. Showing nothing beats showing "$undefined".
+  const { entry, stop, target, buyAbove, sellBelow } = levels;
+  const directional = entry != null && stop != null && target != null;
+  const band = buyAbove != null && sellBelow != null;
+  if (!directional && !band) return null;
 
   return (
     <div className="mb-3 rounded-md border bg-muted/40 p-2.5">
       {directional ? (
         <>
-          <Row label="Entry" value={money(levels.entry!)} hint="price when called" />
-          <Row label="Stop" value={money(levels.stop!)} hint="exit; the call was wrong" />
-          <Row label="Target" value={money(levels.target!)} hint="where to take profit" />
+          <Row label="Entry" value={money(entry)} hint="price when called" />
+          <Row label="Stop" value={money(stop)} hint="exit; the call was wrong" />
+          <Row label="Target" value={money(target)} hint="where to take profit" />
         </>
       ) : (
         <>
           <p className="mb-1 text-xs font-medium text-foreground">
-            Hold between {money(levels.sellBelow!)} and {money(levels.buyAbove!)}
+            Hold between {money(sellBelow!)} and {money(buyAbove!)}
           </p>
-          <Row label="Buy above" value={money(levels.buyAbove!)} hint="breaks upward" />
-          <Row label="Sell below" value={money(levels.sellBelow!)} hint="breaks downward" />
+          <Row label="Buy above" value={money(buyAbove!)} hint="breaks upward" />
+          <Row label="Sell below" value={money(sellBelow!)} hint="breaks downward" />
         </>
       )}
       <p className="mt-2 border-t pt-1.5 text-[11px] leading-snug text-muted-foreground">
         {directional
-          ? `Risking to ${money(levels.stop!)} to reach ${money(levels.target!)}. Levels are sized from recent volatility, not a forecast.`
+          ? `Risking to ${money(stop)} to reach ${money(target)}. Levels are sized from recent volatility, not a forecast.`
           : "These are the prices that would change the call, not predictions that it will reach them."}
         {verdict !== "HOLD" && " Not advice — decide your own position size."}
       </p>
