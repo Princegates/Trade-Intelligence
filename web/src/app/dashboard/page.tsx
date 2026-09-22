@@ -1,4 +1,6 @@
 import { SignalCard } from "@/components/dashboard/signal-card";
+import { ConsensusTile } from "@/components/dashboard/consensus-tile";
+import { buildConsensus } from "@/lib/consensus";
 import { getLatestSignals, getRecentSuppressions } from "@/lib/signals";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -67,6 +69,11 @@ export default async function DashboardOverviewPage() {
       {[...bySymbol.entries()].map(([symbol, group]) => (
         <section key={symbol}>
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">{symbol}</h2>
+
+          <div className="mb-4">
+            <ConsensusTile consensus={buildConsensus(symbol, signals)} />
+          </div>
+
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {group.map((s) => (
               <SignalCard key={`${s.symbol}-${s.timeframe}`} signal={s} />
