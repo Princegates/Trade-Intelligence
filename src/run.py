@@ -61,6 +61,7 @@ def process(instrument, timeframe, now):
             return f"[skip] {symbol}/{timeframe}: rejected feed — {problem}"
 
         db.upsert_candles(symbol, timeframe, candles)
+        _mirror(supabase.publish_candles, symbol, timeframe, candles)
 
     recent = db.get_recent_candles(symbol, timeframe, limit=config.CANDLE_FETCH_LIMIT)
 

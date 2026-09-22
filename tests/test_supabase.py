@@ -86,6 +86,73 @@ def test_project_url_is_accepted_however_it_was_pasted(monkeypatch, configured):
     assert captured["url"] == "https://project.supabase.co/rest/v1/signal_suppressions"
 
 
+def _candle(open_time, complete=True, close=100.0):
+    return {
+        "open_time": open_time,
+        "open": close - 1,
+        "high": close + 1,
+        "low": close - 2,
+        "close": close,
+        "volume": 5.0,
+        "complete": complete,
+    }
+
+
+def _mirror_state(monkeypatch, newest):
+    """Stub the 'what does Supabase already have' lookup."""
+    monkeypatch.setattr(supabase, "newest_mirrored_candle", lambda symbol, timeframe: newest)
+
+
+def test_the_forming_candle_is_never_mirrored(monkeypatch):
+    _configured(monkeypatch)
+    captured = _capture(monkeypatch)
+    _mirror_state(monkeypatch, None)
+
+    sent = supabase.publish_candles("BTCUSDT", "1h", [_candle(0), _candle(3600, complete=False)])
+
+    assert sent == 1
+    assert len(captured["json"]) == 1
+    assert captured["json"][0]["open_time"].startswith("1970-01-01T00:00:00")
+
+
+def test_only_candles_newer_than_the_mirror_are_sent(monkeypatch):
+    _configured(monkeypatch)
+    captured = _capture(monkeypatch)
+    _mirror_state(monkeypatch, 3600)
+
+    sent = supabase.publish_candles("BTCUSDT", "1h", [_candle(0), _candle(3600), _candle(7200)])
+
+    assert sent == 1
+    assert len(captured["json"]) == 1
+
+
+def test_an_empty_mirror_is_backfilled(monkeypatch):
+    _configured(monkeypatch)
+    captured = _capture(monkeypatch)
+    _mirror_state(monkeypatch, None)
+
+    sent = supabase.publish_candles("BTCUSDT", "1h", [_candle(0), _candle(3600), _candle(7200)])
+
+    assert sent == 3
+    assert captured["params"]["on_conflict"] == "symbol,timeframe,open_time"
+
+
+def test_nothing_is_sent_when_the_mirror_is_current(monkeypatch):
+    _configured(monkeypatch)
+    posted = []
+    monkeypatch.setattr(supabase.requests, "post", lambda *a, **k: posted.append(1))
+    _mirror_state(monkeypatch, 7200)
+
+    assert supabase.publish_candles("BTCUSDT", "1h", [_candle(0), _candle(7200)]) == 0
+    assert posted == []
+
+
+def test_candles_are_not_mirrored_when_unconfigured(monkeypatch):
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
+    assert supabase.publish_candles("BTCUSDT", "1h", [_candle(0)]) == 0
+
+
 def test_suppressions_are_appended_not_deduplicated(monkeypatch):
     _configured(monkeypatch)
     captured = _capture(monkeypatch)

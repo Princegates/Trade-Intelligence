@@ -1,6 +1,8 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { breakoutPlans, type Consensus } from "@/lib/consensus";
+import { PriceChart, type ChartLevel } from "@/components/dashboard/price-chart";
+import type { Candle } from "@/lib/candles";
 
 const money = (n: number) => `$${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
@@ -24,11 +26,24 @@ function Level({ label, value, tone }: { label: string; value: string; tone?: st
  * The levels are never averaged — they are taken whole from the heaviest
  * timeframe that agrees, and that timeframe is named, so the numbers always
  * describe one real setup. */
-export function ConsensusTile({ consensus }: { consensus: Consensus }) {
+export function ConsensusTile({ consensus, candles = [] }: { consensus: Consensus; candles?: Candle[] }) {
   const { verdict, agreement, opinions, source, note, symbol } = consensus;
   const levels = source?.levels ?? null;
   const directional = verdict !== "HOLD" && levels?.entry != null && levels?.stop != null;
   const plans = source && !directional ? breakoutPlans(source) : [];
+
+  // Whatever the tile is showing in numbers, drawn on the chart too.
+  const chartLevels: ChartLevel[] = directional
+    ? [
+        { price: levels!.entry!, label: "entry", colour: "#71717a" },
+        { price: levels!.stop!, label: "stop", colour: "#dc2626" },
+        ...(levels!.target != null ? [{ price: levels!.target, label: "target", colour: "#16a34a" }] : []),
+      ]
+    : plans.map((plan) => ({
+        price: plan.trigger,
+        label: plan.direction === "BUY" ? "buy above" : "sell below",
+        colour: plan.direction === "BUY" ? "#16a34a" : "#dc2626",
+      }));
 
   return (
     <Card className="border-2">
@@ -76,6 +91,15 @@ export function ConsensusTile({ consensus }: { consensus: Consensus }) {
               ))}
             </div>
           )
+        )}
+
+        {candles.length > 0 && (
+          <div className="mt-4">
+            <PriceChart candles={candles} levels={chartLevels} />
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              {source ? `${source.timeframe} candles` : "candles"} — the levels above, drawn where they sit.
+            </p>
+          </div>
         )}
 
         <div className="mt-4 flex flex-wrap gap-1.5 border-t pt-3">

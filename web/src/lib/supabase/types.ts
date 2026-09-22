@@ -118,6 +118,30 @@ export interface Database {
         Update: never;
         Relationships: [];
       };
+      candles: {
+        Row: {
+          symbol: string;
+          timeframe: string;
+          open_time: string;
+          open: number;
+          high: number;
+          low: number;
+          close: number;
+          volume: number;
+        };
+        Insert: {
+          symbol: string;
+          timeframe: string;
+          open_time: string;
+          open: number;
+          high: number;
+          low: number;
+          close: number;
+          volume: number;
+        };
+        Update: never;
+        Relationships: [];
+      };
       signal_suppressions: {
         Row: {
           id: number;

@@ -1,6 +1,7 @@
 import { SignalCard } from "@/components/dashboard/signal-card";
 import { ConsensusTile } from "@/components/dashboard/consensus-tile";
 import { buildConsensus } from "@/lib/consensus";
+import { getCandles } from "@/lib/candles";
 import { getLatestSignals, getRecentSuppressions } from "@/lib/signals";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,6 +24,16 @@ export default async function DashboardOverviewPage() {
   for (const s of signals) {
     bySymbol.set(s.symbol, [...(bySymbol.get(s.symbol) ?? []), s]);
   }
+
+  // The chart shows the series the levels were taken from, so the lines drawn
+  // on it belong to the candles under them.
+  const views = await Promise.all(
+    [...bySymbol.entries()].map(async ([symbol, group]) => {
+      const consensus = buildConsensus(symbol, signals);
+      const timeframe = consensus.source?.timeframe ?? group[0]?.timeframe ?? "1h";
+      return { symbol, group, consensus, candles: await getCandles(symbol, timeframe) };
+    }),
+  );
 
   return (
     <div className="space-y-8">
@@ -66,12 +77,12 @@ export default async function DashboardOverviewPage() {
         </Card>
       )}
 
-      {[...bySymbol.entries()].map(([symbol, group]) => (
+      {views.map(({ symbol, group, consensus, candles }) => (
         <section key={symbol}>
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">{symbol}</h2>
 
           <div className="mb-4">
-            <ConsensusTile consensus={buildConsensus(symbol, signals)} />
+            <ConsensusTile consensus={consensus} candles={candles} />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

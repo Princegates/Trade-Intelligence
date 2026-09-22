@@ -117,6 +117,80 @@ def publish_signal(
     )
 
 
+def newest_mirrored_candle(symbol, timeframe):
+    """open_time of the newest candle already mirrored, or None.
+
+    One small request, so a run only uploads what is actually missing: after
+    the first backfill that is a candle or two rather than the whole series.
+    """
+    credentials = _credentials()
+    if credentials is None:
+        return None
+
+    url, key = credentials
+    response = requests.get(
+        f"{url}/rest/v1/candles",
+        params={
+            "symbol": f"eq.{symbol}",
+            "timeframe": f"eq.{timeframe}",
+            "select": "open_time",
+            "order": "open_time.desc",
+            "limit": "1",
+        },
+        headers={"apikey": key, "Authorization": f"Bearer {key}"},
+        timeout=TIMEOUT,
+    )
+    response.raise_for_status()
+    rows = response.json()
+    if not rows:
+        return None
+    return datetime.fromisoformat(rows[0]["open_time"]).timestamp()
+
+
+def publish_candles(symbol, timeframe, candles):
+    """Mirror closed candles, newest-missing first. Returns how many were sent."""
+    credentials = _credentials()
+    if credentials is None or not candles:
+        return 0
+
+    since = newest_mirrored_candle(symbol, timeframe)
+    pending = [
+        c
+        for c in candles
+        if c["complete"] and (since is None or c["open_time"] > since)
+    ]
+    if not pending:
+        return 0
+
+    url, key = credentials
+    response = requests.post(
+        f"{url}/rest/v1/candles",
+        params={"on_conflict": "symbol,timeframe,open_time"},
+        json=[
+            {
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "open_time": _utc(c["open_time"]),
+                "open": c["open"],
+                "high": c["high"],
+                "low": c["low"],
+                "close": c["close"],
+                "volume": c["volume"],
+            }
+            for c in pending
+        ],
+        headers={
+            "apikey": key,
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal,resolution=merge-duplicates",
+        },
+        timeout=TIMEOUT,
+    )
+    response.raise_for_status()
+    return len(pending)
+
+
 def publish_suppression(symbol, timeframe, observed_at, reason, detail=""):
     return _insert(
         "signal_suppressions",
