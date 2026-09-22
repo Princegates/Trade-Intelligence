@@ -56,3 +56,16 @@ export function isWithinWindow(event: CalendarEvent, now: number): boolean {
 export function sortByTime(events: CalendarEvent[]): CalendarEvent[] {
   return [...events].sort((a, b) => new Date(a.eventTime).getTime() - new Date(b.eventTime).getTime());
 }
+
+/** Whether an event falls on the same UTC calendar day as `now` — the
+ * dashboard's default calendar view is just today, not the full week the
+ * underlying data actually spans, so this is what decides that split.
+ * UTC rather than the viewer's local day: every other timestamp in this
+ * system (candles, signal lineage, the event-risk window itself) is UTC,
+ * and a "today" that shifted with each viewer's timezone would disagree
+ * with the window event_risk.py actually gates on. */
+export function isSameUtcDay(eventTime: string, now: number): boolean {
+  const e = new Date(eventTime);
+  const n = new Date(now);
+  return e.getUTCFullYear() === n.getUTCFullYear() && e.getUTCMonth() === n.getUTCMonth() && e.getUTCDate() === n.getUTCDate();
+}

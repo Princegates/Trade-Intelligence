@@ -4,7 +4,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { DEMO_EVENTS } from "@/lib/demo-data";
 import type { CalendarEvent } from "@/lib/calendar-view";
 
-export { affectedInstruments, isWithinWindow, sortByTime, EVENT_RISK_CURRENCY } from "@/lib/calendar-view";
+export { affectedInstruments, isSameUtcDay, isWithinWindow, sortByTime, EVENT_RISK_CURRENCY } from "@/lib/calendar-view";
 export type { CalendarEvent, AffectedInstrument } from "@/lib/calendar-view";
 
 /** Events from a day ago through a week out — wide enough to show what just

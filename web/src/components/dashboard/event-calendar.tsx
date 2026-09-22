@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { affectedInstruments, isWithinWindow, sortByTime, type CalendarEvent } from "@/lib/calendar";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { affectedInstruments, isSameUtcDay, isWithinWindow, sortByTime, type CalendarEvent } from "@/lib/calendar";
 import { ASSET_NAMES } from "@/lib/signals";
 
 function impactVariant(impact: string) {
@@ -65,39 +66,54 @@ function EventRow({ event, now }: { event: CalendarEvent; now: number }) {
   );
 }
 
+function EventList({ events, now, emptyLabel }: { events: CalendarEvent[]; now: number; emptyLabel: string }) {
+  if (events.length === 0) {
+    return <p className="py-6 text-center text-sm text-muted-foreground">No {emptyLabel} events loaded.</p>;
+  }
+  return (
+    <ul>
+      {events.map((event) => (
+        <EventRow key={`${event.title}-${event.country}-${event.eventTime}`} event={event} now={now} />
+      ))}
+    </ul>
+  );
+}
+
 /** The economic calendar, and exactly what it does to our own signals —
  * nothing about which way price might move, only what the engine actually
  * does and when. See "Economic calendar" in the README for the source and
- * its limits. */
+ * its limits.
+ *
+ * Defaults to today rather than dumping the whole week at once; "This week"
+ * is a tab away for whoever wants to look further out. Both tabs read from
+ * the same already-fetched `events` (a week's worth, same window the
+ * event-risk gate itself uses) — switching tabs filters client-side rather
+ * than firing a second request. */
 export function EventCalendar({ events, now }: { events: CalendarEvent[]; now: number }) {
-  if (events.length === 0) {
-    return (
-      <Card>
-        <CardContent className="p-6 text-sm text-muted-foreground">
-          No calendar events loaded for this window.
-        </CardContent>
-      </Card>
-    );
-  }
-
   const ordered = sortByTime(events);
+  const today = ordered.filter((e) => isSameUtcDay(e.eventTime, now));
 
   return (
     <Card>
       <CardContent className="p-4 sm:p-5">
-        <div className="mb-1 flex items-baseline justify-between">
-          <h2 className="text-sm font-semibold">Economic calendar</h2>
-          <span className="text-xs text-muted-foreground">Next 7 days</span>
-        </div>
-        <p className="mb-2 text-xs text-muted-foreground">
+        <h2 className="mb-1 text-sm font-semibold">Economic calendar</h2>
+        <p className="mb-3 text-xs text-muted-foreground">
           High-impact USD releases hold gold to HOLD around them — see each event below. Bitcoin is never gated by
           this calendar.
         </p>
-        <ul>
-          {ordered.map((event) => (
-            <EventRow key={`${event.title}-${event.country}-${event.eventTime}`} event={event} now={now} />
-          ))}
-        </ul>
+
+        <Tabs defaultValue="today">
+          <TabsList>
+            <TabsTrigger value="today">Today</TabsTrigger>
+            <TabsTrigger value="week">This week</TabsTrigger>
+          </TabsList>
+          <TabsContent value="today">
+            <EventList events={today} now={now} emptyLabel="today's" />
+          </TabsContent>
+          <TabsContent value="week">
+            <EventList events={ordered} now={now} emptyLabel="upcoming" />
+          </TabsContent>
+        </Tabs>
       </CardContent>
     </Card>
   );

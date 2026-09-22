@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { affectedInstruments, isWithinWindow, sortByTime, type CalendarEvent } from "@/lib/calendar-view";
+import { affectedInstruments, isSameUtcDay, isWithinWindow, sortByTime, type CalendarEvent } from "@/lib/calendar-view";
 
 function event(overrides: Partial<CalendarEvent> = {}): CalendarEvent {
   return {
@@ -88,5 +88,29 @@ describe("sortByTime", () => {
     sortByTime(input);
 
     expect(input).toEqual(original);
+  });
+});
+
+describe("isSameUtcDay", () => {
+  const NOW = new Date("2026-09-25T18:00:00.000Z").getTime();
+
+  it("is true for an event earlier the same UTC day", () => {
+    expect(isSameUtcDay("2026-09-25T00:05:00.000Z", NOW)).toBe(true);
+  });
+
+  it("is true for an event later the same UTC day", () => {
+    expect(isSameUtcDay("2026-09-25T23:55:00.000Z", NOW)).toBe(true);
+  });
+
+  it("is false just after midnight UTC the next day", () => {
+    expect(isSameUtcDay("2026-09-26T00:00:00.000Z", NOW)).toBe(false);
+  });
+
+  it("is false just before midnight UTC the same day started", () => {
+    expect(isSameUtcDay("2026-09-24T23:59:00.000Z", NOW)).toBe(false);
+  });
+
+  it("is false a week out", () => {
+    expect(isSameUtcDay("2026-10-02T18:00:00.000Z", NOW)).toBe(false);
   });
 });

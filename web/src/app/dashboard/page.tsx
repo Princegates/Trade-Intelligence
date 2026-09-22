@@ -80,11 +80,12 @@ export default async function DashboardOverviewPage() {
         <div>
           <h2 className="mb-4 text-lg font-semibold tracking-tight">Assets</h2>
           <p className="mb-4 -mt-2 text-xs text-muted-foreground">
-            Bitcoin and Gold each also have their own page in the sidebar for a focused view.
+            One consensus verdict per asset — full per-timeframe reasoning lives on each asset&apos;s own page in the
+            sidebar.
           </p>
           <div className="space-y-6">
             {panels.map((data) => (
-              <AssetSection key={data.symbol} data={data} />
+              <AssetSection key={data.symbol} data={data} detailed={false} />
             ))}
           </div>
         </div>
