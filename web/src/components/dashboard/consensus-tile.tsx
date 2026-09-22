@@ -103,7 +103,7 @@ export function ConsensusTile({
         <ChartPanel
           candlesByTimeframe={candlesByTimeframe}
           levels={chartLevels}
-          initialTimeframe={source?.timeframe}
+          levelsTimeframe={source?.timeframe}
         />
 
         <div className="mt-4 flex flex-wrap gap-1.5 border-t pt-3">

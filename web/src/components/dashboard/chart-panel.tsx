@@ -13,16 +13,18 @@ import { CHART_TIMEFRAMES, type Candle } from "@/lib/candle-view";
 export function ChartPanel({
   candlesByTimeframe,
   levels,
-  initialTimeframe,
+  levelsTimeframe,
 }: {
   candlesByTimeframe: Record<string, Candle[]>;
   levels: ChartLevel[];
-  initialTimeframe?: string;
+  /** Which timeframe's setup the levels describe. Also the one shown first,
+   * since that is the chart they were measured against. */
+  levelsTimeframe?: string;
 }) {
   const available = CHART_TIMEFRAMES.filter((tf) => (candlesByTimeframe[tf]?.length ?? 0) > 0);
   const [timeframe, setTimeframe] = useState(
-    initialTimeframe && available.includes(initialTimeframe as (typeof CHART_TIMEFRAMES)[number])
-      ? initialTimeframe
+    levelsTimeframe && available.includes(levelsTimeframe as (typeof CHART_TIMEFRAMES)[number])
+      ? levelsTimeframe
       : (available.at(-1) ?? ""),
   );
 
@@ -53,7 +55,15 @@ export function ChartPanel({
       <PriceChart candles={candles} levels={levels} />
 
       <p className="mt-1 text-[11px] text-muted-foreground">
-        {timeframe} candles — the levels above, drawn where they sit.
+        {timeframe} candles.{" "}
+        {levels.length === 0
+          ? "No levels to draw."
+          : levelsTimeframe && levelsTimeframe !== timeframe
+            ? // Levels are sized from their own timeframe's volatility, so on a
+              // different chart they are real prices but not measured against
+              // the candles under them. Saying which keeps that honest.
+              `Levels are from the ${levelsTimeframe} setup, not sized to these candles.`
+            : "Levels are sized to these candles."}
       </p>
     </div>
   );
