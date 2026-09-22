@@ -121,7 +121,7 @@ feed's side — which would otherwise look identical to a quiet week — shows
 up as that count dropping to zero.
 
 The calendar is also mirrored to Supabase (`economic_events`,
-`web/supabase/migrations/0008_calendar.sql`) and shown on the dashboard: the
+`web/supabase/migrations/0007_calendar.sql`) and shown on the dashboard: the
 next 7 days of events, with forecast/previous/actual where the feed has
 them, and — for each High-impact release that gates something — exactly
 which instrument and exact window it holds, in the engine's own words. The
