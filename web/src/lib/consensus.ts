@@ -47,6 +47,12 @@ function byWeightDescending(a: SignalView, b: SignalView) {
   return (TIMEFRAME_WEIGHTS[b.timeframe] ?? 0) - (TIMEFRAME_WEIGHTS[a.timeframe] ?? 0);
 }
 
+function hasUsableLevels(signal: SignalView) {
+  const l = signal.levels;
+  if (!l) return false;
+  return (l.entry != null && l.stop != null) || (l.buyAbove != null && l.sellBelow != null);
+}
+
 /** Combine one symbol's timeframes into a single call.
  *
  * Stale timeframes are dropped rather than counted: a signal too old to show
@@ -101,7 +107,14 @@ export function buildConsensus(symbol: string, signals: SignalView[], now: numbe
   // Levels are lifted from the heaviest timeframe that actually agrees, whole.
   // Averaging levels across timeframes would produce an entry and stop that
   // describe no real setup.
-  const source = counted.filter((s) => s.verdict === verdict).sort(byWeightDescending)[0] ?? null;
+  //
+  // Preferring one that *has* levels matters during a rollout: a signal
+  // published before levels existed is never rewritten, so the heaviest
+  // agreeing timeframe can be an older one carrying none — and the tile would
+  // announce a direction with no entry under it. Falling back to the heaviest
+  // agreeing timeframe keeps the verdict honest when none of them have levels.
+  const agreeingSignals = counted.filter((s) => s.verdict === verdict).sort(byWeightDescending);
+  const source = agreeingSignals.find(hasUsableLevels) ?? agreeingSignals[0] ?? null;
 
   const agreeing = counted.filter((s) => s.verdict === verdict).map((s) => s.timeframe);
 

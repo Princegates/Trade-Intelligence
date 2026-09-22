@@ -111,6 +111,43 @@ describe("levels", () => {
     expect(c.source?.levels?.stop).toBe(80_000);
   });
 
+  it("prefers an agreeing timeframe that actually has levels", () => {
+    // A signal published before levels existed is never rewritten, so the
+    // heaviest agreeing timeframe can legitimately carry none. Sourcing from
+    // it would announce a direction with no entry underneath.
+    const daily = signal("1d", "BUY");
+    daily.levels = null;
+    const fourHour = signal("4h", "BUY");
+
+    const c = build([daily, fourHour, signal("1h", "BUY")]);
+
+    expect(c.verdict).toBe("BUY");
+    expect(c.source?.timeframe).toBe("4h");
+    expect(c.source?.levels?.entry).not.toBeNull();
+  });
+
+  it("still names a source when no agreeing timeframe has levels", () => {
+    const daily = signal("1d", "BUY");
+    const fourHour = signal("4h", "BUY");
+    daily.levels = null;
+    fourHour.levels = null;
+
+    const c = build([daily, fourHour]);
+
+    expect(c.verdict).toBe("BUY");
+    expect(c.source?.timeframe).toBe("1d");
+  });
+
+  it("does not treat a half-populated level set as usable", () => {
+    const daily = signal("1d", "BUY");
+    daily.levels = { entry: 86_000, stop: null, target: null, buyAbove: null, sellBelow: null };
+    const fourHour = signal("4h", "BUY");
+
+    const c = build([daily, fourHour, signal("1h", "BUY")]);
+
+    expect(c.source?.timeframe).toBe("4h");
+  });
+
   it("never sources levels from a timeframe that disagrees", () => {
     const c = build([signal("1d", "SELL"), signal("4h", "SELL"), signal("1h", "BUY")]);
     expect(c.verdict).toBe("SELL");
