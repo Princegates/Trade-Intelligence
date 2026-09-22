@@ -54,6 +54,14 @@ MIN_CANDLES_FOR_SIGNAL = 60
 # Below this the engine returns HOLD rather than guessing from thin evidence.
 MIN_EVIDENCE = 2
 
+# Net indicator votes needed to call a direction; below it the answer is HOLD.
+# Backtested over ~840 evaluations of stored BTC candles, ±1 produced 44% of
+# evaluations as directional against 28% at ±2, at an indistinguishable hit
+# rate (54.1% vs 53.8%) — the extra HOLDs at ±2 were withholding calls that
+# were no better or worse, not protecting against bad ones. Note that ~54% is
+# close to a coin flip and is not yet evidence of an edge; see `confidence`.
+BUY_THRESHOLD = 1
+
 # How many candles to pull per request/store per refresh.
 CANDLE_FETCH_LIMIT = 200
 

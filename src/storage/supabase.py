@@ -88,7 +88,10 @@ def publish_signal(
     evidence_count,
     strategy_version,
     confidence=None,
+    patterns="",
+    levels=None,
 ):
+    levels = levels or {}
     return _insert(
         "signals",
         {
@@ -103,6 +106,12 @@ def publish_signal(
             "evidence_count": evidence_count,
             "strategy_version": strategy_version,
             "reasoning": reasoning,
+            "patterns": patterns,
+            "entry": levels.get("entry"),
+            "stop": levels.get("stop"),
+            "target": levels.get("target"),
+            "buy_above": levels.get("buy_above"),
+            "sell_below": levels.get("sell_below"),
         },
         on_conflict=SIGNAL_IDENTITY,
     )

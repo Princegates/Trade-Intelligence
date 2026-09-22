@@ -14,6 +14,17 @@ export interface SignalView {
   reasoning: string[];
   confidence: number | null;
   strategyVersion: string;
+  patterns: string[];
+  /** Where to act, sized from volatility. A directional call carries entry,
+   * stop and target; a HOLD carries the two prices that would end the wait.
+   * Null when the engine had no ATR to size them from. */
+  levels: {
+    entry: number | null;
+    stop: number | null;
+    target: number | null;
+    buyAbove: number | null;
+    sellBelow: number | null;
+  } | null;
 }
 
 export interface SuppressionView {
@@ -64,6 +75,20 @@ function toView(row: SignalRow): SignalView {
       .filter(Boolean),
     confidence: row.confidence,
     strategyVersion: row.strategy_version,
+    patterns: (row.patterns ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+    levels:
+      row.entry === null && row.buy_above === null
+        ? null
+        : {
+            entry: row.entry,
+            stop: row.stop,
+            target: row.target,
+            buyAbove: row.buy_above,
+            sellBelow: row.sell_below,
+          },
   };
 }
 

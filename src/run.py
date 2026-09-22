@@ -69,7 +69,8 @@ def process(instrument, timeframe, now):
         suppress(symbol, timeframe, now, "INSUFFICIENT_HISTORY", detail)
         return f"[skip] {symbol}/{timeframe}: {detail}"
 
-    candle_time, price = recent[-1]
+    candle_time = recent[-1]["open_time"]
+    price = recent[-1]["close"]
 
     if quality.is_stale(candle_time, now, timeframe):
         age = now - candle_time
@@ -77,7 +78,7 @@ def process(instrument, timeframe, now):
         suppress(symbol, timeframe, now, "STALE_DATA", detail)
         return f"[skip] {symbol}/{timeframe}: stale feed — {detail}"
 
-    result = engine.evaluate([c[1] for c in recent])
+    result = engine.evaluate(recent)
     reasoning_text = "; ".join(result["reasoning"])
 
     signal = {
@@ -90,6 +91,8 @@ def process(instrument, timeframe, now):
         "evidence_count": result["evidence_count"],
         "strategy_version": config.STRATEGY_VERSION,
         "confidence": result["confidence"],
+        "patterns": ", ".join(result["patterns"]),
+        "levels": result["levels"],
     }
 
     stored = db.record_signal(symbol, timeframe, **signal)

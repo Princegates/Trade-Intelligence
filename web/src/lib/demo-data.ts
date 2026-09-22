@@ -30,6 +30,14 @@ export interface DemoSignal {
   reasoning: string[];
   confidence: number | null;
   strategyVersion: string;
+  patterns: string[];
+  levels: {
+    entry: number | null;
+    stop: number | null;
+    target: number | null;
+    buyAbove: number | null;
+    sellBelow: number | null;
+  } | null;
 }
 
 const now = () => new Date().toISOString();
@@ -38,7 +46,24 @@ const now = () => new Date().toISOString();
 // and the card shows this alongside the verdict.
 const demoLineage = { confidence: null, strategyVersion: "demo" };
 
-export const DEMO_SIGNALS: DemoSignal[] = [
+// Stands in for the engine's ATR sizing so demo cards show the same shape of
+// levels a real one would. A flat 1.8% of price is a plausible stand-in, not
+// a measurement — these are samples, and the card labels them as such.
+function demoLevels(price: number, verdict: DemoSignal["verdict"]): DemoSignal["levels"] {
+  const stop = price * 0.018;
+  const target = stop * 1.5;
+  if (verdict === "BUY") {
+    return { entry: price, stop: price - stop, target: price + target, buyAbove: null, sellBelow: null };
+  }
+  if (verdict === "SELL") {
+    return { entry: price, stop: price + stop, target: price - target, buyAbove: null, sellBelow: null };
+  }
+  return { entry: null, stop: null, target: null, buyAbove: price + stop, sellBelow: price - stop };
+}
+
+type DemoSignalSeed = Omit<DemoSignal, "patterns" | "levels"> & { patterns?: string[] };
+
+const DEMO_SIGNAL_SEEDS: DemoSignalSeed[] = [
   {
     symbol: "BTCUSDT",
     timeframe: "1h",
@@ -124,6 +149,12 @@ export const DEMO_SIGNALS: DemoSignal[] = [
     ],
   },
 ];
+
+export const DEMO_SIGNALS: DemoSignal[] = DEMO_SIGNAL_SEEDS.map((s) => ({
+  ...s,
+  patterns: s.patterns ?? [],
+  levels: demoLevels(s.price, s.verdict),
+}));
 
 export interface DemoUser {
   id: string;

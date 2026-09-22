@@ -87,6 +87,12 @@ export interface Database {
           evidence_count: number;
           strategy_version: string;
           reasoning: string;
+          patterns: string;
+          entry: number | null;
+          stop: number | null;
+          target: number | null;
+          buy_above: number | null;
+          sell_below: number | null;
         };
         Insert: {
           id?: number;
@@ -101,6 +107,12 @@ export interface Database {
           evidence_count?: number;
           strategy_version?: string;
           reasoning: string;
+          patterns?: string;
+          entry?: number | null;
+          stop?: number | null;
+          target?: number | null;
+          buy_above?: number | null;
+          sell_below?: number | null;
         };
         // Published signals are immutable; 0002 drops the update policy.
         Update: never;

@@ -43,6 +43,29 @@ def rsi(values, period=14):
     return 100 - (100 / (1 + rs))
 
 
+def atr(candles, period=14):
+    """Average True Range — how far this market actually moves per candle.
+
+    Stop and target distances are derived from this rather than a fixed
+    percentage: the same $500 move is noise on BTC daily and a large move on
+    a 5m candle, and a level that ignores that is arbitrary.
+    """
+    if len(candles) < period + 1:
+        return None
+
+    true_ranges = []
+    for i in range(1, len(candles)):
+        prev_close = candles[i - 1]["close"]
+        high, low = candles[i]["high"], candles[i]["low"]
+        true_ranges.append(max(high - low, abs(high - prev_close), abs(low - prev_close)))
+
+    # Wilder's smoothing, the definition ATR is normally quoted under.
+    value = sum(true_ranges[:period]) / period
+    for tr in true_ranges[period:]:
+        value = (value * (period - 1) + tr) / period
+    return value
+
+
 def macd(values, fast=12, slow=26, signal=9):
     if len(values) < slow + signal + 1:
         return None

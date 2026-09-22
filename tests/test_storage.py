@@ -63,7 +63,8 @@ def test_forming_candle_is_hidden_from_indicator_input(temp_db):
         "1h",
         [_candle(open_time=0, close=105.0), _candle(open_time=3600, close=108.0, complete=False)],
     )
-    assert db.get_recent_candles("BTCUSDT", "1h") == [(0, 105.0)]
+    rows = db.get_recent_candles("BTCUSDT", "1h")
+    assert [(r["open_time"], r["close"]) for r in rows] == [(0, 105.0)]
 
 
 def test_candle_is_revised_once_it_closes(temp_db):
@@ -71,7 +72,8 @@ def test_candle_is_revised_once_it_closes(temp_db):
     assert db.get_recent_candles("BTCUSDT", "1h") == []
 
     db.upsert_candles("BTCUSDT", "1h", [_candle(open_time=3600, close=112.0, complete=True)])
-    assert db.get_recent_candles("BTCUSDT", "1h") == [(3600, 112.0)]
+    rows = db.get_recent_candles("BTCUSDT", "1h")
+    assert [(r["open_time"], r["close"]) for r in rows] == [(3600, 112.0)]
 
 
 def test_candles_come_back_oldest_first(temp_db):
@@ -80,7 +82,8 @@ def test_candles_come_back_oldest_first(temp_db):
         "1h",
         [_candle(open_time=0, close=100.0), _candle(open_time=3600, close=101.0)],
     )
-    assert db.get_recent_candles("BTCUSDT", "1h") == [(0, 100.0), (3600, 101.0)]
+    rows = db.get_recent_candles("BTCUSDT", "1h")
+    assert [(r["open_time"], r["close"]) for r in rows] == [(0, 100.0), (3600, 101.0)]
 
 
 def test_suppression_records_its_reason(temp_db):
