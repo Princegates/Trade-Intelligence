@@ -10,9 +10,9 @@ import { createClient } from "@/lib/supabase/client";
  * manual reload. Returns whether the subscription is currently connected,
  * for a "Live" indicator. Always disconnected in demo mode
  * (createClient() returns null) and requires
- * supabase/migrations/0004_realtime.sql to have been run — that migration
- * adds both tables to the supabase_realtime publication, which isn't the
- * default for a fresh Supabase project. */
+ * supabase/migrations/0004_realtime.sql and 0006_candles.sql to have been
+ * run — those add the tables to the supabase_realtime publication, which
+ * isn't the default for a fresh Supabase project. */
 export function useSignalsRealtime() {
   const router = useRouter();
   const [connected, setConnected] = useState(false);
@@ -27,6 +27,13 @@ export function useSignalsRealtime() {
         router.refresh();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "signal_suppressions" }, () => {
+        router.refresh();
+      })
+      // Candles too, so the chart advances on its own. A closed candle
+      // usually arrives alongside a signal, but not always — a re-scored
+      // candle is ignored on insert and raises no signal event, and then the
+      // chart would sit still while the price had moved on.
+      .on("postgres_changes", { event: "*", schema: "public", table: "candles" }, () => {
         router.refresh();
       })
       .subscribe((status) => {
