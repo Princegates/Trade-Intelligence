@@ -10,12 +10,16 @@ from .storage import db, supabase
 
 
 def _mirror(publish, *args, **kwargs):
-    """Push a record to Supabase. SQLite already holds it, so a mirror failure
-    is reported and shrugged off rather than losing the run (NFR-013)."""
+    """Push a record to Supabase, reporting failure rather than raising.
+
+    Returns whether it got there, which callers use to decide what follows:
+    a mirror failure must not be allowed to look like success."""
     try:
         publish(*args, **kwargs)
+        return True
     except Exception as exc:
         print(f"[warn] not mirrored to Supabase ({exc})")
+        return False
 
 
 def fetch_candles(instrument, timeframe):
@@ -24,6 +28,23 @@ def fetch_candles(instrument, timeframe):
     if instrument["provider"] == "twelvedata":
         return twelvedata.fetch_klines(instrument["provider_symbol"], timeframe, limit=config.CANDLE_FETCH_LIMIT)
     raise ValueError(f"Unknown provider: {instrument['provider']}")
+
+
+def newest_stored(symbol, timeframe):
+    """open_time of the newest closed candle already held, or None.
+
+    Read from Supabase when it is configured, because that is then the store
+    that outlives the run. The workflow no longer commits the SQLite file, so
+    on a fresh runner the local copy is whatever was last checked in — asking
+    it would report far less than we actually hold and refetch every series
+    on every run, which is what the gold quota cannot afford.
+    """
+    if supabase.is_configured():
+        try:
+            return supabase.newest_mirrored_candle(symbol, timeframe)
+        except Exception as exc:
+            print(f"[warn] {symbol}/{timeframe}: could not read the mirror ({exc}); using local history")
+    return db.newest_complete_candle(symbol, timeframe)
 
 
 def suppress(symbol, timeframe, now, reason, detail):
@@ -42,26 +63,28 @@ def process(instrument, timeframe, now):
     # Only spend a request when the provider could actually have something
     # new. A 1d candle does not change between two polls five minutes apart,
     # and on a free data plan those wasted calls are the binding constraint.
-    # Evaluation below still runs either way, from candles already stored.
-    newest = db.newest_complete_candle(symbol, timeframe)
-    if newest is None or newest < quality.latest_closed_open_time(now, timeframe):
-        try:
-            candles = fetch_candles(instrument, timeframe)
-        except Exception as exc:
-            suppress(symbol, timeframe, now, "FETCH_FAILED", str(exc))
-            return f"[skip] {symbol}/{timeframe}: fetch failed ({exc})"
+    # Nothing new also means nothing to evaluate: the signal for that candle
+    # was published by the run that first saw it.
+    newest = newest_stored(symbol, timeframe)
+    if newest is not None and newest >= quality.latest_closed_open_time(now, timeframe):
+        return f"[current] {symbol}/{timeframe}: latest closed candle already stored"
 
-        if not candles:
-            suppress(symbol, timeframe, now, "NO_DATA", "provider returned nothing (missing API key?)")
-            return f"[skip] {symbol}/{timeframe}: no data (missing API key?)"
+    try:
+        candles = fetch_candles(instrument, timeframe)
+    except Exception as exc:
+        suppress(symbol, timeframe, now, "FETCH_FAILED", str(exc))
+        return f"[skip] {symbol}/{timeframe}: fetch failed ({exc})"
 
-        problem = quality.first_invalid(candles)
-        if problem:
-            suppress(symbol, timeframe, now, "BAD_CANDLE", problem)
-            return f"[skip] {symbol}/{timeframe}: rejected feed — {problem}"
+    if not candles:
+        suppress(symbol, timeframe, now, "NO_DATA", "provider returned nothing (missing API key?)")
+        return f"[skip] {symbol}/{timeframe}: no data (missing API key?)"
 
-        db.upsert_candles(symbol, timeframe, candles)
-        _mirror(supabase.publish_candles, symbol, timeframe, candles)
+    problem = quality.first_invalid(candles)
+    if problem:
+        suppress(symbol, timeframe, now, "BAD_CANDLE", problem)
+        return f"[skip] {symbol}/{timeframe}: rejected feed — {problem}"
+
+    db.upsert_candles(symbol, timeframe, candles)
 
     recent = db.get_recent_candles(symbol, timeframe, limit=config.CANDLE_FETCH_LIMIT)
 
@@ -98,12 +121,17 @@ def process(instrument, timeframe, now):
 
     stored = db.record_signal(symbol, timeframe, **signal)
 
-    # Mirrored even when SQLite already had it. Signals computed before
-    # Supabase was configured would otherwise stay stranded locally forever,
-    # since the local insert reports "already called" and nothing would ever
-    # carry them up. Publishing is idempotent on the Supabase side too, so a
-    # re-send is a no-op rather than a rewrite.
-    _mirror(supabase.publish_signal, symbol, timeframe, **signal)
+    # Mirrored whether or not SQLite already had it; publishing is idempotent
+    # on the Supabase side, so a re-send is a no-op rather than a rewrite.
+    #
+    # Order matters. newest_stored() reads the mirrored candles to decide
+    # there is nothing left to do, so a mirrored candle has to mean the signal
+    # for it arrived too. Publishing candles first would let a failed signal
+    # publish be skipped over on the next run and lost for good. Publishing
+    # them last, and only once the signal is through, makes the next run
+    # refetch and try again.
+    if _mirror(supabase.publish_signal, symbol, timeframe, **signal):
+        _mirror(supabase.publish_candles, symbol, timeframe, candles)
 
     if not stored:
         return f"[kept] {symbol}/{timeframe}: candle already called, original signal left untouched"

@@ -13,7 +13,8 @@ on:
   workflow_dispatch: {}
 
 permissions:
-  contents: write
+  # Read-only: nothing is written back to the repository any more.
+  contents: read
 
 jobs:
   poll:
@@ -37,14 +38,9 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: python -m src.run
 
-      - name: Commit updated database
-        run: |
-          git config user.name "trade-intelligence-bot"
-          git config user.email "actions@users.noreply.github.com"
-          git add data/trade_intelligence.db
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "Update signals $(date -u +'%Y-%m-%d %H:%M UTC')"
-            git push
-          fi
+      # The database is deliberately not committed back. Supabase holds the
+      # signals and candles the dashboard reads, so the file was a duplicate
+      # of that — and committing a 160KB binary every five minutes grew the
+      # repository by roughly 1.4GB a month, since git cannot delta-compress
+      # SQLite. The copy in data/ is a frozen snapshot, useful as a seed for
+      # local runs and nothing more.

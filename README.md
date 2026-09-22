@@ -2,8 +2,8 @@
 
 A small, personal signal engine for BTC and gold. A GitHub Actions cron job
 pulls the latest candles, computes a handful of technical indicators, and
-writes a BUY/SELL/HOLD verdict with the reasoning behind it to a SQLite
-database committed straight into the repo — no server, no hosting bill.
+writes a BUY/SELL/HOLD verdict with the reasoning behind it — no server, no
+hosting bill.
 
 Every signal is logged with a timestamp so its own track record can be
 checked later (`src/accuracy.py`), the same way you'd want to audit any
@@ -12,7 +12,7 @@ model that makes calls: never trust a bare verdict, always keep the receipts.
 ## How it works
 
 ```
-GitHub Actions (hourly cron)
+Scheduled poll (every 5 minutes)
         │
         ▼
   src/run.py
@@ -26,7 +26,7 @@ GitHub Actions (hourly cron)
   └─────┬──────┘
         ▼
   ┌────────────┐
-  │  storage   │  data/trade_intelligence.db (SQLite, committed by the workflow)
+  │  storage   │  SQLite locally; mirrored to Supabase for the dashboard
   └────────────┘
 ```
 
@@ -34,14 +34,23 @@ GitHub Actions (hourly cron)
   API key. Twelve Data's free tier needs `TWELVEDATA_API_KEY`; without it,
   gold is skipped gracefully rather than failing the whole run.
 - **Signal engine** (`src/signals/`) — each indicator votes bullish (+1),
-  bearish (-1), or neutral (0); the combined score decides BUY (≥+2), SELL
-  (≤-2), or HOLD, and every vote's reasoning is kept, never just the number.
+  bearish (-1), or neutral (0); the combined score decides BUY (≥+1), SELL
+  (≤-1), or HOLD, and every vote's reasoning is kept, never just the number.
+  Candlestick patterns (`src/signals/patterns.py`) vote as a fourth
+  indicator, read against the prevailing trend rather than by name.
 - **Quality gates** (`src/quality.py`) — impossible candles and stale feeds
   suppress the signal instead of producing one from bad prices.
 - **Storage** (`src/storage/db.py`) — plain SQLite: `candles`, `signals` and
-  `signal_suppressions`. The `.github/workflows/poll.yml` job commits the
-  updated `.db` file back to the repo after each run, so history is just
-  `git log` on that file.
+  `signal_suppressions`. Durable history lives in Supabase once configured
+  (`src/storage/supabase.py`); the local file is a per-run working copy.
+
+The scheduled job deliberately does **not** commit the database back. It used
+to, which gave a `git log` history of every signal — but a 160KB binary
+committed every five minutes grew the repository by roughly 1.4GB a month,
+because git cannot delta-compress SQLite. The copy in `data/` is a frozen
+snapshot, useful as a seed for local runs. Supabase is the durable store, and
+the mirror is what a run consults to decide whether there is anything new to
+fetch.
 
 ## Signal integrity
 
@@ -82,8 +91,8 @@ account is enough). BTC works with no key.
 1. Create a free [Twelve Data](https://twelvedata.com/) account and API key.
 2. In the repo's Settings → Secrets and variables → Actions, add
    `TWELVEDATA_API_KEY`.
-3. That's it — `.github/workflows/poll.yml` computes signals and commits the
-   updated database. `workflow_dispatch` also lets you trigger it by hand.
+3. That's it — `.github/workflows/poll.yml` computes signals and mirrors them
+   to Supabase. `workflow_dispatch` also lets you trigger it by hand.
 
 ## Keeping the feed fresh
 
@@ -128,7 +137,8 @@ Polling that often does not cost proportionally more provider requests. A run
 only calls a provider when a new candle could actually have closed since the
 last one it stored — a daily candle does not change between two polls five
 minutes apart, so asking again would spend a request to be told the same
-thing. Evaluation still runs every poll, from candles already held.
+thing. Nothing new to fetch also means nothing new to evaluate: the signal
+for that candle was published by the run that first saw it.
 
 Measured over a simulated day of 5-minute polls, gold costs 31 Twelve Data
 requests rather than 864: 24 for 1h, 6 for 4h, 1 for 1d. That is what keeps
@@ -155,7 +165,7 @@ To connect it to the engine:
 2. Copy `web/.env.example` to `web/.env.local` and fill in the project URL and
    anon key.
 3. Add `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to the repo's Actions
-   secrets. The hourly job then mirrors each signal up to Supabase and the
+   secrets. The scheduled job then mirrors each signal up to Supabase and the
    dashboard shows real calls instead of samples.
 
 The mirror is optional and best-effort: SQLite stays the source of truth, so
