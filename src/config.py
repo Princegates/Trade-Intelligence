@@ -22,7 +22,13 @@ BINANCE_BASE_URL = os.environ.get("BINANCE_BASE_URL") or "https://api.binance.us
 # what the old engine called it — but a new candle evaluated under the new
 # logic has to carry a version that actually says so, or nothing downstream
 # (accuracy.py, a future backtest) could tell the two scoring schemes apart.
-STRATEGY_VERSION = "2.0.0"
+#
+# 2.1.0: added the economic-calendar gate (src/signals/event_risk.py) —
+# the same candle, same price data, can now publish HOLD instead of a
+# 2.0.0 BUY/SELL if it lands inside a scheduled high-impact USD release.
+# That is a real change in what gets published for identical technical
+# inputs, which is exactly what this field exists to distinguish.
+STRATEGY_VERSION = "2.1.0"
 
 INSTRUMENTS = [
     {
@@ -125,3 +131,15 @@ EQUAL_LEVEL_TOLERANCE = 0.0015
 # can score every category correctly and still be too extended to enter
 # safely the moment it happens (spec section 13).
 VOLATILITY_SPIKE_ATR = 2.5
+
+# Which currency's high-impact releases should gate an instrument (spec
+# section 6, gold's USD/Fed/macro sensitivity). BTC is deliberately absent:
+# its own spec section calls out funding/leverage/liquidations instead of a
+# macro calendar, and there is no free feed for those either — see README.
+EVENT_RISK_CURRENCY = {"XAUUSD": "USD"}
+
+# How long before and after a high-impact release to hold off. Spread widens
+# and price can spike in either direction right at release and for a while
+# after, while the market digests the number.
+EVENT_RISK_BEFORE_MINUTES = 30
+EVENT_RISK_AFTER_MINUTES = 60

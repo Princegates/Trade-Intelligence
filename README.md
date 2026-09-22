@@ -46,12 +46,13 @@ Scheduled poll (every 5 minutes)
   counted when the shape actually forms at a swing level — a hammer in the
   middle of nowhere is reported but does not vote). A handful of
   false-signal gates (`src/signals/divergence.py`, an ATR volatility spike,
-  a swept liquidity pool) can pull a call back to HOLD after the fact, but
-  never push a HOLD into one — every gate only ever removes a signal, never
-  manufactures one. Every vote's reasoning is kept, never just the number.
-  What this deliberately leaves out: DXY, Treasury yields, Fed/macro
-  calendar, funding rates, open interest, liquidations, and real order-book
-  liquidity — none of that is available on the free feeds this project runs
+  a swept liquidity pool, a scheduled high-impact USD release from
+  `src/signals/event_risk.py`) can pull a call back to HOLD after the fact,
+  but never push a HOLD into one — every gate only ever removes a signal,
+  never manufactures one. Every vote's reasoning is kept, never just the
+  number. What this deliberately leaves out: DXY, Treasury yields, funding
+  rates, open interest, liquidations, and real order-book liquidity — none
+  of that is available on the free feeds this project runs
   on, and reporting it anyway would mean inventing data rather than reducing
   confidence when it's missing.
 - **Quality gates** (`src/quality.py`) — impossible candles and stale feeds
@@ -88,6 +89,39 @@ The engine is deliberately conservative about what it is willing to publish:
   would only restate how many indicators agreed, which is not the same as how
   often that agreement has been right. It stays empty until `src/accuracy.py`
   has enough resolved signals to calibrate it against.
+
+## Economic calendar
+
+Gold goes quiet around scheduled high-impact USD releases (NFP, CPI, FOMC,
+and the like) — spread widens and price can spike in either direction while
+the market digests the number, so a technically sound call issued right
+before or after one is a coin flip dressed up as a read. `src/run.py` fetches
+the calendar once per run and `src/signals/event_risk.py` pulls a would-be
+BUY/SELL back to HOLD if it falls within 30 minutes before or 60 minutes
+after a High-impact `USD` event, the same way the ATR-spike and
+liquidity-sweep gates already work.
+
+The data comes from `nfs.faireconomy.media` (`src/ingest/calendar.py`) — the
+free JSON feed ForexFactory's own embeddable calendar widget runs on, not by
+scraping forexfactory.com's pages. ForexFactory has no public API, and
+scraping its site directly has historically been against its terms and is
+brittle besides; this feed is the redistribution channel it set up for
+exactly this kind of reuse. No key, no login, and it costs nothing.
+
+Two caveats worth knowing:
+
+- **The exact field schema is not verified against a live response.** The
+  fields this project reads (`title`, `country`, `impact`, `date`) match
+  what this feed has used for years across many free trading tools built on
+  it, but if events stop showing up, check that schema first.
+- **BTC is not gated.** This project's BTC-specific concerns are funding
+  rates, leverage and liquidations, not a scheduled macro calendar, and
+  there is no free feed for those either — BTC keeps trading through every
+  release with no override.
+
+A calendar that can't be reached returns no events rather than failing the
+run — event risk is context that degrades gracefully, the same as an
+unreachable Twelve Data.
 
 ## Running it locally
 
@@ -230,6 +264,7 @@ pytest
   consensus tile (`web/src/lib/consensus.ts`), which already weights longer
   timeframes more heavily and requires cross-timeframe agreement.
 - Anything needing data this project doesn't have for free — DXY, Treasury
-  yields, a macro/event calendar, funding rates, open interest,
-  liquidations, real order-book liquidity, spread — stays out of scope
-  until there's a free source for it, rather than approximated or invented.
+  yields, funding rates, open interest, liquidations, real order-book
+  liquidity, spread — stays out of scope until there's a free source for
+  it, rather than approximated or invented. The macro/event calendar is no
+  longer on this list (see "Economic calendar" above).

@@ -1,10 +1,11 @@
 import pytest
 
-from src import run
+from src import config, run
 from src.storage import db
 
 HOUR = 3600
 INSTRUMENT = {"symbol": "BTCUSDT", "provider": "binance", "provider_symbol": "BTCUSDT", "timeframes": ["1h"]}
+GOLD = {"symbol": "XAUUSD", "provider": "twelvedata", "provider_symbol": "XAU/USD", "timeframes": ["1h"]}
 NOW = 1_700_000_000
 
 
@@ -236,3 +237,73 @@ def test_a_fresh_feed_is_never_throttled(temp_db, monkeypatch):
     run.process(INSTRUMENT, "1h", mid_period)
 
     assert len(fetches) == 1
+
+
+def _buy_result():
+    return {
+        "verdict": "BUY",
+        "score": 2,
+        "reasoning": ["fake bullish reason"],
+        "evidence_count": 3,
+        "confidence": None,
+        "patterns": [],
+        "levels": {"entry": 100.0, "stop": 95.0, "target": 107.5, "buy_above": None, "sell_below": None},
+    }
+
+
+def test_a_high_impact_event_pulls_a_gold_buy_to_hold(temp_db, monkeypatch):
+    _serve(monkeypatch, _feed(61, NOW))
+    monkeypatch.setattr(run.engine, "evaluate", lambda candles: _buy_result())
+
+    events = [{"title": "CPI m/m", "country": "USD", "impact": "High", "event_time": NOW}]
+    message = run.process(GOLD, "1h", NOW, events=events)
+
+    assert "XAUUSD/1h: HOLD" in message
+    assert "CPI m/m" in message
+
+
+def test_an_event_outside_the_window_leaves_the_call_untouched(temp_db, monkeypatch):
+    _serve(monkeypatch, _feed(61, NOW))
+    monkeypatch.setattr(run.engine, "evaluate", lambda candles: _buy_result())
+
+    events = [{"title": "CPI m/m", "country": "USD", "impact": "High", "event_time": NOW - 100 * HOUR}]
+    message = run.process(GOLD, "1h", NOW, events=events)
+
+    assert message.startswith("XAUUSD/1h: BUY")
+
+
+def test_a_medium_impact_event_never_gates_a_call(temp_db, monkeypatch):
+    _serve(monkeypatch, _feed(61, NOW))
+    monkeypatch.setattr(run.engine, "evaluate", lambda candles: _buy_result())
+
+    events = [{"title": "Retail Sales", "country": "USD", "impact": "Medium", "event_time": NOW}]
+    message = run.process(GOLD, "1h", NOW, events=events)
+
+    assert message.startswith("XAUUSD/1h: BUY")
+
+
+def test_btc_is_never_gated_by_the_calendar(temp_db, monkeypatch):
+    """BTC has no currency mapped in EVENT_RISK_CURRENCY at all — the same
+    event that would hold gold back must not touch it."""
+    _serve(monkeypatch, _feed(61, NOW))
+    monkeypatch.setattr(run.engine, "evaluate", lambda candles: _buy_result())
+
+    events = [{"title": "CPI m/m", "country": "USD", "impact": "High", "event_time": NOW}]
+    message = run.process(INSTRUMENT, "1h", NOW, events=events)
+
+    assert message.startswith("BTCUSDT/1h: BUY")
+
+
+def test_no_events_passed_defaults_to_no_gate(temp_db, monkeypatch):
+    """The default is empty, not None, so a caller that forgets `events`
+    entirely (every test above this one) never crashes on it."""
+    _serve(monkeypatch, _feed(61, NOW))
+    monkeypatch.setattr(run.engine, "evaluate", lambda candles: _buy_result())
+
+    message = run.process(GOLD, "1h", NOW)
+
+    assert message.startswith("XAUUSD/1h: BUY")
+
+
+def test_event_risk_currency_maps_gold_to_usd_only():
+    assert config.EVENT_RISK_CURRENCY == {"XAUUSD": "USD"}

@@ -266,6 +266,28 @@ def _levels(verdict, price, atr):
     }
 
 
+def apply_event_risk_override(result, candles, event, currency):
+    """Pulls a directional call back to HOLD when it lands inside the
+    blackout window around a scheduled high-impact economic release —
+    the same override pattern as the built-in false-signal gates (spec
+    section 13), just driven by an external calendar (src/signals/
+    event_risk.py) rather than price action alone.
+
+    A HOLD is left untouched: there is nothing to pull back, and this
+    should never be able to turn a HOLD into a call.
+    """
+    if result["verdict"] == "HOLD":
+        return result
+
+    atr_val = ind.atr(candles, 14)
+    result["reasoning"].append(
+        f"Overridden to HOLD — {event['title']} ({currency}, high impact) scheduled within the event-risk window"
+    )
+    result["verdict"] = "HOLD"
+    result["levels"] = _levels("HOLD", candles[-1]["close"], atr_val)
+    return result
+
+
 def evaluate(candles):
     """`candles` are closed candles, oldest first, each with open/high/low/
     close/volume."""

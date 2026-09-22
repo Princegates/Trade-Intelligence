@@ -4,8 +4,8 @@ store both. Run with `python -m src.run`."""
 from datetime import datetime, timezone
 
 from . import config, quality
-from .ingest import binance, twelvedata
-from .signals import engine
+from .ingest import binance, calendar, twelvedata
+from .signals import engine, event_risk
 from .storage import db, supabase
 
 
@@ -52,11 +52,17 @@ def suppress(symbol, timeframe, now, reason, detail):
     _mirror(supabase.publish_suppression, symbol, timeframe, now, reason, detail)
 
 
-def process(instrument, timeframe, now):
+def process(instrument, timeframe, now, events=()):
     """Evaluate one instrument/timeframe. Returns a status string for logging.
 
     Every path that declines to publish leaves a suppression record behind, so
     a missing signal is always explainable after the fact (SE-010).
+
+    `events` is the economic calendar for the whole run, fetched once in
+    main() rather than once per symbol/timeframe — it does not depend on
+    either. Defaults to empty rather than None so a caller that never passes
+    it (every existing test, and any instrument with no currency mapped in
+    EVENT_RISK_CURRENCY) simply never trips the gate, instead of crashing.
     """
     symbol = instrument["symbol"]
 
@@ -111,6 +117,15 @@ def process(instrument, timeframe, now):
         return f"[skip] {symbol}/{timeframe}: stale feed — {detail}"
 
     result = engine.evaluate(recent)
+
+    currency = config.EVENT_RISK_CURRENCY.get(symbol)
+    if currency:
+        event = event_risk.blackout(
+            events, currency, now, config.EVENT_RISK_BEFORE_MINUTES * 60, config.EVENT_RISK_AFTER_MINUTES * 60
+        )
+        if event:
+            result = engine.apply_event_risk_override(result, recent, event, currency)
+
     reasoning_text = "; ".join(result["reasoning"])
 
     signal = {
@@ -154,9 +169,14 @@ def main():
     if not supabase.is_configured():
         print("[info] SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY unset — writing local SQLite only")
 
+    # Fetched once for the whole run, not once per symbol/timeframe — the
+    # calendar does not depend on either, and every instrument's evaluation
+    # is fast enough that ten redundant HTTP calls would be pure waste.
+    events = calendar.fetch_events()
+
     for instrument in config.INSTRUMENTS:
         for timeframe in instrument["timeframes"]:
-            print(process(instrument, timeframe, now))
+            print(process(instrument, timeframe, now, events=events))
 
 
 if __name__ == "__main__":

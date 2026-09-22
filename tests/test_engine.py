@@ -228,3 +228,29 @@ def test_pattern_helper_does_not_count_a_hammer_far_from_any_level():
     assert "Hammer" in result["names"]
     assert result["vote"] == 0
     assert any("not at a meaningful" in r for r in result["reasons"])
+
+
+EVENT = {"title": "CPI m/m", "country": "USD", "impact": "High", "event_time": 0}
+
+
+def test_event_risk_override_pulls_a_buy_to_hold():
+    result = {"verdict": "BUY", "reasoning": ["some bullish reason"], "levels": {"entry": 100.0}}
+    updated = engine.apply_event_risk_override(result, _candles(80), EVENT, "USD")
+
+    assert updated["verdict"] == "HOLD"
+    assert any("CPI m/m" in r and "Overridden to HOLD" in r for r in updated["reasoning"])
+
+
+def test_event_risk_override_recomputes_hold_style_levels():
+    result = {"verdict": "SELL", "reasoning": [], "levels": {"entry": 100.0, "stop": 105.0}}
+    updated = engine.apply_event_risk_override(result, _candles(80), EVENT, "USD")
+
+    assert updated["levels"]["entry"] is None
+    assert updated["levels"]["buy_above"] > updated["levels"]["sell_below"]
+
+
+def test_event_risk_override_leaves_an_existing_hold_untouched():
+    result = {"verdict": "HOLD", "reasoning": ["already neutral"], "levels": {"buy_above": 1, "sell_below": 0}}
+    updated = engine.apply_event_risk_override(result, _candles(80), EVENT, "USD")
+
+    assert updated == result
