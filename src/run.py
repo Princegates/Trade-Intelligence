@@ -173,6 +173,10 @@ def main():
     # calendar does not depend on either, and every instrument's evaluation
     # is fast enough that ten redundant HTTP calls would be pure waste.
     events = calendar.fetch_events()
+    # A quiet feed and a broken parser both look like "no events" to the
+    # gate below, and there is no other way to tell them apart from the
+    # outside — this line is the difference between the two.
+    print(f"[info] economic calendar: {len(events)} events loaded")
 
     for instrument in config.INSTRUMENTS:
         for timeframe in instrument["timeframes"]:
