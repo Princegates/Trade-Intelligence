@@ -202,3 +202,44 @@ def publish_suppression(symbol, timeframe, observed_at, reason, detail=""):
             "detail": detail,
         },
     )
+
+
+def publish_events(events):
+    """Mirror the economic calendar so the dashboard can show it without the
+    browser hitting the third-party feed directly. Returns how many were
+    sent, or 0 if unconfigured or there was nothing to send.
+
+    Upserted, not append-only — unlike a signal, a forecast can legitimately
+    be revised and an actual value arrives after release, so a later fetch
+    of the same event is meant to update the row, not coexist beside it.
+    """
+    credentials = _credentials()
+    if credentials is None or not events:
+        return 0
+
+    url, key = credentials
+    response = requests.post(
+        f"{url}/rest/v1/economic_events",
+        params={"on_conflict": "title,country,event_time"},
+        json=[
+            {
+                "title": e["title"],
+                "country": e["country"],
+                "event_time": _utc(e["event_time"]),
+                "impact": e["impact"],
+                "forecast": e.get("forecast"),
+                "previous": e.get("previous"),
+                "actual": e.get("actual"),
+            }
+            for e in events
+        ],
+        headers={
+            "apikey": key,
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal,resolution=merge-duplicates",
+        },
+        timeout=TIMEOUT,
+    )
+    response.raise_for_status()
+    return len(events)

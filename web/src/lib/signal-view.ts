@@ -47,6 +47,17 @@ export const TIMEFRAME_SECONDS: Record<string, number> = {
   "1w": 604800,
 };
 
+/** Human names for the tickers, so the dashboard reads "Bitcoin" and "Gold"
+ * rather than raw symbols — the symbol is still shown alongside it, never
+ * hidden, since that's what the signal is actually keyed on. Mirrors
+ * src/config.py's INSTRUMENTS order (Bitcoin, then gold). */
+export const ASSET_NAMES: Record<string, string> = {
+  BTCUSDT: "Bitcoin",
+  XAUUSD: "Gold",
+};
+
+export const ASSET_ORDER = ["BTCUSDT", "XAUUSD"];
+
 /** A signal whose run is older than two of its own intervals means the cron
  * has stopped producing. Shown as stale rather than passed off as current. */
 export function isStale(signal: SignalView, now: number = Date.now()): boolean {

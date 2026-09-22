@@ -108,20 +108,25 @@ scraping its site directly has historically been against its terms and is
 brittle besides; this feed is the redistribution channel it set up for
 exactly this kind of reuse. No key, no login, and it costs nothing.
 
-Two caveats worth knowing:
-
-- **The exact field schema is not verified against a live response.** The
-  fields this project reads (`title`, `country`, `impact`, `date`) match
-  what this feed has used for years across many free trading tools built on
-  it, but if events stop showing up, check that schema first.
-- **BTC is not gated.** This project's BTC-specific concerns are funding
-  rates, leverage and liquidations, not a scheduled macro calendar, and
-  there is no free feed for those either — BTC keeps trading through every
-  release with no override.
+One caveat worth knowing: **BTC is not gated.** This project's BTC-specific
+concerns are funding rates, leverage and liquidations, not a scheduled macro
+calendar, and there is no free feed for those either — BTC keeps trading
+through every release with no override.
 
 A calendar that can't be reached returns no events rather than failing the
 run — event risk is context that degrades gracefully, the same as an
-unreachable Twelve Data.
+unreachable Twelve Data. `src/run.py` prints how many events it loaded each
+run (`[info] economic calendar: N events loaded`) so a schema change on the
+feed's side — which would otherwise look identical to a quiet week — shows
+up as that count dropping to zero.
+
+The calendar is also mirrored to Supabase (`economic_events`,
+`web/supabase/migrations/0008_calendar.sql`) and shown on the dashboard: the
+next 7 days of events, with forecast/previous/actual where the feed has
+them, and — for each High-impact release that gates something — exactly
+which instrument and exact window it holds, in the engine's own words. The
+card never claims a direction; it only states what the system is actually
+doing and why.
 
 ## Running it locally
 

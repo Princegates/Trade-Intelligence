@@ -162,6 +162,32 @@ export interface Database {
         Update: never;
         Relationships: [];
       };
+      economic_events: {
+        Row: {
+          title: string;
+          country: string;
+          event_time: string;
+          impact: string;
+          forecast: string | null;
+          previous: string | null;
+          actual: string | null;
+          fetched_at: string;
+        };
+        Insert: {
+          title: string;
+          country: string;
+          event_time: string;
+          impact: string;
+          forecast?: string | null;
+          previous?: string | null;
+          actual?: string | null;
+          fetched_at?: string;
+        };
+        // Upserted by the cron job's service key on every fetch — a
+        // forecast or actual can legitimately change, unlike a signal.
+        Update: never;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

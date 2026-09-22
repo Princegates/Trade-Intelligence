@@ -160,3 +160,53 @@ def test_suppressions_are_appended_not_deduplicated(monkeypatch):
     supabase.publish_suppression("XAUUSD", "1h", 1_700_000_000, "NO_DATA", "")
 
     assert "on_conflict" not in captured["params"]
+
+
+def _event(title="CPI m/m", country="USD", event_time=1_700_000_000, impact="High", forecast=None, previous=None):
+    return {
+        "title": title,
+        "country": country,
+        "event_time": event_time,
+        "impact": impact,
+        "forecast": forecast,
+        "previous": previous,
+    }
+
+
+def test_events_are_mirrored_with_a_merge_on_conflict(monkeypatch):
+    _configured(monkeypatch)
+    captured = _capture(monkeypatch)
+
+    sent = supabase.publish_events([_event()])
+
+    assert sent == 1
+    assert captured["url"] == "https://project.supabase.co/rest/v1/economic_events"
+    assert captured["params"]["on_conflict"] == "title,country,event_time"
+    assert "resolution=merge-duplicates" in captured["headers"]["Prefer"]
+    row = captured["json"][0]
+    assert row["title"] == "CPI m/m"
+    assert row["event_time"] == "2023-11-14T22:13:20+00:00"
+
+
+def test_a_missing_actual_defaults_to_none_rather_than_a_missing_key(monkeypatch):
+    _configured(monkeypatch)
+    captured = _capture(monkeypatch)
+
+    supabase.publish_events([_event()])
+
+    assert captured["json"][0]["actual"] is None
+
+
+def test_events_are_not_mirrored_when_unconfigured(monkeypatch):
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
+    assert supabase.publish_events([_event()]) == 0
+
+
+def test_an_empty_events_list_is_a_no_op(monkeypatch):
+    _configured(monkeypatch)
+    posted = []
+    monkeypatch.setattr(supabase.requests, "post", lambda *a, **k: posted.append(1))
+
+    assert supabase.publish_events([]) == 0
+    assert posted == []

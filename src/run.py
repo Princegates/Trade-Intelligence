@@ -177,6 +177,7 @@ def main():
     # gate below, and there is no other way to tell them apart from the
     # outside — this line is the difference between the two.
     print(f"[info] economic calendar: {len(events)} events loaded")
+    _mirror(supabase.publish_events, events)
 
     for instrument in config.INSTRUMENTS:
         for timeframe in instrument["timeframes"]:

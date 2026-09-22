@@ -55,14 +55,23 @@ def _fetch_feed(feed):
 
 
 def _parse(row):
-    """One event, or None for a row that doesn't have what this needs — a
-    malformed entry is skipped rather than allowed to crash the whole feed."""
+    """One event, or None for a row that doesn't have what this needs.
+
+    title/country/impact/date are load-bearing — the event-risk gate cannot
+    work without them, so a row missing any of those is skipped entirely.
+    forecast/previous/actual are display-only extras for the dashboard;
+    their absence should not cost the event its gate, so they default to
+    None rather than failing the whole row.
+    """
     try:
         return {
             "title": row["title"],
             "country": row["country"],
             "impact": row["impact"],
             "event_time": int(datetime.fromisoformat(row["date"]).astimezone(timezone.utc).timestamp()),
+            "forecast": row.get("forecast") or None,
+            "previous": row.get("previous") or None,
+            "actual": row.get("actual") or None,
         }
     except (KeyError, TypeError, ValueError):
         return None

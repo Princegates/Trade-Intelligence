@@ -14,7 +14,14 @@ class _Response:
         return self._rows
 
 
-ROW = {"title": "CPI m/m", "country": "USD", "impact": "High", "date": "2026-09-25T12:30:00-04:00"}
+ROW = {
+    "title": "CPI m/m",
+    "country": "USD",
+    "impact": "High",
+    "date": "2026-09-25T12:30:00-04:00",
+    "forecast": "0.3%",
+    "previous": "0.2%",
+}
 
 
 def _serve(monkeypatch, by_feed):
@@ -38,6 +45,26 @@ def test_fetch_events_parses_a_row_into_epoch_utc(monkeypatch):
     assert events[0]["impact"] == "High"
     # 2026-09-25T12:30:00-04:00 == 2026-09-25 16:30:00 UTC
     assert events[0]["event_time"] == 1790353800
+    assert events[0]["forecast"] == "0.3%"
+    assert events[0]["previous"] == "0.2%"
+    assert events[0]["actual"] is None  # not released yet
+
+
+def test_a_released_actual_value_is_captured(monkeypatch):
+    released = {**ROW, "actual": "0.4%"}
+    _serve(monkeypatch, {"ff_calendar_thisweek.json": [released]})
+
+    assert calendar.fetch_events()[0]["actual"] == "0.4%"
+
+
+def test_missing_forecast_and_previous_do_not_drop_the_event(monkeypatch):
+    bare = {"title": "Holiday", "country": "USD", "impact": "Low", "date": ROW["date"]}
+    _serve(monkeypatch, {"ff_calendar_thisweek.json": [bare]})
+
+    events = calendar.fetch_events()
+    assert len(events) == 1
+    assert events[0]["forecast"] is None
+    assert events[0]["previous"] is None
 
 
 def test_events_from_both_feeds_are_combined(monkeypatch):

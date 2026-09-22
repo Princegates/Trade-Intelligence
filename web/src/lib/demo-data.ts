@@ -5,6 +5,7 @@
 
 import type { SessionUser } from "@/lib/auth";
 import type { SettingsCategory } from "@/lib/supabase/types";
+import type { CalendarEvent } from "@/lib/calendar-view";
 
 export const DEMO_USER: SessionUser = {
   id: "demo-user",
@@ -168,6 +169,58 @@ export const DEMO_SIGNALS: DemoSignal[] = DEMO_SIGNAL_SEEDS.map((s) => ({
   patterns: s.patterns ?? [],
   levels: demoLevels(s.price, s.verdict),
 }));
+
+// Offsets from "now" rather than fixed dates, so the calendar always looks
+// current in demo mode instead of showing a week that has already passed.
+const hoursFromNow = (h: number) => new Date(Date.now() + h * 3600_000).toISOString();
+
+export const DEMO_EVENTS: CalendarEvent[] = [
+  {
+    title: "Retail Sales m/m",
+    country: "USD",
+    eventTime: hoursFromNow(-6),
+    impact: "Medium",
+    forecast: "0.3%",
+    previous: "0.1%",
+    actual: "0.4%",
+  },
+  {
+    title: "CPI m/m",
+    country: "USD",
+    eventTime: hoursFromNow(2),
+    impact: "High",
+    forecast: "0.3%",
+    previous: "0.2%",
+    actual: null,
+  },
+  {
+    title: "ECB Press Conference",
+    country: "EUR",
+    eventTime: hoursFromNow(9),
+    impact: "High",
+    forecast: null,
+    previous: null,
+    actual: null,
+  },
+  {
+    title: "Unemployment Claims",
+    country: "USD",
+    eventTime: hoursFromNow(30),
+    impact: "Low",
+    forecast: "225K",
+    previous: "231K",
+    actual: null,
+  },
+  {
+    title: "FOMC Member Speech",
+    country: "USD",
+    eventTime: hoursFromNow(54),
+    impact: "Medium",
+    forecast: null,
+    previous: null,
+    actual: null,
+  },
+];
 
 export interface DemoUser {
   id: string;
