@@ -43,14 +43,67 @@ export interface Consensus {
 
 const direction = (v: Verdict) => (v === "BUY" ? 1 : v === "SELL" ? -1 : 0);
 
+/** Reward aimed for per unit risked. Matches REWARD_TO_RISK in the engine. */
+const REWARD_TO_RISK = 1.5;
+
+export interface BreakoutPlan {
+  direction: "BUY" | "SELL";
+  trigger: number;
+  stop: number;
+  target: number;
+}
+
+/** What a HOLD turns into if price leaves the band, with its stop and target.
+ *
+ * "Buy above X" on its own still leaves the two questions that matter
+ * unanswered: where is it wrong, and where do you take profit. None of this
+ * is invented — the engine sizes a HOLD band as price plus or minus one stop
+ * distance, so that distance is recoverable from the band itself, and the
+ * same reward-to-risk the engine applies to a directional call carries
+ * forward. The stop sits back at the price the band was drawn around: if a
+ * breakout returns there, it failed. */
+export function breakoutPlans(signal: SignalView): BreakoutPlan[] {
+  const l = signal.levels;
+  if (!l || l.buyAbove == null || l.sellBelow == null) return [];
+
+  const risk = l.buyAbove - signal.price;
+  if (!(risk > 0)) return [];
+
+  return [
+    {
+      direction: "BUY",
+      trigger: l.buyAbove,
+      stop: signal.price,
+      target: l.buyAbove + risk * REWARD_TO_RISK,
+    },
+    {
+      direction: "SELL",
+      trigger: l.sellBelow,
+      stop: signal.price,
+      target: l.sellBelow - risk * REWARD_TO_RISK,
+    },
+  ];
+}
+
 function byWeightDescending(a: SignalView, b: SignalView) {
   return (TIMEFRAME_WEIGHTS[b.timeframe] ?? 0) - (TIMEFRAME_WEIGHTS[a.timeframe] ?? 0);
 }
 
-function hasUsableLevels(signal: SignalView) {
+/** Carries an entry and a stop — what a directional call needs. */
+function hasTradeLevels(signal: SignalView) {
   const l = signal.levels;
-  if (!l) return false;
-  return (l.entry != null && l.stop != null) || (l.buyAbove != null && l.sellBelow != null);
+  return l != null && l.entry != null && l.stop != null;
+}
+
+/** Carries the band a HOLD is waiting out.
+ *
+ * Distinct from hasTradeLevels on purpose: a timeframe that called SELL
+ * carries an entry and a stop but no band, so it cannot tell a HOLD where
+ * the wait ends. Treating "has some levels" as good enough picks that
+ * timeframe and leaves the tile with nothing to show. */
+function hasBand(signal: SignalView) {
+  const l = signal.levels;
+  return l != null && l.buyAbove != null && l.sellBelow != null;
 }
 
 /** Combine one symbol's timeframes into a single call.
@@ -72,14 +125,20 @@ export function buildConsensus(symbol: string, signals: SignalView[], now: numbe
   const counted = mine.filter((s) => !isStale(s, now) && (TIMEFRAME_WEIGHTS[s.timeframe] ?? 0) > 0);
   const totalWeight = counted.reduce((sum, s) => sum + TIMEFRAME_WEIGHTS[s.timeframe], 0);
 
-  const hold = (note: string): Consensus => ({
-    symbol,
-    verdict: "HOLD",
-    agreement: 0,
-    opinions,
-    source: [...counted].sort(byWeightDescending)[0] ?? null,
-    note,
-  });
+  const hold = (note: string): Consensus => {
+    // Same preference as the directional path: the heaviest timeframe may be
+    // an older signal with no levels, and sourcing from it would leave a HOLD
+    // with no band — no answer to "so when do I act?".
+    const ranked = [...counted].sort(byWeightDescending);
+    return {
+      symbol,
+      verdict: "HOLD",
+      agreement: 0,
+      opinions,
+      source: ranked.find(hasBand) ?? ranked[0] ?? null,
+      note,
+    };
+  };
 
   if (counted.length < MIN_TIMEFRAMES || totalWeight === 0) {
     return hold(
@@ -114,7 +173,7 @@ export function buildConsensus(symbol: string, signals: SignalView[], now: numbe
   // announce a direction with no entry under it. Falling back to the heaviest
   // agreeing timeframe keeps the verdict honest when none of them have levels.
   const agreeingSignals = counted.filter((s) => s.verdict === verdict).sort(byWeightDescending);
-  const source = agreeingSignals.find(hasUsableLevels) ?? agreeingSignals[0] ?? null;
+  const source = agreeingSignals.find(hasTradeLevels) ?? agreeingSignals[0] ?? null;
 
   const agreeing = counted.filter((s) => s.verdict === verdict).map((s) => s.timeframe);
 

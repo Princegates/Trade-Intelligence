@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { AGREEMENT_THRESHOLD, buildConsensus } from "@/lib/consensus";
+import { AGREEMENT_THRESHOLD, breakoutPlans, buildConsensus } from "@/lib/consensus";
 import type { SignalView } from "@/lib/signal-view";
 
 const NOW = Date.UTC(2026, 8, 22, 12, 0, 0);
@@ -158,6 +158,67 @@ describe("levels", () => {
     const c = build([signal("1d", "BUY"), signal("4h", "BUY"), signal("3m", "SELL")]);
     expect(c.verdict).toBe("BUY");
     expect(c.opinions.find((o) => o.timeframe === "3m")?.counted).toBe(false);
+  });
+});
+
+describe("breakout plans", () => {
+  function holding(buyAbove: number, sellBelow: number, price = 86_000) {
+    const s = signal("1h", "HOLD");
+    s.price = price;
+    s.levels = { entry: null, stop: null, target: null, buyAbove, sellBelow };
+    return s;
+  }
+
+  it("turns a band into a buy and a sell plan", () => {
+    const plans = breakoutPlans(holding(87_000, 85_000));
+    expect(plans.map((p) => p.direction)).toEqual(["BUY", "SELL"]);
+  });
+
+  it("puts the stop back where the band was drawn", () => {
+    // A breakout that returns to where it started has failed.
+    const plans = breakoutPlans(holding(87_000, 85_000));
+    expect(plans[0].stop).toBe(86_000);
+    expect(plans[1].stop).toBe(86_000);
+  });
+
+  it("targets 1.5x the risk, matching the engine's sizing", () => {
+    const [buy, sell] = breakoutPlans(holding(87_000, 85_000)); // risk 1000
+    expect(buy.target).toBe(87_000 + 1_500);
+    expect(sell.target).toBe(85_000 - 1_500);
+  });
+
+  it("keeps the plans the right way round", () => {
+    const [buy, sell] = breakoutPlans(holding(87_000, 85_000));
+    expect(buy.stop).toBeLessThan(buy.trigger);
+    expect(buy.target).toBeGreaterThan(buy.trigger);
+    expect(sell.stop).toBeGreaterThan(sell.trigger);
+    expect(sell.target).toBeLessThan(sell.trigger);
+  });
+
+  it("a HOLD sources from a timeframe with a band, not one with a trade", () => {
+    // The daily called SELL, so it carries entry/stop/target and no band —
+    // it cannot say where the wait ends. Picking it because it "has levels"
+    // leaves the tile with nothing to show.
+    const daily = signal("1d", "SELL");
+    const hourly = signal("1h", "BUY");
+    const fourHour = signal("4h", "HOLD");
+    fourHour.levels = { entry: null, stop: null, target: null, buyAbove: 87_000, sellBelow: 85_000 };
+
+    const c = build([daily, fourHour, hourly]);
+
+    expect(c.verdict).toBe("HOLD");
+    expect(c.source?.timeframe).toBe("4h");
+    expect(breakoutPlans(c.source!)).toHaveLength(2);
+  });
+
+  it("produces nothing without a band", () => {
+    const s = signal("1h", "HOLD");
+    s.levels = null;
+    expect(breakoutPlans(s)).toEqual([]);
+  });
+
+  it("produces nothing from a degenerate band", () => {
+    expect(breakoutPlans(holding(86_000, 86_000))).toEqual([]);
   });
 });
 

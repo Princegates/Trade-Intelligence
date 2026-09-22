@@ -1,6 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import type { Consensus } from "@/lib/consensus";
+import { breakoutPlans, type Consensus } from "@/lib/consensus";
 
 const money = (n: number) => `$${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
@@ -28,6 +28,7 @@ export function ConsensusTile({ consensus }: { consensus: Consensus }) {
   const { verdict, agreement, opinions, source, note, symbol } = consensus;
   const levels = source?.levels ?? null;
   const directional = verdict !== "HOLD" && levels?.entry != null && levels?.stop != null;
+  const plans = source && !directional ? breakoutPlans(source) : [];
 
   return (
     <Card className="border-2">
@@ -53,11 +54,26 @@ export function ConsensusTile({ consensus }: { consensus: Consensus }) {
             )}
           </div>
         ) : (
-          levels?.buyAbove != null &&
-          levels?.sellBelow != null && (
-            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-              <Level label="Buy above" value={money(levels.buyAbove)} />
-              <Level label="Sell below" value={money(levels.sellBelow)} />
+          plans.length > 0 && (
+            <div className="mt-4 space-y-2">
+              <p className="text-xs text-muted-foreground">
+                Nothing to do yet. If price leaves the band, this is the plan:
+              </p>
+              {plans.map((plan) => (
+                <div key={plan.direction} className="flex flex-col gap-2 sm:flex-row">
+                  <Level
+                    label={plan.direction === "BUY" ? "Buy above" : "Sell below"}
+                    value={money(plan.trigger)}
+                    tone={
+                      plan.direction === "BUY"
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-red-600 dark:text-red-400"
+                    }
+                  />
+                  <Level label="Stop loss" value={money(plan.stop)} />
+                  <Level label="Take profit" value={money(plan.target)} />
+                </div>
+              ))}
             </div>
           )
         )}
@@ -80,7 +96,9 @@ export function ConsensusTile({ consensus }: { consensus: Consensus }) {
           Stale timeframes are struck through and do not vote.{" "}
           {directional
             ? "Levels come from the heaviest agreeing timeframe, not an average. Not advice — decide your own position size."
-            : "No entry is shown because no direction has enough agreement behind it."}
+            : plans.length > 0
+              ? "Stop and take-profit are carried from the same volatility sizing the engine uses, applied at the trigger. Not advice — decide your own position size."
+              : "No levels are shown because no timeframe with levels is currently fresh."}
         </p>
       </CardContent>
     </Card>
