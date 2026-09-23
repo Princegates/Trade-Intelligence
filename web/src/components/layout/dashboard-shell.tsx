@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
-import { LineChart, LogOut, Menu, X } from "lucide-react";
+import { LayoutDashboard, LineChart, LogOut, Menu, ShieldCheck, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -17,6 +17,7 @@ import {
 import { signOut } from "@/lib/actions/auth";
 import { useSignalsRealtime } from "@/lib/use-signals-realtime";
 import { ModeToggle } from "@/components/mode/mode-toggle";
+import type { Role } from "@/lib/supabase/types";
 
 export interface NavItem {
   href: string;
@@ -27,7 +28,7 @@ export interface NavItem {
 interface DashboardShellProps {
   title: string;
   nav: NavItem[];
-  user: { email: string; fullName: string | null };
+  user: { email: string; fullName: string | null; role: Role };
   children: ReactNode;
 }
 
@@ -45,6 +46,7 @@ export function DashboardShell({ title, nav, user, children }: DashboardShellPro
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const { connected } = useSignalsRealtime();
+  const inAdminArea = pathname.startsWith("/admin");
 
   const SidebarContent = (
     <>
@@ -124,6 +126,28 @@ export function DashboardShell({ title, nav, user, children }: DashboardShellPro
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>{user.fullName || user.email}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                {inAdminArea && (
+                  <>
+                    <DropdownMenuItem asChild>
+                      <Link href="/dashboard">
+                        <LayoutDashboard />
+                        View dashboard
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
+                {!inAdminArea && user.role === "admin" && (
+                  <>
+                    <DropdownMenuItem asChild>
+                      <Link href="/admin">
+                        <ShieldCheck />
+                        Admin panel
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
                 {/* A <form action={signOut}> submit button here doesn't reliably fire:
                     Radix closes/unmounts the menu on selection, which can interrupt the
                     browser's default form submission before it completes. Calling the
