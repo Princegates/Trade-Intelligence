@@ -1,5 +1,5 @@
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { RoleSelect } from "@/components/admin/role-select";
 import { ApprovalToggle } from "@/components/admin/approval-toggle";
@@ -20,6 +20,10 @@ export default async function AdminUsersPage() {
 
   return (
     <Card>
+      <CardHeader>
+        <CardTitle>Access control</CardTitle>
+        <CardDescription>Approve new sign-ups before they can reach the dashboard, and set who&apos;s an admin.</CardDescription>
+      </CardHeader>
       <CardContent className="p-0">
         <Table>
           <TableHeader>

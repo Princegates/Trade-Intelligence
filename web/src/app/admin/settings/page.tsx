@@ -1,6 +1,8 @@
 import { Mail, MessageSquare, CreditCard, Bell, Sparkles } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ProviderSettingsForm } from "@/components/admin/provider-settings-form";
+import { PasswordForm } from "@/components/account/password-form";
 import { Badge } from "@/components/ui/badge";
 import { SETTINGS_PROVIDERS } from "@/lib/demo-data";
 import { getAllProviderStates } from "@/lib/settings";
@@ -25,6 +27,23 @@ export default async function AdminSettingsPage() {
           Demo mode — changes here are not saved. Configure Supabase to persist settings.
         </Badge>
       )}
+
+      <Card className="max-w-2xl">
+        <CardHeader>
+          <CardTitle>Account security</CardTitle>
+          <CardDescription>Change the password used to sign in to your own admin account.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <PasswordForm />
+        </CardContent>
+      </Card>
+
+      <div>
+        <h2 className="mb-1 text-lg font-semibold">Platform integrations</h2>
+        <p className="mb-4 text-sm text-muted-foreground">
+          API keys and configuration for the services the whole site runs on — not personal account settings.
+        </p>
+      </div>
 
       <Tabs defaultValue="email">
         <TabsList>
