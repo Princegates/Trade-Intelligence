@@ -38,6 +38,10 @@ export const THEMES: ThemeMeta[] = [
 export const DEFAULT_THEME: ThemeKey = "default";
 export const DEFAULT_MODE: Mode = "light";
 
+// Mode (day/night) is a per-visitor preference, unlike the color theme —
+// see src/components/mode/. This is the cookie it's persisted in.
+export const MODE_COOKIE = "ti-mode";
+
 export function isThemeKey(value: string | undefined | null): value is ThemeKey {
   return !!value && THEMES.some((t) => t.key === value);
 }

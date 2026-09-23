@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { signOut } from "@/lib/actions/auth";
 import { useSignalsRealtime } from "@/lib/use-signals-realtime";
+import { ModeToggle } from "@/components/mode/mode-toggle";
 
 export interface NavItem {
   href: string;
@@ -111,6 +112,7 @@ export function DashboardShell({ title, nav, user, children }: DashboardShellPro
           </div>
 
           <div className="flex items-center gap-2">
+            <ModeToggle />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="ml-1 rounded-full">

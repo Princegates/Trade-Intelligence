@@ -38,8 +38,9 @@ export function AppearanceForm({ current }: { current: { theme: ThemeKey; mode: 
       <CardHeader>
         <CardTitle>Site appearance</CardTitle>
         <CardDescription>
-          This applies to every visitor — the public site and every user&apos;s dashboard, approved or not.
-          Nobody else can change it.
+          The color theme applies to every visitor and nobody else can change it. Day/night is only the
+          <em> default</em> — anyone can flip to their own preference with the toggle in the header, which
+          then always wins over this for them.
         </CardDescription>
       </CardHeader>
       <form action={formAction}>
@@ -49,8 +50,10 @@ export function AppearanceForm({ current }: { current: { theme: ThemeKey; mode: 
         <CardContent className="space-y-6">
           <div className="flex items-center justify-between rounded-md border border-border p-3">
             <div>
-              <p className="text-sm font-medium">Day / night</p>
-              <p className="text-xs text-muted-foreground">Currently live: {current.mode}</p>
+              <p className="text-sm font-medium">Day / night default</p>
+              <p className="text-xs text-muted-foreground">
+                For visitors who haven&apos;t picked their own — currently {current.mode}
+              </p>
             </div>
             <div className="flex gap-2">
               <Button
@@ -105,11 +108,11 @@ export function AppearanceForm({ current }: { current: { theme: ThemeKey; mode: 
           </div>
 
           {state.error && <p className="text-sm text-destructive">{state.error}</p>}
-          {state.success && <p className="text-sm text-emerald-600 dark:text-emerald-400">Saved — live for everyone now.</p>}
+          {state.success && <p className="text-sm text-emerald-600 dark:text-emerald-400">Saved.</p>}
         </CardContent>
         <CardFooter>
           <Button type="submit" disabled={pending || !dirty}>
-            {pending ? "Saving..." : "Save and apply site-wide"}
+            {pending ? "Saving..." : "Save appearance settings"}
           </Button>
         </CardFooter>
       </form>

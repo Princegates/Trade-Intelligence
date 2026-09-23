@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { LineChart, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ModeToggle } from "@/components/mode/mode-toggle";
 
 const links = [
   { href: "/#features", label: "Features" },
@@ -31,6 +32,7 @@ export function Navbar({ isAuthed }: { isAuthed: boolean }) {
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
+          <ModeToggle />
           {isAuthed ? (
             <Button asChild>
               <Link href="/dashboard">Dashboard</Link>
@@ -66,6 +68,7 @@ export function Navbar({ isAuthed }: { isAuthed: boolean }) {
             ))}
           </nav>
           <div className="mt-4 flex items-center gap-2">
+            <ModeToggle />
             {isAuthed ? (
               <Button asChild className="flex-1">
                 <Link href="/dashboard">Dashboard</Link>
