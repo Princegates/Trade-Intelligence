@@ -28,7 +28,13 @@ BINANCE_BASE_URL = os.environ.get("BINANCE_BASE_URL") or "https://api.binance.us
 # 2.0.0 BUY/SELL if it lands inside a scheduled high-impact USD release.
 # That is a real change in what gets published for identical technical
 # inputs, which is exactly what this field exists to distinguish.
-STRATEGY_VERSION = "2.1.0"
+#
+# 2.1.1: tightened the stop from 1.5 ATR to 0.75 ATR (src/signals/engine.py
+# STOP_ATRS) for stricter risk management. The verdict and score are
+# unchanged for identical inputs, but entry/stop/target are themselves part
+# of what a signal publishes, so a candle scored before this change and one
+# scored after it carry materially different levels under the same call.
+STRATEGY_VERSION = "2.1.1"
 
 INSTRUMENTS = [
     {

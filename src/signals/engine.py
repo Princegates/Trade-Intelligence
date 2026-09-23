@@ -24,9 +24,11 @@ SELL_THRESHOLD = -config.BUY_THRESHOLD
 
 EMA_PERIODS = (9, 21, 50, 100, 200)
 
-# Stop sits this many ATRs from the entry, target twice that again, so a call
-# is framed to risk one unit to make one and a half.
-STOP_ATRS = 1.5
+# Stop sits this many ATRs from the entry — tightened from 1.5 to 0.75 for
+# stricter risk management. Target keeps the same 1:1.5 risk:reward ratio
+# (REWARD_TO_RISK is a multiple of the stop distance, not of ATR directly),
+# so it tightens along with the stop rather than staying fixed.
+STOP_ATRS = 0.75
 REWARD_TO_RISK = 1.5
 
 
