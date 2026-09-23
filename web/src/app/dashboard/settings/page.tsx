@@ -1,6 +1,4 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { ThemePicker } from "@/components/theme/theme-picker";
-import { ModeToggle } from "@/components/theme/mode-toggle";
 import { requireUser } from "@/lib/auth";
 
 export default async function AccountSettingsPage() {
@@ -22,20 +20,6 @@ export default async function AccountSettingsPage() {
             <span className="text-muted-foreground">Email</span>
             <span>{user.email}</span>
           </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Appearance</CardTitle>
-          <CardDescription>Pick a theme and switch between day and night mode.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">Day / night</span>
-            <ModeToggle />
-          </div>
-          <ThemePicker />
         </CardContent>
       </Card>
     </div>

@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { ThemeProvider } from "@/components/theme/theme-provider";
-import { ThemeScript } from "@/components/theme/theme-script";
-import { DEFAULT_MODE, DEFAULT_THEME } from "@/lib/themes";
+import { getSiteAppearance } from "@/lib/site-appearance";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -24,21 +22,22 @@ export const metadata: Metadata = {
     "Rule-based BTC and gold trading signals with the reasoning behind every call, and a track record you can audit.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  // The theme is a single site-wide, admin-controlled setting (see
+  // /admin/appearance) rather than a per-visitor preference, so it's read
+  // here server-side and baked straight into the HTML — no client-side
+  // cookie, no inline script, no guess-then-correct flash prevention
+  // needed, because the server already knows the real value.
+  const { theme, mode } = await getSiteAppearance();
+
   return (
     <html
       lang="en"
-      data-theme={DEFAULT_THEME}
-      data-mode={DEFAULT_MODE}
-      suppressHydrationWarning
+      data-theme={theme}
+      data-mode={mode}
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <head>
-        <ThemeScript />
-      </head>
-      <body className="min-h-full flex flex-col">
-        <ThemeProvider>{children}</ThemeProvider>
-      </body>
+      <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );
 }

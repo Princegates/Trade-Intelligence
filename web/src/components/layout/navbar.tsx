@@ -2,15 +2,8 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { LineChart, Menu, Palette, X } from "lucide-react";
+import { LineChart, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ModeToggle } from "@/components/theme/mode-toggle";
-import { ThemePicker } from "@/components/theme/theme-picker";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 
 const links = [
   { href: "/#features", label: "Features" },
@@ -38,17 +31,6 @@ export function Navbar({ isAuthed }: { isAuthed: boolean }) {
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" aria-label="Choose theme">
-                <Palette className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80 p-3">
-              <ThemePicker />
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <ModeToggle />
           {isAuthed ? (
             <Button asChild>
               <Link href="/dashboard">Dashboard</Link>
@@ -84,7 +66,6 @@ export function Navbar({ isAuthed }: { isAuthed: boolean }) {
             ))}
           </nav>
           <div className="mt-4 flex items-center gap-2">
-            <ModeToggle />
             {isAuthed ? (
               <Button asChild className="flex-1">
                 <Link href="/dashboard">Dashboard</Link>
@@ -99,9 +80,6 @@ export function Navbar({ isAuthed }: { isAuthed: boolean }) {
                 </Button>
               </>
             )}
-          </div>
-          <div className="mt-4">
-            <ThemePicker />
           </div>
         </div>
       )}

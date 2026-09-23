@@ -3,12 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
-import { LineChart, LogOut, Menu, Palette, X } from "lucide-react";
+import { LineChart, LogOut, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { ModeToggle } from "@/components/theme/mode-toggle";
-import { ThemePicker } from "@/components/theme/theme-picker";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -114,18 +111,6 @@ export function DashboardShell({ title, nav, user, children }: DashboardShellPro
           </div>
 
           <div className="flex items-center gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" aria-label="Choose theme">
-                  <Palette className="size-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-80 p-3">
-                <ThemePicker />
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <ModeToggle />
-
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="ml-1 rounded-full">

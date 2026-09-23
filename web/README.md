@@ -33,9 +33,12 @@ everywhere automatically.
 
 2. **Create a Supabase project** at [supabase.com](https://supabase.com) (free tier is enough to start).
 
-3. **Run the schema migration.** In the Supabase SQL editor, paste and run `supabase/migrations/0001_init.sql`.
-   This creates `profiles` (roles), `app_settings` (the settings panel's storage), and `signals` (mirrors the
-   Python engine's schema), all with Row Level Security policies.
+3. **Run the schema migrations.** In the Supabase SQL editor, paste and run every file in
+   `supabase/migrations/`, **in filename order** (`0001_init.sql`, `0002_...`, and so on through the highest
+   number) — each one builds on the last. They create `profiles` (roles + admin-approval), `app_settings` (the
+   settings panel's storage), `signals` and friends (mirrors the Python engine's schema), and `site_appearance`
+   (the admin-controlled theme), all with Row Level Security policies. All of them are safe to re-run if you're
+   ever unsure whether one already applied.
 
 4. **Set environment variables.** Copy `.env.example` to `.env.local` and fill in:
    - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Settings → API in the Supabase dashboard.
@@ -43,10 +46,11 @@ everywhere automatically.
    - `NEXT_PUBLIC_SITE_URL` — your deployed URL (used for the email confirmation link).
 
 5. **Sign up through the app**, then promote yourself to admin from the Supabase SQL editor (there's no other
-   way to create the first admin, by design):
+   way to create the first admin, by design). Every new signup starts unapproved (see "Access control"
+   below), so set both columns together for your own account:
 
    ```sql
-   update public.profiles set role = 'admin' where email = 'you@example.com';
+   update public.profiles set role = 'admin', approved = true where email = 'you@example.com';
    ```
 
 6. **Run it:**
@@ -63,10 +67,9 @@ src/
     (marketing)/      Public site: landing, pricing, about
     (auth)/            Login, signup
     auth/callback/     Supabase email-confirmation redirect target
-    dashboard/         Signed-in user area: signals, history, profile/theme settings
-    admin/             Admin-only: overview, user management, settings panel
+    dashboard/         Signed-in user area: signals, history, profile settings
+    admin/             Admin-only: overview, user management, appearance, settings panel
   components/
-    theme/             10-theme + day/night system (see below)
     ui/                Shared primitives (button, card, table, tabs, dialog, ...)
     layout/            Navbar, footer, dashboard/admin shell (sidebar + header)
     dashboard/, admin/ Feature-specific components
@@ -78,6 +81,7 @@ src/
     users.ts, actions/users.ts         Admin user management
     demo-data.ts       All mock/demo data in one place
     themes.ts          Theme metadata (keep in sync with scripts/generate-themes.mjs)
+    site-appearance.ts, actions/appearance.ts   Site-wide theme: read + admin-only save
 supabase/migrations/    SQL schema + RLS policies
 scripts/generate-themes.mjs   Regenerates src/app/themes.css from theme definitions
 ```
@@ -89,13 +93,29 @@ with its own light and dark palette and a slightly different corner radius for v
 plain CSS custom properties keyed by `[data-theme="..."]` / `[data-theme="..."][data-mode="dark"]` selectors
 on `<html>`, mapped into Tailwind's color tokens via `@theme inline` in `globals.css`.
 
-- To change a theme's hue/saturation/radius, edit the `THEMES` array in `scripts/generate-themes.mjs` and run
-  `npm run generate-themes` — this regenerates `src/app/themes.css`. Don't hand-edit that file.
-- Switching is instant and flash-free: an inline script in `app/layout.tsx` (`ThemeScript`) reads the
-  `ti-theme`/`ti-mode` cookies and sets the `data-theme`/`data-mode` attributes before first paint. This is
-  Next.js's documented pattern for avoiding a flash of the wrong theme.
-- `ThemeProvider` (React context) and the `ThemePicker`/`ModeToggle` components handle live switching and
-  persist the choice back to the same cookies.
+The theme is a **single site-wide setting, not a per-visitor preference**: only an admin can change it (from
+`/admin/appearance`), and it then applies to every visitor — the public site and every user's dashboard alike.
+`app/layout.tsx` reads the current value server-side from the `site_appearance` table
+(`src/lib/site-appearance.ts`) and renders it directly as the real `data-theme`/`data-mode` attributes on
+`<html>` — there's no client-side cookie or inline script involved, since the server already knows the correct
+value for everyone.
+
+To change a theme's hue/saturation/radius, edit the `THEMES` array in `scripts/generate-themes.mjs` and run
+`npm run generate-themes` — this regenerates `src/app/themes.css`. Don't hand-edit that file.
+
+## Access control
+
+Public signup is open, but a new account starts **unapproved**: `src/lib/auth.ts#requireUser` redirects an
+unapproved, non-admin user to `/pending` instead of the dashboard. An admin approves (or later revokes) access
+per-user from `/admin/users`, via the switch in the "Access" column (`setUserApproval` in
+`src/lib/actions/users.ts`). Admins always have access regardless of their own `approved` flag.
+
+This is enforced in two layers, matching how the rest of the schema is built: the page-level redirect above,
+and Row Level Security on `signal_suppressions`, `candles`, and `economic_events` (gated on the
+`public.has_access()` SQL function, added in `0009_access_approval.sql`) — an authenticated-but-unapproved
+session can't read those tables directly either, not just through the UI. `signals` itself is deliberately left
+out of that RLS tightening: `0008_public_signal_preview.sql` already made it fully readable by anonymous
+visitors for the homepage preview, so gating the authenticated policy on approval wouldn't add anything real.
 
 ## Settings panel (email / SMS / payments / push / AI)
 

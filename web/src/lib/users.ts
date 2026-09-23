@@ -13,9 +13,16 @@ export async function listUsers(): Promise<UserRow[]> {
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, email, full_name, role, created_at")
+    .select("id, email, full_name, role, approved, created_at")
     .order("created_at", { ascending: false });
 
   if (error || !data) return [];
-  return data.map((r) => ({ id: r.id, email: r.email, fullName: r.full_name, role: r.role, createdAt: r.created_at }));
+  return data.map((r) => ({
+    id: r.id,
+    email: r.email,
+    fullName: r.full_name,
+    role: r.role,
+    approved: r.approved,
+    createdAt: r.created_at,
+  }));
 }

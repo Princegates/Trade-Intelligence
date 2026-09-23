@@ -1,12 +1,14 @@
 @import "tailwindcss";
 @import "./themes.css";
 
-/* No :root fallback here on purpose: <html> always carries data-theme (the
-   default in app/layout.tsx, corrected before paint by ThemeScript), and a
-   :root block previously here had the same CSS specificity as [data-theme]
-   but came later in source order — so it silently won every tie and masked
-   every theme's light-mode colors (dark mode was fine, since
-   [data-theme][data-mode="dark"] has higher specificity and always won). */
+/* No :root fallback here on purpose: <html> always carries the real
+   data-theme/data-mode, fetched server-side in app/layout.tsx from the
+   admin-controlled site_appearance table (see src/lib/site-appearance.ts).
+   A :root block previously here had the same CSS specificity as
+   [data-theme] but came later in source order — so it silently won every
+   tie and masked every theme's light-mode colors (dark mode was fine,
+   since [data-theme][data-mode="dark"] has higher specificity and always
+   won). Keeping :root out avoids reintroducing that. */
 
 @theme inline {
   --color-background: hsl(var(--background));
@@ -46,13 +48,4 @@ body {
   background: hsl(var(--background));
   color: hsl(var(--foreground));
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
-}
-
-/* Themed elements transition smoothly when switching theme/mode, but not on
-   first paint (avoids a flash-fade on load). */
-[data-theme-ready="true"] * {
-  transition:
-    background-color 150ms ease,
-    border-color 150ms ease,
-    color 150ms ease;
 }

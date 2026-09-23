@@ -10,6 +10,7 @@ export interface SessionUser {
   email: string;
   fullName: string | null;
   role: Role;
+  approved: boolean;
 }
 
 /** Current signed-in user + profile role, or null. In demo mode (no
@@ -27,23 +28,33 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data: profile } = await supabase.from("profiles").select("full_name, role").eq("id", user.id).single();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("full_name, role, approved")
+    .eq("id", user.id)
+    .single();
 
   return {
     id: user.id,
     email: user.email ?? "",
     fullName: profile?.full_name ?? null,
     role: profile?.role ?? "user",
+    // No profile row is treated as not approved — deny by default rather
+    // than admit by default if the signup trigger somehow hasn't run yet.
+    approved: profile?.approved ?? false,
   };
 }
 
-/** Require a signed-in user; redirects to /login otherwise. In demo mode,
- * returns a mock signed-in user so /dashboard is browsable without setup. */
+/** Require a signed-in, admin-approved user; redirects a signed-out visitor
+ * to /login and an unapproved one to /pending. Admins always pass,
+ * regardless of their own `approved` flag. In demo mode, returns a mock
+ * signed-in user so /dashboard is browsable without setup. */
 export async function requireUser(): Promise<SessionUser> {
   if (!isSupabaseConfigured()) return DEMO_USER;
 
   const user = await getSessionUser();
   if (!user) redirect("/login");
+  if (!user.approved && user.role !== "admin") redirect("/pending");
   return user;
 }
 

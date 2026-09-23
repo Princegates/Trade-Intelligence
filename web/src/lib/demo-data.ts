@@ -12,6 +12,7 @@ export const DEMO_USER: SessionUser = {
   email: "trader@example.com",
   fullName: "Demo Trader",
   role: "user",
+  approved: true,
 };
 
 export const DEMO_ADMIN: SessionUser = {
@@ -19,6 +20,7 @@ export const DEMO_ADMIN: SessionUser = {
   email: "admin@example.com",
   fullName: "Demo Admin",
   role: "admin",
+  approved: true,
 };
 
 export interface DemoSignal {
@@ -227,14 +229,15 @@ export interface DemoUser {
   email: string;
   fullName: string | null;
   role: "user" | "admin";
+  approved: boolean;
   createdAt: string;
 }
 
 export const DEMO_USERS: DemoUser[] = [
-  { id: "1", email: "admin@example.com", fullName: "Demo Admin", role: "admin", createdAt: "2026-01-04T00:00:00Z" },
-  { id: "2", email: "trader@example.com", fullName: "Demo Trader", role: "user", createdAt: "2026-02-11T00:00:00Z" },
-  { id: "3", email: "jane.doe@example.com", fullName: "Jane Doe", role: "user", createdAt: "2026-03-22T00:00:00Z" },
-  { id: "4", email: "sam.k@example.com", fullName: "Sam K.", role: "user", createdAt: "2026-04-02T00:00:00Z" },
+  { id: "1", email: "admin@example.com", fullName: "Demo Admin", role: "admin", approved: true, createdAt: "2026-01-04T00:00:00Z" },
+  { id: "2", email: "trader@example.com", fullName: "Demo Trader", role: "user", approved: true, createdAt: "2026-02-11T00:00:00Z" },
+  { id: "3", email: "jane.doe@example.com", fullName: "Jane Doe", role: "user", approved: false, createdAt: "2026-03-22T00:00:00Z" },
+  { id: "4", email: "sam.k@example.com", fullName: "Sam K.", role: "user", approved: true, createdAt: "2026-04-02T00:00:00Z" },
 ];
 
 export interface ProviderField {

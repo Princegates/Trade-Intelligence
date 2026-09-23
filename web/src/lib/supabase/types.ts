@@ -25,6 +25,7 @@ export interface Database {
           email: string;
           full_name: string | null;
           role: Role;
+          approved: boolean;
           created_at: string;
         };
         Insert: {
@@ -32,6 +33,7 @@ export interface Database {
           email: string;
           full_name?: string | null;
           role?: Role;
+          approved?: boolean;
           created_at?: string;
         };
         Update: {
@@ -39,6 +41,7 @@ export interface Database {
           email?: string;
           full_name?: string | null;
           role?: Role;
+          approved?: boolean;
           created_at?: string;
         };
         Relationships: [];
@@ -186,6 +189,30 @@ export interface Database {
         // Upserted by the cron job's service key on every fetch — a
         // forecast or actual can legitimately change, unlike a signal.
         Update: never;
+        Relationships: [];
+      };
+      site_appearance: {
+        Row: {
+          id: boolean;
+          theme: string;
+          mode: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          id?: boolean;
+          theme?: string;
+          mode?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          id?: boolean;
+          theme?: string;
+          mode?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
         Relationships: [];
       };
     };

@@ -2,6 +2,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { RoleSelect } from "@/components/admin/role-select";
+import { ApprovalToggle } from "@/components/admin/approval-toggle";
 import { listUsers } from "@/lib/users";
 
 function initials(name: string | null, email: string) {
@@ -26,6 +27,7 @@ export default async function AdminUsersPage() {
               <TableHead>User</TableHead>
               <TableHead>Email</TableHead>
               <TableHead>Joined</TableHead>
+              <TableHead>Access</TableHead>
               <TableHead>Role</TableHead>
             </TableRow>
           </TableHeader>
@@ -42,6 +44,9 @@ export default async function AdminUsersPage() {
                 </TableCell>
                 <TableCell className="text-muted-foreground">{u.email}</TableCell>
                 <TableCell className="text-muted-foreground">{new Date(u.createdAt).toLocaleDateString()}</TableCell>
+                <TableCell>
+                  <ApprovalToggle userId={u.id} approved={u.approved} />
+                </TableCell>
                 <TableCell>
                   <RoleSelect userId={u.id} role={u.role} />
                 </TableCell>

@@ -38,9 +38,6 @@ export const THEMES: ThemeMeta[] = [
 export const DEFAULT_THEME: ThemeKey = "default";
 export const DEFAULT_MODE: Mode = "light";
 
-export const THEME_COOKIE = "ti-theme";
-export const MODE_COOKIE = "ti-mode";
-
 export function isThemeKey(value: string | undefined | null): value is ThemeKey {
   return !!value && THEMES.some((t) => t.key === value);
 }

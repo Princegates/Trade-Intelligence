@@ -1,4 +1,4 @@
-import { Users, ShieldCheck, Plug, LineChart } from "lucide-react";
+import { Users, ShieldCheck, Plug, LineChart, Clock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { listUsers } from "@/lib/users";
@@ -22,10 +22,12 @@ export default async function AdminOverviewPage() {
     countActiveSettings(),
   ]);
   const admins = users.filter((u) => u.role === "admin").length;
+  const pendingApprovals = users.filter((u) => !u.approved && u.role !== "admin").length;
   const totalProviders = Object.values(SETTINGS_PROVIDERS).flat().length;
 
   const stats = [
     { label: "Total users", value: users.length, icon: Users },
+    { label: "Pending approvals", value: pendingApprovals, icon: Clock },
     { label: "Admins", value: admins, icon: ShieldCheck },
     { label: "Active integrations", value: `${activeSettings} / ${totalProviders}`, icon: Plug },
     { label: "Tracked signals", value: signals.length, icon: LineChart },
