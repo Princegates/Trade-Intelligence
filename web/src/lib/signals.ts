@@ -2,27 +2,11 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { DEMO_SIGNALS } from "@/lib/demo-data";
-import type { Database, SuppressionReason, Verdict } from "@/lib/supabase/types";
+import type { Database } from "@/lib/supabase/types";
+import type { SignalView, SuppressionView } from "@/lib/signal-view";
 
-export interface SignalView {
-  symbol: string;
-  timeframe: string;
-  generatedAt: string;
-  price: number;
-  verdict: Verdict;
-  score: number;
-  reasoning: string[];
-  confidence: number | null;
-  strategyVersion: string;
-}
-
-export interface SuppressionView {
-  symbol: string;
-  timeframe: string;
-  observedAt: string;
-  reason: SuppressionReason;
-  detail: string;
-}
+export { isStale, TIMEFRAME_SECONDS, ASSET_NAMES, ASSET_ORDER, unresolvedSuppressions } from "@/lib/signal-view";
+export type { SignalView, SuppressionView } from "@/lib/signal-view";
 
 /** Where the numbers on screen came from.
  *
@@ -35,17 +19,6 @@ export interface SignalFeed {
   source: FeedSource;
   signals: SignalView[];
 }
-
-const TIMEFRAME_SECONDS: Record<string, number> = {
-  "1m": 60,
-  "5m": 300,
-  "15m": 900,
-  "30m": 1800,
-  "1h": 3600,
-  "4h": 14400,
-  "1d": 86400,
-  "1w": 604800,
-};
 
 type SignalRow = Database["public"]["Tables"]["signals"]["Row"];
 type SuppressionRow = Database["public"]["Tables"]["signal_suppressions"]["Row"];
@@ -64,15 +37,30 @@ function toView(row: SignalRow): SignalView {
       .filter(Boolean),
     confidence: row.confidence,
     strategyVersion: row.strategy_version,
+    patterns: (row.patterns ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+    levels: toLevels(row),
   };
 }
 
-/** A signal whose run is older than two of its own intervals means the cron
- * has stopped producing. Shown as stale rather than passed off as current. */
-export function isStale(signal: SignalView, now: number = Date.now()): boolean {
-  const interval = TIMEFRAME_SECONDS[signal.timeframe];
-  if (!interval) return false;
-  return (now - new Date(signal.generatedAt).getTime()) / 1000 > interval * 2;
+/** Levels are only usable as a complete set, and a database that predates
+ * migration 0005 returns `undefined` for these columns rather than null — so
+ * normalise both away here rather than letting a half-populated object reach
+ * the UI, where a missing number renders as a crash. */
+function toLevels(row: SignalRow): SignalView["levels"] {
+  const entry = row.entry ?? null;
+  const stop = row.stop ?? null;
+  const target = row.target ?? null;
+  const buyAbove = row.buy_above ?? null;
+  const sellBelow = row.sell_below ?? null;
+
+  const directional = entry !== null && stop !== null && target !== null;
+  const band = buyAbove !== null && sellBelow !== null;
+  if (!directional && !band) return null;
+
+  return { entry, stop, target, buyAbove, sellBelow };
 }
 
 function latestPerPair(rows: SignalRow[]): SignalView[] {

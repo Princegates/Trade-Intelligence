@@ -1,17 +1,20 @@
 name: Poll markets and compute signals
 
 on:
+  # An external scheduler drives the real cadence (see "Keeping the feed
+  # fresh" in README.md). GitHub's own schedule: is best-effort and is
+  # dropped under load — measured on this repo, roughly 2 of 40 expected
+  # runs fired over ten hours, which is why the short timeframes were
+  # permanently stale. It is kept below only as a free backstop.
+  repository_dispatch:
+    types: [poll]
   schedule:
-    # Every 15 minutes, so the 15m timeframe's signal never goes stale
-    # (STALENESS_INTERVALS=2 * 900s = 30min tolerance) between runs. 5m
-    # signals will still show "Stale" for part of each 15-minute window —
-    # a genuinely live 5m feed would need to poll every 5 minutes, which
-    # multiplies GitHub Actions minutes and Twelve Data API calls ~3x.
-    - cron: "*/15 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch: {}
 
 permissions:
-  contents: write
+  # Read-only: nothing is written back to the repository any more.
+  contents: read
 
 jobs:
   poll:
@@ -35,14 +38,9 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: python -m src.run
 
-      - name: Commit updated database
-        run: |
-          git config user.name "trade-intelligence-bot"
-          git config user.email "actions@users.noreply.github.com"
-          git add data/trade_intelligence.db
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "Update signals $(date -u +'%Y-%m-%d %H:%M UTC')"
-            git push
-          fi
+      # The database is deliberately not committed back. Supabase holds the
+      # signals and candles the dashboard reads, so the file was a duplicate
+      # of that — and committing a 160KB binary every five minutes grew the
+      # repository by roughly 1.4GB a month, since git cannot delta-compress
+      # SQLite. The copy in data/ is a frozen snapshot, useful as a seed for
+      # local runs and nothing more.

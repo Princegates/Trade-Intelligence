@@ -34,6 +34,12 @@ CREATE TABLE IF NOT EXISTS signals (
     evidence_count INTEGER NOT NULL,
     strategy_version TEXT NOT NULL,
     reasoning TEXT NOT NULL,
+    patterns TEXT NOT NULL DEFAULT '',
+    entry REAL,
+    stop REAL,
+    target REAL,
+    buy_above REAL,
+    sell_below REAL,
     UNIQUE(symbol, timeframe, candle_time, strategy_version)
 );
 
@@ -59,9 +65,40 @@ def connect():
         conn.close()
 
 
+# CREATE TABLE IF NOT EXISTS silently does nothing to a table that already
+# exists, so a column added to SCHEMA never reaches the committed database —
+# every run then fails on "no column named ...". Columns added after the
+# first release are listed here and applied on open.
+ADDED_COLUMNS = {
+    "candles": {
+        "is_complete": "INTEGER NOT NULL DEFAULT 0",
+    },
+    "signals": {
+        "confidence": "REAL",
+        "evidence_count": "INTEGER NOT NULL DEFAULT 0",
+        "strategy_version": "TEXT NOT NULL DEFAULT ''",
+        "patterns": "TEXT NOT NULL DEFAULT ''",
+        "entry": "REAL",
+        "stop": "REAL",
+        "target": "REAL",
+        "buy_above": "REAL",
+        "sell_below": "REAL",
+    },
+}
+
+
+def _add_missing_columns(conn):
+    for table, columns in ADDED_COLUMNS.items():
+        present = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+        for name, definition in columns.items():
+            if name not in present:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
+
+
 def init_db():
     with connect() as conn:
         conn.executescript(SCHEMA)
+        _add_missing_columns(conn)
 
 
 def upsert_candles(symbol, timeframe, candles):
@@ -93,18 +130,34 @@ def upsert_candles(symbol, timeframe, candles):
 
 
 def get_recent_candles(symbol, timeframe, limit=200):
-    """Returns (open_time, close) tuples for *closed* candles only, oldest
-    first. The forming candle is excluded so indicators never see a value
-    that is still moving (SE-002)."""
+    """Closed candles only, oldest first, as open/high/low/close dicts.
+
+    The forming candle is excluded so indicators never see a value that is
+    still moving (SE-002). Full OHLC rather than closes alone, because
+    candlestick patterns and ATR are read from the body and wicks."""
     with connect() as conn:
         rows = conn.execute(
-            """SELECT open_time, close FROM candles
+            """SELECT open_time, open, high, low, close, volume FROM candles
                WHERE symbol=? AND timeframe=? AND is_complete=1
                ORDER BY open_time DESC LIMIT ?""",
             (symbol, timeframe, limit),
         ).fetchall()
     rows.reverse()
-    return rows
+    return [
+        {"open_time": r[0], "open": r[1], "high": r[2], "low": r[3], "close": r[4], "volume": r[5]}
+        for r in rows
+    ]
+
+
+def newest_complete_candle(symbol, timeframe):
+    """open_time of the newest closed candle held locally, or None."""
+    with connect() as conn:
+        row = conn.execute(
+            """SELECT MAX(open_time) FROM candles
+               WHERE symbol=? AND timeframe=? AND is_complete=1""",
+            (symbol, timeframe),
+        ).fetchone()
+    return row[0]
 
 
 def record_signal(
@@ -119,16 +172,20 @@ def record_signal(
     evidence_count,
     strategy_version,
     confidence=None,
+    patterns="",
+    levels=None,
 ):
     """Insert-only. A published signal is never rewritten (FR-SIG-004), so a
     re-run over the same closed candle is ignored rather than overwriting the
     original call. Returns True when a new signal was stored."""
+    levels = levels or {}
     with connect() as conn:
         cur = conn.execute(
             """INSERT OR IGNORE INTO signals
                (symbol, timeframe, generated_at, candle_time, price, verdict, score,
-                confidence, evidence_count, strategy_version, reasoning)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                confidence, evidence_count, strategy_version, reasoning, patterns,
+                entry, stop, target, buy_above, sell_below)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 symbol,
                 timeframe,
@@ -141,6 +198,12 @@ def record_signal(
                 evidence_count,
                 strategy_version,
                 reasoning,
+                patterns,
+                levels.get("entry"),
+                levels.get("stop"),
+                levels.get("target"),
+                levels.get("buy_above"),
+                levels.get("sell_below"),
             ),
         )
         return cur.rowcount == 1

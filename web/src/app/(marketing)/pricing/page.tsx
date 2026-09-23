@@ -3,14 +3,30 @@ import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ASSET_NAMES, ASSET_ORDER } from "@/lib/signal-view";
+import { CHART_TIMEFRAMES } from "@/lib/candle-view";
+
+// Pulled from the same constants the dashboard itself renders from, not
+// retyped here — an asset or timeframe added to the real system (both have
+// grown at least once already) shows up on this page without anyone having
+// to remember to update a second copy of the same fact.
+const assetList = new Intl.ListFormat(undefined, { style: "long", type: "conjunction" }).format(
+  ASSET_ORDER.map((symbol) => ASSET_NAMES[symbol] ?? symbol),
+);
+const timeframeList = CHART_TIMEFRAMES.join(", ");
 
 const tiers = [
   {
     name: "Free",
     price: "$0",
     period: "",
-    description: "Look around and see how the signal engine reasons.",
-    features: ["Latest signal per symbol/timeframe", "Reasoning shown for every call", "Community support"],
+    description: "Everything the system actually does today — nothing held back.",
+    features: [
+      `${assetList} across ${timeframeList}`,
+      "Full signal history, not a preview of it",
+      "Reasoning shown for every call",
+      "Community support",
+    ],
     cta: "Create free account",
     href: "/signup",
     highlighted: false,
@@ -19,9 +35,9 @@ const tiers = [
     name: "Pro",
     price: "$19",
     period: "/mo",
-    description: "For active traders who want full history and accuracy tracking.",
-    features: ["Everything in Free", "Full signal history", "Accuracy / track-record view", "Priority support"],
-    cta: "Contact us to subscribe",
+    description: "Reserved for what isn't built yet — nothing here is withheld from Free today.",
+    features: ["Everything in Free", "Accuracy / track-record view (coming soon)", "Priority support"],
+    cta: "Get notified",
     href: "/about",
     highlighted: true,
   },
@@ -30,7 +46,7 @@ const tiers = [
     price: "Custom",
     period: "",
     description: "Multiple seats and a direct line for feature requests.",
-    features: ["Everything in Pro", "Multiple team members", "Custom alert delivery", "Dedicated onboarding"],
+    features: ["Everything in Pro", "Multiple team members", "Custom alert delivery (coming soon)", "Dedicated onboarding"],
     cta: "Contact us",
     href: "/about",
     highlighted: false,
@@ -43,11 +59,19 @@ export default function PricingPage() {
       <div className="mx-auto max-w-2xl text-center">
         <h1 className="text-4xl font-bold tracking-tight">Simple pricing</h1>
         <p className="mt-3 text-muted-foreground">
-          Billing is handled manually for now while the signal engine builds its track record — reach out and
-          we&apos;ll get you set up.
+          There is no automated billing or paywall yet — every account gets full access today. These tiers describe
+          where things are headed as paid features actually ship, not what&apos;s being withheld right now.
         </p>
-        <Badge variant="outline" className="mt-4">No card required for Free</Badge>
+        <Badge variant="outline" className="mt-4">No card required — nothing is gated yet</Badge>
       </div>
+
+      <p className="mx-auto mt-4 max-w-2xl text-center text-xs text-muted-foreground">
+        Trade Intelligence is not financial advice — see the{" "}
+        <Link href="/disclaimer" className="underline underline-offset-4 hover:text-foreground">
+          full disclaimer
+        </Link>
+        .
+      </p>
 
       <div className="mx-auto mt-14 grid max-w-5xl gap-6 lg:grid-cols-3">
         {tiers.map((tier) => (

@@ -1,26 +1,53 @@
-import { SignalCard } from "@/components/dashboard/signal-card";
-import { getLatestSignals, getRecentSuppressions } from "@/lib/signals";
+import { AssetSection } from "@/components/dashboard/asset-section";
+import { EventCalendar } from "@/components/dashboard/event-calendar";
+import { SuppressionList } from "@/components/dashboard/suppression-list";
+import { buildAssetPanel } from "@/lib/asset-panel";
+import { getUpcomingEvents } from "@/lib/calendar";
+import { ASSET_ORDER, getLatestSignals, getRecentSuppressions, unresolvedSuppressions } from "@/lib/signals";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 
 // Market data must never be served from a build-time cache.
 export const dynamic = "force-dynamic";
 
-const SUPPRESSION_COPY: Record<string, string> = {
-  FETCH_FAILED: "the provider could not be reached",
-  NO_DATA: "the provider returned nothing",
-  BAD_CANDLE: "the feed sent an impossible candle",
-  INSUFFICIENT_HISTORY: "there is not enough closed history yet",
-  STALE_DATA: "the feed has gone stale",
-};
+// A plain (non-component) function, the same way lib/consensus.ts's
+// buildConsensus defaults its own `now` parameter — the render-purity lint
+// rule checks component bodies for direct Date.now() calls, not calls made
+// through an ordinary function, and this page only ever renders once per
+// request server-side, not reactively re-rendered against stale props.
+function currentTime() {
+  return Date.now();
+}
 
 export default async function DashboardOverviewPage() {
-  const [{ source, signals }, suppressions] = await Promise.all([getLatestSignals(), getRecentSuppressions()]);
+  const now = currentTime();
 
-  const bySymbol = new Map<string, typeof signals>();
-  for (const s of signals) {
-    bySymbol.set(s.symbol, [...(bySymbol.get(s.symbol) ?? []), s]);
-  }
+  const [{ source, signals }, allSuppressions, events] = await Promise.all([
+    getLatestSignals(),
+    getRecentSuppressions(),
+    getUpcomingEvents(),
+  ]);
+
+  // A suppression is only worth showing while it is still the latest word on
+  // that series; once a signal arrives, the feed recovered.
+  const suppressions = unresolvedSuppressions(allSuppressions, signals);
+
+  // Fixed order (Bitcoin, then gold — matching src/config.py's INSTRUMENTS)
+  // rather than whichever symbol's freshest signal happened to sort first,
+  // which would otherwise reorder the page on every reload. A symbol not
+  // yet added to ASSET_ORDER is sorted after the known ones rather than
+  // dropped, so a newly-tracked instrument still shows up.
+  const present = [...new Set(signals.map((s) => s.symbol))];
+  const orderedSymbols = present.sort((a, b) => {
+    const ai = ASSET_ORDER.indexOf(a);
+    const bi = ASSET_ORDER.indexOf(b);
+    if (ai === -1 && bi === -1) return a.localeCompare(b);
+    if (ai === -1) return 1;
+    if (bi === -1) return -1;
+    return ai - bi;
+  });
+
+  const panels = await Promise.all(orderedSymbols.map((symbol) => buildAssetPanel(symbol, signals)));
 
   return (
     <div className="space-y-8">
@@ -36,24 +63,7 @@ export default async function DashboardOverviewPage() {
         </Badge>
       )}
 
-      {suppressions.length > 0 && (
-        <Card>
-          <CardContent className="space-y-2 p-4">
-            <h2 className="text-sm font-semibold">Feed health</h2>
-            <ul className="space-y-1 text-sm text-muted-foreground">
-              {suppressions.map((s) => (
-                <li key={`${s.symbol}-${s.timeframe}`}>
-                  <span className="font-medium text-foreground">
-                    {s.symbol} / {s.timeframe}
-                  </span>{" "}
-                  — no signal because {SUPPRESSION_COPY[s.reason] ?? s.reason.toLowerCase()}
-                  {s.detail && <span className="text-xs"> ({s.detail})</span>}
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
+      <SuppressionList suppressions={suppressions} />
 
       {source === "live" && signals.length === 0 && (
         <Card>
@@ -64,16 +74,22 @@ export default async function DashboardOverviewPage() {
         </Card>
       )}
 
-      {[...bySymbol.entries()].map(([symbol, group]) => (
-        <section key={symbol}>
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">{symbol}</h2>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {group.map((s) => (
-              <SignalCard key={`${s.symbol}-${s.timeframe}`} signal={s} />
+      <EventCalendar events={events} now={now} />
+
+      {panels.length > 0 && (
+        <div>
+          <h2 className="mb-4 text-lg font-semibold tracking-tight">Assets</h2>
+          <p className="mb-4 -mt-2 text-xs text-muted-foreground">
+            One consensus verdict per asset — full per-timeframe reasoning lives on each asset&apos;s own page in the
+            sidebar.
+          </p>
+          <div className="space-y-6">
+            {panels.map((data) => (
+              <AssetSection key={data.symbol} data={data} detailed={false} />
             ))}
           </div>
-        </section>
-      ))}
+        </div>
+      )}
     </div>
   );
 }

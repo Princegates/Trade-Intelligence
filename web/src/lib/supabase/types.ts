@@ -87,6 +87,12 @@ export interface Database {
           evidence_count: number;
           strategy_version: string;
           reasoning: string;
+          patterns: string;
+          entry: number | null;
+          stop: number | null;
+          target: number | null;
+          buy_above: number | null;
+          sell_below: number | null;
         };
         Insert: {
           id?: number;
@@ -101,8 +107,38 @@ export interface Database {
           evidence_count?: number;
           strategy_version?: string;
           reasoning: string;
+          patterns?: string;
+          entry?: number | null;
+          stop?: number | null;
+          target?: number | null;
+          buy_above?: number | null;
+          sell_below?: number | null;
         };
         // Published signals are immutable; 0002 drops the update policy.
+        Update: never;
+        Relationships: [];
+      };
+      candles: {
+        Row: {
+          symbol: string;
+          timeframe: string;
+          open_time: string;
+          open: number;
+          high: number;
+          low: number;
+          close: number;
+          volume: number;
+        };
+        Insert: {
+          symbol: string;
+          timeframe: string;
+          open_time: string;
+          open: number;
+          high: number;
+          low: number;
+          close: number;
+          volume: number;
+        };
         Update: never;
         Relationships: [];
       };
@@ -123,6 +159,32 @@ export interface Database {
           reason: SuppressionReason;
           detail?: string;
         };
+        Update: never;
+        Relationships: [];
+      };
+      economic_events: {
+        Row: {
+          title: string;
+          country: string;
+          event_time: string;
+          impact: string;
+          forecast: string | null;
+          previous: string | null;
+          actual: string | null;
+          fetched_at: string;
+        };
+        Insert: {
+          title: string;
+          country: string;
+          event_time: string;
+          impact: string;
+          forecast?: string | null;
+          previous?: string | null;
+          actual?: string | null;
+          fetched_at?: string;
+        };
+        // Upserted by the cron job's service key on every fetch — a
+        // forecast or actual can legitimately change, unlike a signal.
         Update: never;
         Relationships: [];
       };

@@ -32,3 +32,25 @@ def is_stale(latest_open_time, now, timeframe):
     duration = config.TIMEFRAME_SECONDS[timeframe]
     overdue = now - (latest_open_time + duration)
     return overdue > config.STALENESS_INTERVALS * duration
+
+
+def due_for_stale_retry(now):
+    """Whether a feed already known to be stale should be retried now.
+
+    Derived from the clock rather than from stored state, so it needs no
+    bookkeeping and behaves the same on an ephemeral runner: an attempt is
+    allowed in the opening window of each retry period and skipped for the
+    rest of it.
+    """
+    return now % config.STALE_RETRY_SECONDS < config.STALE_RETRY_WINDOW
+
+
+def latest_closed_open_time(now, timeframe):
+    """When the most recently closed candle opened.
+
+    Lets a run tell whether the provider could have anything new before
+    spending a request on it — a daily candle does not change between two
+    polls five minutes apart.
+    """
+    duration = config.TIMEFRAME_SECONDS[timeframe]
+    return (now // duration) * duration - duration

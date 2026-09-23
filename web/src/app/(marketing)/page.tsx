@@ -1,16 +1,29 @@
 import Link from "next/link";
-import { ArrowRight, BarChart3, ShieldCheck, Sparkles, Palette, Settings2, Bell } from "lucide-react";
+import { ArrowRight, BarChart3, ShieldCheck, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DEMO_SIGNALS } from "@/lib/demo-data";
 import { plainLanguageSummary } from "@/lib/plain-language";
+import { getLatestSignals } from "@/lib/signals";
+
+// The same asset and horizons the sample data always curated (one
+// instrument across three timeframes tells a clearer "how it reasons over
+// time" story than three unrelated series would) — now sourced for real
+// when a live signal exists for each, via the anon-readable preview policy
+// (migration 0008_public_signal_preview.sql).
+const PREVIEW_SYMBOL = "BTCUSDT";
+const PREVIEW_TIMEFRAMES = ["1h", "4h", "1d"];
+
+// Live market data must never be served from a build-time cache — same rule
+// as the dashboard, now that this page reads it too.
+export const dynamic = "force-dynamic";
 
 const features = [
   {
     icon: BarChart3,
     title: "Rule-based signals, not black boxes",
-    description: "RSI, MACD, and moving-average crossovers combine into a BUY/SELL/HOLD verdict — every vote is shown, never a bare number.",
+    description: "Trend, momentum, market structure, and candlestick confirmation each vote, and at least two have to agree before it calls a direction — every vote is shown, never a bare number.",
   },
   {
     icon: ShieldCheck,
@@ -22,21 +35,6 @@ const features = [
     title: "BTC and gold, more assets later",
     description: "Built on the same pipeline for both, with room to add more instruments as the signal engine proves itself.",
   },
-  {
-    icon: Palette,
-    title: "10 themes, day and night",
-    description: "Pick a look that fits the way you read charts, and switch between day and night instantly, with no flash on load.",
-  },
-  {
-    icon: Settings2,
-    title: "Built for commercialization",
-    description: "An admin settings panel with pre-wired slots for email, SMS, payments, and AI providers — ready when you are.",
-  },
-  {
-    icon: Bell,
-    title: "Alerts, when the track record earns it",
-    description: "Delivery starts simple — dashboard and CLI — with push/SMS/email alerts layered on once the signal logic is trusted.",
-  },
 ];
 
 function verdictVariant(v: string) {
@@ -45,7 +43,23 @@ function verdictVariant(v: string) {
   return "secondary" as const;
 }
 
-export default function HomePage() {
+export default async function HomePage() {
+  const { source, signals } = await getLatestSignals();
+
+  const live =
+    source === "live"
+      ? PREVIEW_TIMEFRAMES.map((tf) => signals.find((s) => s.symbol === PREVIEW_SYMBOL && s.timeframe === tf)).filter(
+          (s) => s != null,
+        )
+      : [];
+
+  // Never fabricate "live": a card only counts as live if the real signal
+  // for that exact timeframe was actually found. Falling short of three
+  // (nothing published yet for one horizon) falls back to the honest sample
+  // set entirely, rather than mixing real and demo cards on one row.
+  const preview = live.length === PREVIEW_TIMEFRAMES.length ? live : DEMO_SIGNALS.slice(0, 3);
+  const isLive = live.length === PREVIEW_TIMEFRAMES.length;
+
   return (
     <div>
       <section className="mx-auto max-w-6xl px-4 pb-16 pt-20 sm:px-6 sm:pt-28">
@@ -71,7 +85,7 @@ export default function HomePage() {
         </div>
 
         <div className="mx-auto mt-16 grid max-w-4xl gap-4 sm:grid-cols-3">
-          {DEMO_SIGNALS.slice(0, 3).map((s) => (
+          {preview.map((s) => (
             <Card key={`${s.symbol}-${s.timeframe}`}>
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
@@ -89,7 +103,9 @@ export default function HomePage() {
             </Card>
           ))}
         </div>
-        <p className="mt-3 text-center text-xs text-muted-foreground">Sample data shown — sign up to see live signals.</p>
+        <p className="mt-3 text-center text-xs text-muted-foreground">
+          {isLive ? "Live signals, straight from the engine — sign up for the full dashboard." : "Sample data shown — sign up to see live signals."}
+        </p>
       </section>
 
       <section id="features" className="border-t border-border bg-muted/30 py-20">

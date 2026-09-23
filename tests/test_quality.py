@@ -47,3 +47,44 @@ def test_fresh_feed_is_not_stale():
 
 def test_overdue_feed_is_stale():
     assert quality.is_stale(latest_open_time=0, now=3600 * 4, timeframe="1h") is True
+
+
+def test_a_stale_feed_is_retried_at_the_start_of_each_period():
+    # STALE_RETRY_SECONDS is 1800, window 600: allowed in the first ten
+    # minutes of each half hour.
+    assert quality.due_for_stale_retry(now=1800 * 4) is True
+    assert quality.due_for_stale_retry(now=1800 * 4 + 599) is True
+
+
+def test_a_stale_feed_is_left_alone_for_the_rest_of_the_period():
+    assert quality.due_for_stale_retry(now=1800 * 4 + 600) is False
+    assert quality.due_for_stale_retry(now=1800 * 4 + 1799) is False
+
+
+def test_the_retry_window_is_wide_enough_for_a_five_minute_poll():
+    # A poller stepping in 300s must land in the window, or a dead feed is
+    # never retried at all.
+    from src import config
+
+    assert config.STALE_RETRY_WINDOW >= 300
+    hits = sum(1 for t in range(0, config.STALE_RETRY_SECONDS, 300) if quality.due_for_stale_retry(t))
+    assert hits >= 1
+
+
+def test_latest_closed_candle_is_the_one_before_the_forming_one():
+    # 10:30 into the hour: 10:00 is still forming, 09:00 is the last closed.
+    assert quality.latest_closed_open_time(now=3600 * 10 + 1800, timeframe="1h") == 3600 * 9
+
+
+def test_latest_closed_candle_on_an_exact_boundary():
+    # Exactly 10:00: the 10:00 candle has only just opened.
+    assert quality.latest_closed_open_time(now=3600 * 10, timeframe="1h") == 3600 * 9
+
+
+def test_latest_closed_candle_is_unchanged_across_a_short_poll_interval():
+    # The point of the check: five minutes apart, a daily candle is the same
+    # one, so there is nothing for a second request to return.
+    day = 86400
+    assert quality.latest_closed_open_time(now=day * 5 + 300, timeframe="1d") == quality.latest_closed_open_time(
+        now=day * 5 + 600, timeframe="1d"
+    )

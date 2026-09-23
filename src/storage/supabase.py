@@ -88,7 +88,10 @@ def publish_signal(
     evidence_count,
     strategy_version,
     confidence=None,
+    patterns="",
+    levels=None,
 ):
+    levels = levels or {}
     return _insert(
         "signals",
         {
@@ -103,9 +106,89 @@ def publish_signal(
             "evidence_count": evidence_count,
             "strategy_version": strategy_version,
             "reasoning": reasoning,
+            "patterns": patterns,
+            "entry": levels.get("entry"),
+            "stop": levels.get("stop"),
+            "target": levels.get("target"),
+            "buy_above": levels.get("buy_above"),
+            "sell_below": levels.get("sell_below"),
         },
         on_conflict=SIGNAL_IDENTITY,
     )
+
+
+def newest_mirrored_candle(symbol, timeframe):
+    """open_time of the newest candle already mirrored, or None.
+
+    One small request, so a run only uploads what is actually missing: after
+    the first backfill that is a candle or two rather than the whole series.
+    """
+    credentials = _credentials()
+    if credentials is None:
+        return None
+
+    url, key = credentials
+    response = requests.get(
+        f"{url}/rest/v1/candles",
+        params={
+            "symbol": f"eq.{symbol}",
+            "timeframe": f"eq.{timeframe}",
+            "select": "open_time",
+            "order": "open_time.desc",
+            "limit": "1",
+        },
+        headers={"apikey": key, "Authorization": f"Bearer {key}"},
+        timeout=TIMEOUT,
+    )
+    response.raise_for_status()
+    rows = response.json()
+    if not rows:
+        return None
+    return datetime.fromisoformat(rows[0]["open_time"]).timestamp()
+
+
+def publish_candles(symbol, timeframe, candles):
+    """Mirror closed candles, newest-missing first. Returns how many were sent."""
+    credentials = _credentials()
+    if credentials is None or not candles:
+        return 0
+
+    since = newest_mirrored_candle(symbol, timeframe)
+    pending = [
+        c
+        for c in candles
+        if c["complete"] and (since is None or c["open_time"] > since)
+    ]
+    if not pending:
+        return 0
+
+    url, key = credentials
+    response = requests.post(
+        f"{url}/rest/v1/candles",
+        params={"on_conflict": "symbol,timeframe,open_time"},
+        json=[
+            {
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "open_time": _utc(c["open_time"]),
+                "open": c["open"],
+                "high": c["high"],
+                "low": c["low"],
+                "close": c["close"],
+                "volume": c["volume"],
+            }
+            for c in pending
+        ],
+        headers={
+            "apikey": key,
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal,resolution=merge-duplicates",
+        },
+        timeout=TIMEOUT,
+    )
+    response.raise_for_status()
+    return len(pending)
 
 
 def publish_suppression(symbol, timeframe, observed_at, reason, detail=""):
@@ -119,3 +202,44 @@ def publish_suppression(symbol, timeframe, observed_at, reason, detail=""):
             "detail": detail,
         },
     )
+
+
+def publish_events(events):
+    """Mirror the economic calendar so the dashboard can show it without the
+    browser hitting the third-party feed directly. Returns how many were
+    sent, or 0 if unconfigured or there was nothing to send.
+
+    Upserted, not append-only — unlike a signal, a forecast can legitimately
+    be revised and an actual value arrives after release, so a later fetch
+    of the same event is meant to update the row, not coexist beside it.
+    """
+    credentials = _credentials()
+    if credentials is None or not events:
+        return 0
+
+    url, key = credentials
+    response = requests.post(
+        f"{url}/rest/v1/economic_events",
+        params={"on_conflict": "title,country,event_time"},
+        json=[
+            {
+                "title": e["title"],
+                "country": e["country"],
+                "event_time": _utc(e["event_time"]),
+                "impact": e["impact"],
+                "forecast": e.get("forecast"),
+                "previous": e.get("previous"),
+                "actual": e.get("actual"),
+            }
+            for e in events
+        ],
+        headers={
+            "apikey": key,
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal,resolution=merge-duplicates",
+        },
+        timeout=TIMEOUT,
+    )
+    response.raise_for_status()
+    return len(events)

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 export default function AboutPage() {
@@ -16,9 +17,10 @@ export default function AboutPage() {
           <CardHeader>
             <CardTitle>What it does</CardTitle>
             <CardDescription>
-              RSI, MACD, and moving-average crossovers each vote bullish, bearish, or neutral. The combined
-              score becomes a BUY/SELL/HOLD verdict, and every vote&apos;s reasoning is kept, not just the
-              number.
+              An EMA stack, momentum (RSI+MACD), market structure, and candlestick confirmation each vote
+              bullish, bearish, or neutral — and at least two have to agree before it calls a direction at
+              all. Every vote&apos;s reasoning is kept, not just the number, and a handful of false-signal
+              checks can pull a call back to wait-and-see, never the other way around.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -27,7 +29,11 @@ export default function AboutPage() {
             <CardTitle>What it doesn&apos;t do</CardTitle>
             <CardDescription>
               It isn&apos;t financial advice, and it doesn&apos;t place trades for you. It&apos;s a second
-              opinion with its reasoning shown, and a record of how that opinion has performed.
+              opinion with its reasoning shown, and a record of how that opinion has performed. Full{" "}
+              <Link href="/disclaimer" className="underline underline-offset-4 hover:text-foreground">
+                disclaimer here
+              </Link>
+              .
             </CardDescription>
           </CardHeader>
         </Card>
