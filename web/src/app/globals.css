@@ -130,3 +130,38 @@ body {
 .chat-typing-dot {
   animation: chat-bounce-dot 1.1s ease-in-out infinite;
 }
+
+/* Dialog animations (src/components/ui/dialog.tsx). Radix sets a real
+   data-state="open"|"closed" attribute on these elements at runtime — this
+   targets that directly rather than through Tailwind's animate-in/fade-in
+   utilities, which come from the tailwindcss-animate plugin this project
+   doesn't have installed (the classes referencing them here previously
+   compiled to nothing). Fixes every dialog in the app, not just one. */
+
+@keyframes dialog-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dialog-content-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+.dialog-overlay[data-state="open"] {
+  animation: dialog-overlay-in 0.2s ease-out;
+}
+
+.dialog-content[data-state="open"] {
+  animation: dialog-content-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}

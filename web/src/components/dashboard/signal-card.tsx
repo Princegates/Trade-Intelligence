@@ -1,7 +1,7 @@
-import { Sparkles } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { plainLanguageSummary } from "@/lib/plain-language";
+import { AiTakeDialog } from "@/components/dashboard/ai-take-dialog";
 import { isStale, type SignalView } from "@/lib/signals";
 
 function verdictVariant(v: string) {
@@ -107,13 +107,7 @@ export function SignalCard({ signal }: { signal: SignalView }) {
             </div>
             <p className="mb-3 text-sm text-foreground">{plainLanguageSummary(signal)}</p>
             {signal.aiCommentary && (
-              <div className="mb-3 rounded-md border border-dashed bg-muted/30 p-2.5">
-                <p className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-                  <Sparkles className="size-3" />
-                  AI take
-                </p>
-                <p className="text-sm text-foreground">{signal.aiCommentary}</p>
-              </div>
+              <AiTakeDialog commentary={signal.aiCommentary} symbol={signal.symbol} timeframe={signal.timeframe} />
             )}
           </>
         )}
