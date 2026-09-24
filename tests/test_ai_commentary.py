@@ -19,11 +19,9 @@ def _signal(**overrides):
 class _Response:
     def __init__(self, payload, status=200):
         self._payload = payload
-        self.status = status
-
-    def raise_for_status(self):
-        if self.status >= 400:
-            raise RuntimeError(f"HTTP {self.status}")
+        self.status_code = status
+        self.ok = status < 400
+        self.text = str(payload)
 
     def json(self):
         return self._payload

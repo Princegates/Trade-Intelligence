@@ -64,6 +64,7 @@ def _generate_commentary(symbol, timeframe, candle_time, price, result):
         print(f"[warn] could not read AI settings ({exc})")
         return
     if not settings:
+        print(f"[info] {symbol}/{timeframe}: no active AI provider configured, skipping commentary")
         return
 
     text = commentary.generate(
@@ -80,10 +81,12 @@ def _generate_commentary(symbol, timeframe, candle_time, price, result):
         settings,
     )
     if not text:
+        print(f"[warn] {symbol}/{timeframe}: AI commentary generation returned nothing")
         return
 
     model = (settings.get("config") or {}).get("model") or commentary.DEFAULT_GEMINI_MODEL
-    _mirror(supabase.publish_commentary, symbol, timeframe, candle_time, config.STRATEGY_VERSION, text, model)
+    if _mirror(supabase.publish_commentary, symbol, timeframe, candle_time, config.STRATEGY_VERSION, text, model):
+        print(f"[info] {symbol}/{timeframe}: AI commentary generated and published ({len(text)} chars, {model})")
 
 
 def process(instrument, timeframe, now, events=()):

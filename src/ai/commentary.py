@@ -62,6 +62,7 @@ def _build_prompt(signal):
 def _generate_gemini(signal, config):
     api_key = (config or {}).get("api_key")
     if not api_key:
+        print("[warn] AI commentary (gemini): no API key saved in /admin/settings")
         return None
     model = (config or {}).get("model") or DEFAULT_GEMINI_MODEL
 
@@ -75,7 +76,12 @@ def _generate_gemini(signal, config):
             },
             timeout=TIMEOUT,
         )
-        response.raise_for_status()
+        if not response.ok:
+            # Same diagnostic as the chat widget's gemini-chat.ts: the body
+            # carries the actual reason (bad key, unknown model, rate limit),
+            # which response.raise_for_status()'s message alone would not.
+            print(f"[warn] AI commentary (gemini) {response.status_code}: {response.text[:500]}")
+            return None
         data = response.json()
         text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
         return text or None
@@ -97,5 +103,6 @@ def generate(signal, settings):
         return None
     generator = _GENERATORS.get(settings.get("provider"))
     if not generator:
+        print(f"[warn] AI commentary: no generator for provider {settings.get('provider')!r}")
         return None
     return generator(signal, settings.get("config"))
