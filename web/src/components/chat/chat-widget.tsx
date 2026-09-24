@@ -119,8 +119,9 @@ export function ChatWidget() {
 
       <Button
         type="button"
+        variant="ghost"
         size="icon"
-        className={`size-14 rounded-full shadow-lg transition-transform duration-200 hover:scale-110 active:scale-90 ${invitePulse ? "chat-fab-idle" : ""}`}
+        className={`size-14 rounded-full bg-transparent transition-transform duration-200 hover:scale-110 hover:bg-transparent active:scale-90 ${invitePulse ? "chat-fab-idle" : ""}`}
         onClick={() => setOpen((v) => !v)}
         aria-label={open ? "Close assistant" : "Open assistant"}
       >
