@@ -20,6 +20,7 @@ import { signOut } from "@/lib/actions/auth";
 import { useSignalsRealtime } from "@/lib/use-signals-realtime";
 import { ModeToggle } from "@/components/mode/mode-toggle";
 import { hasFullAccess, daysRemaining } from "@/lib/access";
+import { ChatWidget } from "@/components/chat/chat-widget";
 import type { Role } from "@/lib/supabase/types";
 
 export interface NavItem {
@@ -179,6 +180,8 @@ export function DashboardShell({ title, nav, user, children }: DashboardShellPro
 
         <main className="flex-1 p-4 sm:p-6">{children}</main>
       </div>
+
+      <ChatWidget />
     </div>
   );
 }
