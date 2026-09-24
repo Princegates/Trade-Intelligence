@@ -47,47 +47,53 @@ export function ChatWidget() {
     }
   }
 
+  const invitePulse = !open && messages.length === 0;
+
   return (
     <div className="fixed bottom-4 right-4 z-40 sm:bottom-6 sm:right-6">
       {open && (
-        <div className="mb-3 flex h-[28rem] w-[22rem] max-w-[calc(100vw-2rem)] flex-col rounded-lg border border-border bg-card shadow-xl">
+        <div className="chat-panel-enter mb-3 flex h-[28rem] w-[22rem] max-w-[calc(100vw-2rem)] origin-bottom-right flex-col rounded-lg border border-border bg-card shadow-xl">
           <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
             <div className="flex items-center gap-2 text-sm font-medium">
-              <Bot className="size-4 text-primary" />
+              <Bot className="chat-bot-icon size-4 text-primary" />
               Assistant
             </div>
             <button
               type="button"
               onClick={() => setOpen(false)}
               aria-label="Close assistant"
-              className="rounded-sm p-1 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              className="rounded-sm p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
             >
-              <X className="size-4" />
+              <X className="size-4 transition-transform duration-200 hover:rotate-90" />
             </button>
           </div>
 
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-3 py-3">
             {messages.length === 0 && (
-              <p className="text-sm text-muted-foreground">Ask me anything — about your signals or anything else.</p>
+              <p className="chat-bubble-enter text-sm text-muted-foreground">
+                Ask me anything — about your signals or anything else.
+              </p>
             )}
             {messages.map((m, i) => (
               <div
                 key={i}
                 className={
                   m.role === "user"
-                    ? "ml-auto max-w-[85%] rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground"
-                    : "mr-auto max-w-[85%] rounded-lg bg-muted px-3 py-2 text-sm text-foreground"
+                    ? "chat-bubble-enter ml-auto max-w-[85%] rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground"
+                    : "chat-bubble-enter mr-auto max-w-[85%] rounded-lg bg-muted px-3 py-2 text-sm text-foreground"
                 }
               >
                 {m.text}
               </div>
             ))}
             {pending && (
-              <div className="mr-auto max-w-[85%] rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
-                Thinking...
+              <div className="chat-bubble-enter mr-auto flex items-center gap-1 rounded-lg bg-muted px-3 py-2.5">
+                <span className="chat-typing-dot size-1.5 rounded-full bg-muted-foreground" style={{ animationDelay: "0ms" }} />
+                <span className="chat-typing-dot size-1.5 rounded-full bg-muted-foreground" style={{ animationDelay: "150ms" }} />
+                <span className="chat-typing-dot size-1.5 rounded-full bg-muted-foreground" style={{ animationDelay: "300ms" }} />
               </div>
             )}
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && <p className="chat-bubble-enter text-sm text-destructive">{error}</p>}
           </div>
 
           <form onSubmit={handleSend} className="flex items-center gap-2 border-t border-border p-2.5">
@@ -96,9 +102,14 @@ export function ChatWidget() {
               onChange={(e) => setInput(e.target.value)}
               placeholder="Type a message..."
               disabled={pending}
-              className="h-9"
+              className="h-9 transition-shadow"
             />
-            <Button type="submit" size="sm" disabled={pending || !input.trim()}>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={pending || !input.trim()}
+              className="transition-transform active:scale-90"
+            >
               <Send className="size-3.5" />
             </Button>
           </form>
@@ -108,11 +119,13 @@ export function ChatWidget() {
       <Button
         type="button"
         size="icon"
-        className="size-12 rounded-full shadow-lg"
+        className={`size-12 rounded-full shadow-lg transition-transform duration-200 hover:scale-110 active:scale-90 ${invitePulse ? "chat-fab-idle" : ""}`}
         onClick={() => setOpen((v) => !v)}
         aria-label={open ? "Close assistant" : "Open assistant"}
       >
-        {open ? <X className="size-5" /> : <MessageCircle className="size-5" />}
+        <span className={`inline-flex transition-transform duration-300 ${open ? "rotate-180" : "rotate-0"}`}>
+          {open ? <X className="size-5" /> : <MessageCircle className="size-5" />}
+        </span>
       </Button>
     </div>
   );
