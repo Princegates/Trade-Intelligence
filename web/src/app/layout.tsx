@@ -17,11 +17,11 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Trade Intelligence",
-    template: "%s | Trade Intelligence",
+    default: "SignalsVault AI",
+    template: "%s | SignalsVault AI",
   },
   description:
-    "Rule-based BTC and gold trading signals with the reasoning behind every call, and a track record you can audit.",
+    "Trade intelligence for BTC and gold: rule-based signals with the reasoning behind every call, and a track record you can audit.",
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {

@@ -4,6 +4,7 @@ store both. Run with `python -m src.run`."""
 from datetime import datetime, timezone
 
 from . import config, quality
+from .ai import commentary
 from .ingest import binance, calendar, twelvedata
 from .signals import engine, event_risk
 from .storage import db, supabase
@@ -50,6 +51,39 @@ def newest_stored(symbol, timeframe):
 def suppress(symbol, timeframe, now, reason, detail):
     db.record_suppression(symbol, timeframe, now, reason, detail)
     _mirror(supabase.publish_suppression, symbol, timeframe, now, reason, detail)
+
+
+def _generate_commentary(symbol, timeframe, candle_time, price, result):
+    """Best-effort AI commentary for a signal this run just published.
+    Never raises: a missing/misconfigured/rate-limited provider just means
+    no commentary for this signal, not a failed run. See src/ai/commentary.py.
+    """
+    try:
+        settings = supabase.get_active_ai_settings()
+    except Exception as exc:
+        print(f"[warn] could not read AI settings ({exc})")
+        return
+    if not settings:
+        return
+
+    text = commentary.generate(
+        {
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "verdict": result["verdict"],
+            "score": result["score"],
+            "reasoning": result["reasoning"],
+            "patterns": result["patterns"],
+            "levels": result["levels"],
+            "price": price,
+        },
+        settings,
+    )
+    if not text:
+        return
+
+    model = (settings.get("config") or {}).get("model") or commentary.DEFAULT_GEMINI_MODEL
+    _mirror(supabase.publish_commentary, symbol, timeframe, candle_time, config.STRATEGY_VERSION, text, model)
 
 
 def process(instrument, timeframe, now, events=()):
@@ -155,6 +189,13 @@ def process(instrument, timeframe, now, events=()):
     # refetch and try again.
     if _mirror(supabase.publish_signal, symbol, timeframe, **signal):
         _mirror(supabase.publish_candles, symbol, timeframe, candles)
+        # Only for a signal this run actually just recorded — publish_signal
+        # above is a no-op re-send on every poll that finds nothing new
+        # (idempotent on_conflict), and generating commentary on every one
+        # of those would burn the AI provider's free-tier quota on the same
+        # signal over and over for nothing new to say.
+        if stored:
+            _generate_commentary(symbol, timeframe, candle_time, price, result)
 
     if not stored:
         return f"[kept] {symbol}/{timeframe}: candle already called, original signal left untouched"

@@ -191,6 +191,64 @@ def publish_candles(symbol, timeframe, candles):
     return len(pending)
 
 
+def get_active_ai_settings():
+    """The admin's active AI provider config from app_settings (category
+    "ai"), or None if unconfigured, unreachable, or nothing is marked
+    active. Read with the service_role key, same as everything else here,
+    so this bypasses RLS rather than needing its own grant.
+
+    If more than one AI provider is somehow marked active at once (the
+    settings UI doesn't enforce exclusivity — see web/src/lib/actions/
+    settings.ts), whichever Postgres happens to return first wins. That is
+    a pre-existing looseness shared by every other settings category, not
+    something specific to this one.
+    """
+    credentials = _credentials()
+    if credentials is None:
+        return None
+
+    url, key = credentials
+    try:
+        response = requests.get(
+            f"{url}/rest/v1/app_settings",
+            params={
+                "category": "eq.ai",
+                "is_active": "eq.true",
+                "select": "provider,config",
+                "limit": "1",
+            },
+            headers={"apikey": key, "Authorization": f"Bearer {key}"},
+            timeout=TIMEOUT,
+        )
+        response.raise_for_status()
+        rows = response.json()
+    except Exception:
+        return None
+
+    return rows[0] if rows else None
+
+
+def publish_commentary(symbol, timeframe, candle_time, strategy_version, commentary, model):
+    """Stores an LLM-written paragraph about an already-published signal.
+    Same identity/on_conflict as the signal itself (SIGNAL_IDENTITY), so a
+    duplicate call — there shouldn't be one, since run.py only generates
+    commentary for a signal this run newly recorded — is a no-op rather than
+    a second row or an error.
+    """
+    return _insert(
+        "signal_commentary",
+        {
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "candle_time": _utc(candle_time),
+            "strategy_version": strategy_version,
+            "commentary": commentary,
+            "model": model,
+        },
+        on_conflict=SIGNAL_IDENTITY,
+    )
+
+
 def publish_suppression(symbol, timeframe, observed_at, reason, detail=""):
     return _insert(
         "signal_suppressions",

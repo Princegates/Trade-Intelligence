@@ -12,7 +12,7 @@ function Section({ n, title, children }: { n: string; title: string; children: R
   );
 }
 
-export const metadata = { title: "Disclaimer — Trade Intelligence" };
+export const metadata = { title: "Disclaimer" };
 
 export default function DisclaimerPage() {
   return (
@@ -28,7 +28,7 @@ export default function DisclaimerPage() {
         </CardHeader>
         <CardContent className="text-sm leading-relaxed text-muted-foreground">
           <p>
-            <strong className="text-foreground">Trade Intelligence is not financial, investment, legal, or tax
+            <strong className="text-foreground">SignalsVault AI is not financial, investment, legal, or tax
             advice.</strong> It is an automated, rule-based system that analyzes public market data and publishes the
             reasoning behind each call. Nothing it produces is a recommendation, an offer, or a solicitation to buy,
             sell, or hold any currency, cryptocurrency, commodity, or other instrument. You are solely responsible for
@@ -76,7 +76,7 @@ export default function DisclaimerPage() {
 
         <Section n="4" title="Not a registered adviser; no fiduciary relationship">
           <p>
-            Trade Intelligence and its operator are not a registered investment adviser, broker-dealer, futures
+            SignalsVault AI and its operator are not a registered investment adviser, broker-dealer, futures
             commission merchant, or financial planner in any jurisdiction, and nothing on this platform creates an
             advisory, fiduciary, or client relationship between you and us. If you require personalized advice, engage
             a professional licensed to give it in your jurisdiction.
@@ -103,7 +103,7 @@ export default function DisclaimerPage() {
 
         <Section n="7" title="Limitation of liability">
           <p>
-            To the maximum extent permitted by applicable law, Trade Intelligence and its operator will not be liable
+            To the maximum extent permitted by applicable law, SignalsVault AI and its operator will not be liable
             for any direct, indirect, incidental, consequential, special, exemplary, or punitive damages — including
             lost profits or trading losses — arising from your access to or use of, or inability to access or use,
             the service, or from any reliance placed on any signal, data, or content it provides, even if advised of

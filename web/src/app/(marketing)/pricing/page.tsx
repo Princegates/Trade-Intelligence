@@ -66,7 +66,7 @@ export default function PricingPage() {
       </div>
 
       <p className="mx-auto mt-4 max-w-2xl text-center text-xs text-muted-foreground">
-        Trade Intelligence is not financial advice — see the{" "}
+        SignalsVault AI is not financial advice — see the{" "}
         <Link href="/disclaimer" className="underline underline-offset-4 hover:text-foreground">
           full disclaimer
         </Link>

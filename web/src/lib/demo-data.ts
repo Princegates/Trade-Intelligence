@@ -44,6 +44,7 @@ export interface DemoSignal {
     buyAbove: number | null;
     sellBelow: number | null;
   } | null;
+  aiCommentary: string | null;
 }
 
 const now = () => new Date().toISOString();
@@ -67,7 +68,10 @@ function demoLevels(price: number, verdict: DemoSignal["verdict"]): DemoSignal["
   return { entry: null, stop: null, target: null, buyAbove: price + stop, sellBelow: price - stop };
 }
 
-type DemoSignalSeed = Omit<DemoSignal, "patterns" | "levels"> & { patterns?: string[] };
+type DemoSignalSeed = Omit<DemoSignal, "patterns" | "levels" | "aiCommentary"> & {
+  patterns?: string[];
+  aiCommentary?: string;
+};
 
 const DEMO_SIGNAL_SEEDS: DemoSignalSeed[] = [
   {
@@ -85,6 +89,8 @@ const DEMO_SIGNAL_SEEDS: DemoSignalSeed[] = [
       "BOS at 68150.00 — price confirms the prevailing uptrend",
       "ATR(14) at 145.30 — typical move per candle, used to size the levels below",
     ],
+    aiCommentary:
+      "Every trend and momentum reading here is pulling the same direction, which is the cleaner setup to catch early rather than chase — the EMA stack has been climbing in order since the 200 down through the 9, RSI still has room before overbought, and the break of structure at 68,150 is the kind of confirmation that tends to hold rather than fake out. The $145 ATR is what's sizing the stop below, so a move back through recent structure is what would actually invalidate this, not just a red candle.",
   },
   {
     symbol: "BTCUSDT",
@@ -173,6 +179,7 @@ export const DEMO_SIGNALS: DemoSignal[] = DEMO_SIGNAL_SEEDS.map((s) => ({
   ...s,
   patterns: s.patterns ?? [],
   levels: demoLevels(s.price, s.verdict),
+  aiCommentary: s.aiCommentary ?? null,
 }));
 
 // Offsets from "now" rather than fixed dates, so the calendar always looks
@@ -281,6 +288,7 @@ export const SETTINGS_PROVIDERS: Record<SettingsCategory, ProviderDef[]> = {
     { provider: "fcm", label: "Firebase Cloud Messaging", fields: [{ key: "project_id", label: "Project ID" }, { key: "service_account_json", label: "Service Account JSON", secret: true }] },
   ],
   ai: [
+    { provider: "gemini", label: "Google Gemini (free tier)", fields: [{ key: "api_key", label: "API Key", secret: true }, { key: "model", label: "Model", placeholder: "gemini-2.5-flash" }] },
     { provider: "anthropic", label: "Anthropic (Claude)", fields: [{ key: "api_key", label: "API Key", secret: true }, { key: "model", label: "Model", placeholder: "claude-sonnet-5" }] },
     { provider: "openai", label: "OpenAI", fields: [{ key: "api_key", label: "API Key", secret: true }, { key: "model", label: "Model", placeholder: "gpt-5" }] },
   ],
@@ -294,7 +302,7 @@ export interface DemoSetting {
 }
 
 export const DEMO_SETTINGS: DemoSetting[] = [
-  { category: "email", provider: "resend", isActive: true, config: { from_address: "alerts@tradeintel.app" } },
+  { category: "email", provider: "resend", isActive: true, config: { from_address: "alerts@signalsvaultai.com" } },
   { category: "sms", provider: "hubtel", isActive: false, config: {} },
   { category: "payments", provider: "paystack", isActive: false, config: {} },
 ];

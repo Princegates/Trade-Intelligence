@@ -1,3 +1,4 @@
+import { Sparkles } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { plainLanguageSummary } from "@/lib/plain-language";
@@ -105,6 +106,15 @@ export function SignalCard({ signal }: { signal: SignalView }) {
               </span>
             </div>
             <p className="mb-3 text-sm text-foreground">{plainLanguageSummary(signal)}</p>
+            {signal.aiCommentary && (
+              <div className="mb-3 rounded-md border border-dashed bg-muted/30 p-2.5">
+                <p className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+                  <Sparkles className="size-3" />
+                  AI take
+                </p>
+                <p className="text-sm text-foreground">{signal.aiCommentary}</p>
+              </div>
+            )}
           </>
         )}
 

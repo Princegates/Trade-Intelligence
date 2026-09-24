@@ -4,9 +4,9 @@ import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/ca
 export default function AboutPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-20 sm:px-6">
-      <h1 className="text-4xl font-bold tracking-tight">About Trade Intelligence</h1>
+      <h1 className="text-4xl font-bold tracking-tight">About SignalsVault AI</h1>
       <p className="mt-4 text-muted-foreground">
-        Trade Intelligence started as a small, personal signal engine for BTC and gold: a scheduled job that
+        SignalsVault AI started as a small, personal trade intelligence engine for BTC and gold: a scheduled job that
         pulls the latest candles, computes a handful of technical indicators, and writes a verdict with the
         reasoning behind it. This site is that same philosophy, built into a product — never a bare number,
         always the reasoning, and a track record you can check.
@@ -43,8 +43,8 @@ export default function AboutPage() {
         <h2 className="text-2xl font-semibold">Get in touch</h2>
         <p className="mt-3 text-muted-foreground">
           For Pro/Team plans, feature requests, or anything else, reach out at{" "}
-          <a href="mailto:hello@tradeintel.app" className="text-primary underline underline-offset-4">
-            hello@tradeintel.app
+          <a href="mailto:hello@signalsvaultai.com" className="text-primary underline underline-offset-4">
+            hello@signalsvaultai.com
           </a>
           .
         </p>

@@ -26,6 +26,12 @@ export interface SignalView {
     buyAbove: number | null;
     sellBelow: number | null;
   } | null;
+  /** An LLM-written paragraph adding color to the same call the deterministic
+   * plain-language summary already states — additive, never the source of
+   * the verdict itself. Null when no admin-configured AI provider has
+   * generated one (or generation failed) for this signal; see
+   * src/lib/plain-language.ts for the always-available fallback. */
+  aiCommentary: string | null;
 }
 
 export interface SuppressionView {

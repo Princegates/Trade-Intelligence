@@ -22,6 +22,7 @@ function signal(timeframe: string, minutes: number, symbol = "XAUUSD"): SignalVi
     strategyVersion: "1.0.0",
     patterns: [],
     levels: null,
+    aiCommentary: null,
   };
 }
 

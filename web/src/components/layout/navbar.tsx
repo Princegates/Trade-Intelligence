@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { LineChart, Menu, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ModeToggle } from "@/components/mode/mode-toggle";
+import { BrandMark } from "@/components/layout/brand-mark";
 
 const links = [
   { href: "/#features", label: "Features" },
@@ -18,9 +19,8 @@ export function Navbar({ isAuthed }: { isAuthed: boolean }) {
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-        <Link href="/" className="flex items-center gap-2 font-semibold">
-          <LineChart className="size-5 text-primary" />
-          <span>Trade Intelligence</span>
+        <Link href="/">
+          <BrandMark />
         </Link>
 
         <nav className="hidden items-center gap-6 md:flex">

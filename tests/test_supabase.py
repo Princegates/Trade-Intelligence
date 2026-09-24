@@ -210,3 +210,66 @@ def test_an_empty_events_list_is_a_no_op(monkeypatch):
 
     assert supabase.publish_events([]) == 0
     assert posted == []
+
+
+class _JsonResponse(_Response):
+    def __init__(self, payload):
+        self._payload = payload
+
+    def json(self):
+        return self._payload
+
+
+def test_commentary_is_mirrored_with_the_signal_identity_on_conflict(monkeypatch):
+    _configured(monkeypatch)
+    captured = _capture(monkeypatch)
+
+    ok = supabase.publish_commentary(
+        "BTCUSDT", "1h", 1_700_000_000, "1.0.0", "The trend and momentum readings agree here.", "gemini-2.5-flash"
+    )
+
+    assert ok is True
+    assert captured["url"] == "https://project.supabase.co/rest/v1/signal_commentary"
+    assert captured["params"]["on_conflict"] == "symbol,timeframe,candle_time,strategy_version"
+    row = captured["json"][0]
+    assert row["commentary"] == "The trend and momentum readings agree here."
+    assert row["model"] == "gemini-2.5-flash"
+    assert row["candle_time"] == "2023-11-14T22:13:20+00:00"
+
+
+def test_ai_settings_are_not_read_when_unconfigured(monkeypatch):
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
+
+    assert supabase.get_active_ai_settings() is None
+
+
+def test_ai_settings_return_the_first_active_row(monkeypatch):
+    _configured(monkeypatch)
+    monkeypatch.setattr(
+        supabase.requests,
+        "get",
+        lambda *a, **k: _JsonResponse([{"provider": "gemini", "config": {"api_key": "k", "model": "gemini-2.5-flash"}}]),
+    )
+
+    settings = supabase.get_active_ai_settings()
+
+    assert settings == {"provider": "gemini", "config": {"api_key": "k", "model": "gemini-2.5-flash"}}
+
+
+def test_ai_settings_are_none_when_nothing_is_active(monkeypatch):
+    _configured(monkeypatch)
+    monkeypatch.setattr(supabase.requests, "get", lambda *a, **k: _JsonResponse([]))
+
+    assert supabase.get_active_ai_settings() is None
+
+
+def test_ai_settings_failure_is_swallowed_not_raised(monkeypatch):
+    _configured(monkeypatch)
+
+    def boom(*a, **k):
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr(supabase.requests, "get", boom)
+
+    assert supabase.get_active_ai_settings() is None

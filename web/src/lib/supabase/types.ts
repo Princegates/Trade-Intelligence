@@ -266,6 +266,30 @@ export interface Database {
         };
         Relationships: [];
       };
+      signal_commentary: {
+        Row: {
+          symbol: string;
+          timeframe: string;
+          candle_time: string;
+          strategy_version: string;
+          commentary: string;
+          model: string;
+          generated_at: string;
+        };
+        Insert: {
+          symbol: string;
+          timeframe: string;
+          candle_time: string;
+          strategy_version: string;
+          commentary: string;
+          model: string;
+          generated_at?: string;
+        };
+        // Written once by the cron job's service_role key; nothing in the
+        // web app ever updates a row here.
+        Update: never;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {

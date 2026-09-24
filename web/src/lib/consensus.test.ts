@@ -18,6 +18,7 @@ function signal(timeframe: string, verdict: SignalView["verdict"], minutesAgo = 
     strategyVersion: "1.0.0",
     patterns: [],
     levels: { entry: 86_000, stop: 84_000, target: 89_000, buyAbove: null, sellBelow: null },
+    aiCommentary: null,
   };
 }
 

@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
-import { LayoutDashboard, LineChart, LogOut, Menu, ShieldCheck, X } from "lucide-react";
+import { LayoutDashboard, LogOut, Menu, ShieldCheck, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { BrandMark } from "@/components/layout/brand-mark";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -54,9 +55,8 @@ export function DashboardShell({ title, nav, user, children }: DashboardShellPro
 
   const SidebarContent = (
     <>
-      <Link href="/" className="flex items-center gap-2 px-4 py-5 font-semibold">
-        <LineChart className="size-5 text-primary" />
-        <span>Trade Intelligence</span>
+      <Link href="/" className="px-4 py-5">
+        <BrandMark />
       </Link>
       <nav className="flex flex-1 flex-col gap-1 px-3">
         {nav.map((item) => {
