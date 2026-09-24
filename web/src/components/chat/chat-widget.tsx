@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bot, Send, X } from "lucide-react";
+import { Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ChatMascot } from "@/components/chat/chat-mascot";
@@ -166,13 +166,13 @@ export function ChatWidget() {
         >
           <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
             <div className="flex items-center gap-2 text-sm font-medium">
-              <Bot className="chat-bot-icon size-4 text-primary" />
-              Assistant
+              <ChatMascot open={open} size="1.5rem" />
+              Guda
             </div>
             <button
               type="button"
               onClick={() => setOpen(false)}
-              aria-label="Close assistant"
+              aria-label="Close Guda"
               className="rounded-sm p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
             >
               <X className="size-4 transition-transform duration-200 hover:rotate-90" />
@@ -182,7 +182,7 @@ export function ChatWidget() {
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-3 py-3">
             {messages.length === 0 && (
               <p className="chat-bubble-enter text-sm text-muted-foreground">
-                Ask me anything — about your signals or anything else.
+                Hi, I&apos;m Guda — ask me anything, about your signals or anything else.
               </p>
             )}
             {messages.map((m, i) => (
@@ -239,7 +239,7 @@ export function ChatWidget() {
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
-        aria-label={open ? "Close assistant" : "Open assistant — drag to move"}
+        aria-label={open ? "Close Guda" : "Open Guda — drag to move"}
       >
         <ChatMascot open={open} />
       </Button>

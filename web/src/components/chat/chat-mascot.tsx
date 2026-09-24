@@ -10,7 +10,7 @@
  * way a logo would. There's only ever one of these on screen at a time
  * (the single persistent chat widget), so the gradient/filter ids below
  * are plain fixed strings rather than generated per instance. */
-export function ChatMascot({ open }: { open: boolean }) {
+export function ChatMascot({ open, size = "6rem" }: { open: boolean; size?: string }) {
   const GLOW = "#22e6e0";
 
   return (
@@ -21,7 +21,7 @@ export function ChatMascot({ open }: { open: boolean }) {
       // this element on specificity alone, silently forcing every icon
       // inside a Button down to 16px regardless of what's set here. An
       // inline style is the one thing guaranteed to win over that.
-      style={{ width: "6rem", height: "6rem" }}
+      style={{ width: size, height: size }}
       className="chat-mascot-halo overflow-visible"
       aria-hidden="true"
     >
