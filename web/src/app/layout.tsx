@@ -22,6 +22,9 @@ export const metadata: Metadata = {
   },
   description:
     "Trade intelligence for BTC and gold: rule-based signals with the reasoning behind every call, and a track record you can audit.",
+  verification: {
+    google: "rk3vvdEg2_gJzM9CEiC7OGov3nf4la3f63LnxOx4dfQ",
+  },
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
