@@ -65,6 +65,24 @@ body {
   }
 }
 
+/* Generic collapsible-section entrance — currently just the dashboard's
+   economic calendar (src/components/dashboard/event-calendar.tsx), but
+   not named after it, since any future collapsible card can reuse this. */
+@keyframes card-collapse-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.card-collapse-enter {
+  animation: card-collapse-in 0.18s ease-out;
+}
+
 @keyframes chat-bubble-in {
   from {
     opacity: 0;

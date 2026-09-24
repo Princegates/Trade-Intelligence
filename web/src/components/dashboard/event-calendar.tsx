@@ -1,8 +1,18 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { affectedInstruments, isSameUtcDay, isWithinWindow, sortByTime, type CalendarEvent } from "@/lib/calendar";
-import { ASSET_NAMES } from "@/lib/signals";
+// From calendar-view.ts / signal-view.ts specifically, not calendar.ts /
+// signals.ts — those carry `import "server-only"`, which a "use client"
+// component can't pull in even transitively. The pure helpers this file
+// actually needs already live in the unguarded sibling modules.
+import { affectedInstruments, isSameUtcDay, isWithinWindow, sortByTime, type CalendarEvent } from "@/lib/calendar-view";
+import { ASSET_NAMES } from "@/lib/signal-view";
+
+const STORAGE_KEY = "ti-econ-calendar-collapsed";
 
 function impactVariant(impact: string) {
   const normalized = impact.toLowerCase();
@@ -88,32 +98,85 @@ function EventList({ events, now, emptyLabel }: { events: CalendarEvent[]; now: 
  * is a tab away for whoever wants to look further out. Both tabs read from
  * the same already-fetched `events` (a week's worth, same window the
  * event-risk gate itself uses) — switching tabs filters client-side rather
- * than firing a second request. */
+ * than firing a second request.
+ *
+ * Collapsible: starts expanded (matches the server-rendered markup, so
+ * there's no flash of missing content before JS loads) and remembers a
+ * collapsed choice in localStorage — a per-viewer convenience, not app
+ * state, so it doesn't need a server round trip to persist. */
 export function EventCalendar({ events, now }: { events: CalendarEvent[]; now: number }) {
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(STORAGE_KEY) === "true") {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setCollapsed(true);
+      }
+    } catch {
+      // Private browsing / blocked storage — stays expanded, the default.
+    }
+  }, []);
+
+  function toggle() {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(STORAGE_KEY, String(next));
+      } catch {
+        // Ignore — the preference just won't persist across reloads.
+      }
+      return next;
+    });
+  }
+
   const ordered = sortByTime(events);
   const today = ordered.filter((e) => isSameUtcDay(e.eventTime, now));
+  const todayCount = today.length;
 
   return (
     <Card>
       <CardContent className="p-4 sm:p-5">
-        <h2 className="mb-1 text-sm font-semibold">Economic calendar</h2>
-        <p className="mb-3 text-xs text-muted-foreground">
-          High-impact USD releases hold gold to HOLD around them — see each event below. Bitcoin is never gated by
-          this calendar.
-        </p>
+        <button
+          type="button"
+          onClick={toggle}
+          aria-expanded={!collapsed}
+          className="flex w-full items-center justify-between gap-2 text-left"
+        >
+          <span className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold">Economic calendar</h2>
+            {collapsed && todayCount > 0 && (
+              <Badge variant="outline" className="text-[10px]">
+                {todayCount} today
+              </Badge>
+            )}
+          </span>
+          <ChevronDown
+            className={`size-4 shrink-0 text-muted-foreground transition-transform duration-200 ${collapsed ? "" : "rotate-180"}`}
+          />
+        </button>
 
-        <Tabs defaultValue="today">
-          <TabsList>
-            <TabsTrigger value="today">Today</TabsTrigger>
-            <TabsTrigger value="week">This week</TabsTrigger>
-          </TabsList>
-          <TabsContent value="today">
-            <EventList events={today} now={now} emptyLabel="today's" />
-          </TabsContent>
-          <TabsContent value="week">
-            <EventList events={ordered} now={now} emptyLabel="upcoming" />
-          </TabsContent>
-        </Tabs>
+        {!collapsed && (
+          <div className="card-collapse-enter">
+            <p className="mb-3 mt-1 text-xs text-muted-foreground">
+              High-impact USD releases hold gold to HOLD around them — see each event below. Bitcoin is never gated
+              by this calendar.
+            </p>
+
+            <Tabs defaultValue="today">
+              <TabsList>
+                <TabsTrigger value="today">Today</TabsTrigger>
+                <TabsTrigger value="week">This week</TabsTrigger>
+              </TabsList>
+              <TabsContent value="today">
+                <EventList events={today} now={now} emptyLabel="today's" />
+              </TabsContent>
+              <TabsContent value="week">
+                <EventList events={ordered} now={now} emptyLabel="upcoming" />
+              </TabsContent>
+            </Tabs>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
