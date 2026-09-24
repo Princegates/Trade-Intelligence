@@ -166,18 +166,43 @@ body {
   animation: dialog-content-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Chat mascot (src/components/chat/chat-mascot.tsx) — a little face on the
-   FAB instead of a static icon, so the assistant reads as a character, not
-   a button. */
+/* Chat mascot (src/components/chat/chat-mascot.tsx) — a little robot
+   character on the FAB instead of a static icon, so the assistant reads as
+   something alive, not a button. Bounces continuously (a real hop, with
+   squash-and-stretch, not just a subtle bob) while its eyes blink and
+   antennae/chest light glow, independently, so nothing moves in perfect
+   lockstep. */
+
+@keyframes chat-mascot-jump {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg) scaleY(1);
+  }
+  12% {
+    transform: translateY(0) rotate(-3deg) scaleY(0.88);
+  }
+  32% {
+    transform: translateY(-7px) rotate(3deg) scaleY(1.06);
+  }
+  50% {
+    transform: translateY(-9px) rotate(0deg) scaleY(1.02);
+  }
+  68% {
+    transform: translateY(-7px) rotate(-3deg) scaleY(1.06);
+  }
+  88% {
+    transform: translateY(0) rotate(3deg) scaleY(0.9);
+  }
+}
 
 @keyframes chat-mascot-blink {
   0%,
   92%,
   100% {
-    transform: scaleY(1);
+    opacity: 1;
   }
   95% {
-    transform: scaleY(0.1);
+    opacity: 0.1;
   }
 }
 
@@ -187,10 +212,10 @@ body {
     transform: rotate(0deg);
   }
   25% {
-    transform: rotate(-10deg);
+    transform: rotate(-14deg);
   }
   75% {
-    transform: rotate(10deg);
+    transform: rotate(14deg);
   }
 }
 
@@ -206,19 +231,23 @@ body {
   }
 }
 
-.chat-mascot-eyes {
+.chat-mascot-bob {
   transform-box: fill-box;
-  transform-origin: center;
+  transform-origin: bottom center;
+  animation: chat-mascot-jump 2s ease-in-out infinite;
+}
+
+.chat-mascot-eyes {
   animation: chat-mascot-blink 4s ease-in-out infinite;
 }
 
 .chat-mascot-antenna {
   transform-box: fill-box;
   transform-origin: bottom center;
-  animation: chat-mascot-antenna-wiggle 2.8s ease-in-out infinite;
+  animation: chat-mascot-antenna-wiggle 1.4s ease-in-out infinite;
 }
 
-.chat-mascot-antenna-tip {
+.chat-mascot-glow {
   transform-box: fill-box;
   transform-origin: center;
   animation: chat-mascot-glow 1.6s ease-in-out infinite;
