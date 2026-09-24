@@ -1,9 +1,12 @@
+import Link from "next/link";
 import { HistoryFilters } from "@/components/dashboard/history-filters";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { getLatestSignals, getSignalHistory, symbolTimeframePairs } from "@/lib/signals";
 import { plainLanguageSummary } from "@/lib/plain-language";
+import { requireUser } from "@/lib/auth";
+import { hasFullAccess } from "@/lib/access";
 
 function verdictVariant(v: string) {
   if (v === "BUY") return "success" as const;
@@ -12,6 +15,9 @@ function verdictVariant(v: string) {
 }
 
 export default async function HistoryPage({ searchParams }: PageProps<"/dashboard/history">) {
+  const user = await requireUser();
+  const fullAccess = hasFullAccess(user);
+
   const params = await searchParams;
   const { signals: latest } = await getLatestSignals();
   const pairs = symbolTimeframePairs(latest);
@@ -19,7 +25,7 @@ export default async function HistoryPage({ searchParams }: PageProps<"/dashboar
   const symbol = typeof params.symbol === "string" ? params.symbol : pairs[0]?.symbol ?? "BTCUSDT";
   const timeframe = typeof params.timeframe === "string" ? params.timeframe : pairs[0]?.timeframe ?? "1h";
 
-  const history = await getSignalHistory(symbol, timeframe);
+  const history = await getSignalHistory(symbol, timeframe, fullAccess ? 25 : 1);
 
   return (
     <div className="space-y-6">
@@ -27,6 +33,20 @@ export default async function HistoryPage({ searchParams }: PageProps<"/dashboar
         <p className="text-sm text-muted-foreground">Signal history for the selected symbol and timeframe.</p>
         <HistoryFilters pairs={pairs} symbol={symbol} timeframe={timeframe} />
       </div>
+
+      {!fullAccess && (
+        <Card>
+          <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">
+              You&apos;re on the basic view — only the latest signal is shown. Ask your admin for an access code to
+              unlock full history.
+            </p>
+            <Link href="/dashboard/settings" className="text-sm font-medium text-primary underline-offset-4 hover:underline">
+              Redeem a code
+            </Link>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardContent className="p-0">

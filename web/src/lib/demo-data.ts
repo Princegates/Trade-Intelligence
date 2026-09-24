@@ -13,6 +13,8 @@ export const DEMO_USER: SessionUser = {
   fullName: "Demo Trader",
   role: "user",
   approved: true,
+  // Mid-trial in the demo, same as a freshly-approved real account would be.
+  fullAccessUntil: new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString(),
 };
 
 export const DEMO_ADMIN: SessionUser = {
@@ -21,6 +23,7 @@ export const DEMO_ADMIN: SessionUser = {
   fullName: "Demo Admin",
   role: "admin",
   approved: true,
+  fullAccessUntil: null,
 };
 
 export interface DemoSignal {
@@ -231,13 +234,16 @@ export interface DemoUser {
   role: "user" | "admin";
   approved: boolean;
   createdAt: string;
+  fullAccessUntil: string | null;
 }
 
+const days = (n: number) => new Date(Date.now() + n * 24 * 3600 * 1000).toISOString();
+
 export const DEMO_USERS: DemoUser[] = [
-  { id: "1", email: "admin@example.com", fullName: "Demo Admin", role: "admin", approved: true, createdAt: "2026-01-04T00:00:00Z" },
-  { id: "2", email: "trader@example.com", fullName: "Demo Trader", role: "user", approved: true, createdAt: "2026-02-11T00:00:00Z" },
-  { id: "3", email: "jane.doe@example.com", fullName: "Jane Doe", role: "user", approved: false, createdAt: "2026-03-22T00:00:00Z" },
-  { id: "4", email: "sam.k@example.com", fullName: "Sam K.", role: "user", approved: true, createdAt: "2026-04-02T00:00:00Z" },
+  { id: "1", email: "admin@example.com", fullName: "Demo Admin", role: "admin", approved: true, createdAt: "2026-01-04T00:00:00Z", fullAccessUntil: null },
+  { id: "2", email: "trader@example.com", fullName: "Demo Trader", role: "user", approved: true, createdAt: "2026-02-11T00:00:00Z", fullAccessUntil: days(5) },
+  { id: "3", email: "jane.doe@example.com", fullName: "Jane Doe", role: "user", approved: false, createdAt: "2026-03-22T00:00:00Z", fullAccessUntil: null },
+  { id: "4", email: "sam.k@example.com", fullName: "Sam K.", role: "user", approved: true, createdAt: "2026-04-02T00:00:00Z", fullAccessUntil: days(-2) },
 ];
 
 export interface ProviderField {

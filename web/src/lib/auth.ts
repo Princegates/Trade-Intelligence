@@ -11,6 +11,10 @@ export interface SessionUser {
   fullName: string | null;
   role: Role;
   approved: boolean;
+  /** Full access (every timeframe's full history) until this timestamp;
+   * null or past means basic view (latest signal only). Ignored for admins,
+   * who always have full access — see src/lib/access.ts#hasFullAccess. */
+  fullAccessUntil: string | null;
 }
 
 /** Current signed-in user + profile role, or null. In demo mode (no
@@ -30,7 +34,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name, role, approved")
+    .select("full_name, role, approved, full_access_until")
     .eq("id", user.id)
     .single();
 
@@ -42,6 +46,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     // No profile row is treated as not approved — deny by default rather
     // than admit by default if the signup trigger somehow hasn't run yet.
     approved: profile?.approved ?? false,
+    fullAccessUntil: profile?.full_access_until ?? null,
   };
 }
 

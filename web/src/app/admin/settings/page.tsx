@@ -3,9 +3,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ProviderSettingsForm } from "@/components/admin/provider-settings-form";
 import { PasswordForm } from "@/components/account/password-form";
+import { TrialLengthForm } from "@/components/admin/trial-length-form";
 import { Badge } from "@/components/ui/badge";
 import { SETTINGS_PROVIDERS } from "@/lib/demo-data";
 import { getAllProviderStates } from "@/lib/settings";
+import { getAccessPolicy } from "@/lib/access-policy";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import type { SettingsCategory } from "@/lib/supabase/types";
 
@@ -18,7 +20,10 @@ const CATEGORIES: { key: SettingsCategory; label: string; icon: React.ReactNode 
 ];
 
 export default async function AdminSettingsPage() {
-  const providersByCategory = await Promise.all(CATEGORIES.map((c) => getAllProviderStates(c.key)));
+  const [providersByCategory, { trialDays }] = await Promise.all([
+    Promise.all(CATEGORIES.map((c) => getAllProviderStates(c.key))),
+    getAccessPolicy(),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -35,6 +40,19 @@ export default async function AdminSettingsPage() {
         </CardHeader>
         <CardContent>
           <PasswordForm />
+        </CardContent>
+      </Card>
+
+      <Card className="max-w-2xl">
+        <CardHeader>
+          <CardTitle>Trial access</CardTitle>
+          <CardDescription>
+            New accounts get full access for a limited trial, then drop to a basic view (latest signal only) until
+            you send them a code from Access Control.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <TrialLengthForm trialDays={trialDays} />
         </CardContent>
       </Card>
 

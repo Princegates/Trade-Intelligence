@@ -26,6 +26,7 @@ export interface Database {
           full_name: string | null;
           role: Role;
           approved: boolean;
+          full_access_until: string | null;
           created_at: string;
         };
         Insert: {
@@ -34,6 +35,7 @@ export interface Database {
           full_name?: string | null;
           role?: Role;
           approved?: boolean;
+          full_access_until?: string | null;
           created_at?: string;
         };
         Update: {
@@ -42,6 +44,7 @@ export interface Database {
           full_name?: string | null;
           role?: Role;
           approved?: boolean;
+          full_access_until?: string | null;
           created_at?: string;
         };
         Relationships: [];
@@ -215,9 +218,62 @@ export interface Database {
         };
         Relationships: [];
       };
+      access_policy: {
+        Row: {
+          id: boolean;
+          trial_days: number;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          id?: boolean;
+          trial_days?: number;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          id?: boolean;
+          trial_days?: number;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [];
+      };
+      access_codes: {
+        Row: {
+          id: string;
+          user_id: string;
+          code: string;
+          created_by: string;
+          created_at: string;
+          redeemed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          code: string;
+          created_by: string;
+          created_at?: string;
+          redeemed_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          code?: string;
+          created_by?: string;
+          created_at?: string;
+          redeemed_at?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      redeem_access_code: {
+        Args: { p_code: string };
+        Returns: boolean;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

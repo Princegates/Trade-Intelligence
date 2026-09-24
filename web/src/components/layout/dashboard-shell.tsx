@@ -6,6 +6,7 @@ import { useState, type ReactNode } from "react";
 import { LayoutDashboard, LineChart, LogOut, Menu, ShieldCheck, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,6 +18,7 @@ import {
 import { signOut } from "@/lib/actions/auth";
 import { useSignalsRealtime } from "@/lib/use-signals-realtime";
 import { ModeToggle } from "@/components/mode/mode-toggle";
+import { hasFullAccess, daysRemaining } from "@/lib/access";
 import type { Role } from "@/lib/supabase/types";
 
 export interface NavItem {
@@ -28,7 +30,7 @@ export interface NavItem {
 interface DashboardShellProps {
   title: string;
   nav: NavItem[];
-  user: { email: string; fullName: string | null; role: Role };
+  user: { email: string; fullName: string | null; role: Role; fullAccessUntil: string | null };
   children: ReactNode;
 }
 
@@ -47,6 +49,8 @@ export function DashboardShell({ title, nav, user, children }: DashboardShellPro
   const [mobileOpen, setMobileOpen] = useState(false);
   const { connected } = useSignalsRealtime();
   const inAdminArea = pathname.startsWith("/admin");
+  const fullAccess = hasFullAccess(user);
+  const remaining = daysRemaining(user);
 
   const SidebarContent = (
     <>
@@ -111,6 +115,18 @@ export function DashboardShell({ title, nav, user, children }: DashboardShellPro
                 Live
               </span>
             )}
+            {user.role !== "admin" &&
+              (fullAccess ? (
+                remaining !== null && (
+                  <Badge variant="outline" title="Full access — every timeframe's full history">
+                    {remaining === 0 ? "Trial ends today" : `Trial: ${remaining}d left`}
+                  </Badge>
+                )
+              ) : (
+                <Badge variant="warning" title="Ask your admin for an access code to unlock full trade history — see Settings">
+                  Basic view
+                </Badge>
+              ))}
           </div>
 
           <div className="flex items-center gap-2">
