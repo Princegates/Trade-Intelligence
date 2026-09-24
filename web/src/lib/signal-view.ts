@@ -95,3 +95,32 @@ export function unresolvedSuppressions(
     return new Date(suppression.observedAt).getTime() > signalAt;
   });
 }
+
+/** Every current signal, as plain text — fed into the chat assistant's
+ * prompt (see src/lib/actions/chat.ts) so it can answer from what's
+ * actually on the dashboard right now instead of generic market talk. A
+ * stale signal is still included but flagged, the same distinction the
+ * dashboard itself shows, so the assistant doesn't cite an expired call as
+ * if it were current. */
+export function formatSignalsForChat(signals: SignalView[], now: number = Date.now()): string {
+  if (signals.length === 0) return "No signals have been published yet.";
+
+  return signals
+    .map((s) => {
+      const stale = isStale(s, now);
+      const levels = s.levels
+        ? s.levels.entry !== null
+          ? ` Levels: entry ${s.levels.entry}, stop ${s.levels.stop}, target ${s.levels.target}.`
+          : ` Levels: buy above ${s.levels.buyAbove}, sell below ${s.levels.sellBelow}.`
+        : "";
+      const patterns = s.patterns.length > 0 ? ` Patterns: ${s.patterns.join(", ")}.` : "";
+      const reasoning = s.reasoning.length > 0 ? ` Reasoning: ${s.reasoning.join("; ")}.` : "";
+
+      return (
+        `${ASSET_NAMES[s.symbol] ?? s.symbol} (${s.symbol}) ${s.timeframe}${stale ? " [STALE, do not treat as current]" : ""} — ` +
+        `${s.verdict} (score ${s.score > 0 ? "+" : ""}${s.score}), price ${s.price}, as of ${s.generatedAt}.` +
+        `${levels}${patterns}${reasoning}`
+      );
+    })
+    .join("\n");
+}

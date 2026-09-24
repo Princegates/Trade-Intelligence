@@ -19,15 +19,22 @@ const SYSTEM_INSTRUCTION =
   "You are the assistant built into SignalsVault AI, a BTC/gold trading-signals dashboard. " +
   "You can discuss anything the user asks. You are not a licensed financial advisor, so don't " +
   "represent yourself as one or claim certainty about future price moves — beyond that, answer " +
-  "freely and helpfully.";
+  "freely and helpfully. Below is the current live data from the dashboard the user is looking " +
+  "at right now — use it directly when the user asks about current signals, prices, or which " +
+  "asset looks stronger or weaker; don't say you lack access to it.\n\n";
 
 /** Calls Gemini's chat-style generateContent with the running history plus
- * a new message. Returns the reply text, or null on any failure — a
- * provider outage should read as "try again," never crash the page. */
+ * a new message. `dataContext` (see src/lib/signal-view.ts#formatSignalsForChat)
+ * is folded into the system instruction, not sent as a chat turn, so it
+ * grounds every answer without cluttering the visible conversation or
+ * counting against MAX_HISTORY_TURNS. Returns the reply text, or null on
+ * any failure — a provider outage should read as "try again," never crash
+ * the page. */
 export async function generateChatReply(
   history: ChatTurn[],
   message: string,
-  provider: AiProvider
+  provider: AiProvider,
+  dataContext: string
 ): Promise<string | null> {
   if (provider.provider !== "gemini") return null;
   const apiKey = provider.config.api_key;
@@ -51,7 +58,7 @@ export async function generateChatReply(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents,
-          systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
+          systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION + dataContext }] },
           generationConfig: { maxOutputTokens: MAX_OUTPUT_TOKENS, temperature: 0.6 },
         }),
         signal: AbortSignal.timeout(30_000),
