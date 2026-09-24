@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bot, MessageCircle, Send, X } from "lucide-react";
+import { Bot, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ChatMascot } from "@/components/chat/chat-mascot";
 import { sendChatMessage } from "@/lib/actions/chat";
 import type { ChatTurn } from "@/lib/gemini-chat";
 
@@ -119,13 +120,11 @@ export function ChatWidget() {
       <Button
         type="button"
         size="icon"
-        className={`size-12 rounded-full shadow-lg transition-transform duration-200 hover:scale-110 active:scale-90 ${invitePulse ? "chat-fab-idle" : ""}`}
+        className={`size-14 rounded-full shadow-lg transition-transform duration-200 hover:scale-110 active:scale-90 ${invitePulse ? "chat-fab-idle" : ""}`}
         onClick={() => setOpen((v) => !v)}
         aria-label={open ? "Close assistant" : "Open assistant"}
       >
-        <span className={`inline-flex transition-transform duration-300 ${open ? "rotate-180" : "rotate-0"}`}>
-          {open ? <X className="size-5" /> : <MessageCircle className="size-5" />}
-        </span>
+        <ChatMascot open={open} />
       </Button>
     </div>
   );

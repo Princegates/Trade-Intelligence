@@ -165,3 +165,61 @@ body {
 .dialog-content[data-state="open"] {
   animation: dialog-content-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+/* Chat mascot (src/components/chat/chat-mascot.tsx) — a little face on the
+   FAB instead of a static icon, so the assistant reads as a character, not
+   a button. */
+
+@keyframes chat-mascot-blink {
+  0%,
+  92%,
+  100% {
+    transform: scaleY(1);
+  }
+  95% {
+    transform: scaleY(0.1);
+  }
+}
+
+@keyframes chat-mascot-antenna-wiggle {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-10deg);
+  }
+  75% {
+    transform: rotate(10deg);
+  }
+}
+
+@keyframes chat-mascot-glow {
+  0%,
+  100% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.35);
+  }
+}
+
+.chat-mascot-eyes {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: chat-mascot-blink 4s ease-in-out infinite;
+}
+
+.chat-mascot-antenna {
+  transform-box: fill-box;
+  transform-origin: bottom center;
+  animation: chat-mascot-antenna-wiggle 2.8s ease-in-out infinite;
+}
+
+.chat-mascot-antenna-tip {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: chat-mascot-glow 1.6s ease-in-out infinite;
+}
