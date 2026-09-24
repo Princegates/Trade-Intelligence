@@ -57,14 +57,32 @@ export async function generateChatReply(
         signal: AbortSignal.timeout(30_000),
       }
     );
-    if (!response.ok) return null;
+
+    if (!response.ok) {
+      // Logged, not surfaced to the browser — the most common causes are an
+      // invalid API key (400/403), a model name Gemini doesn't recognize
+      // (404), or the free tier's rate limit (429). Check Vercel's function
+      // logs for this line to tell which one it actually was.
+      const body = await response.text().catch(() => "");
+      console.error(`[gemini-chat] ${response.status} ${response.statusText}: ${body.slice(0, 500)}`);
+      return null;
+    }
 
     const data = await response.json();
     const text: unknown = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (typeof text !== "string") return null;
+    if (typeof text !== "string") {
+      // A 200 with no usable text is almost always Gemini's safety filter
+      // blocking the prompt or the reply, not a code bug — surfaced here so
+      // it's distinguishable from every other failure mode above.
+      console.error(
+        `[gemini-chat] no text in response — blockReason=${data?.promptFeedback?.blockReason} finishReason=${data?.candidates?.[0]?.finishReason}`
+      );
+      return null;
+    }
     const trimmed = text.trim();
     return trimmed || null;
-  } catch {
+  } catch (exc) {
+    console.error(`[gemini-chat] request failed: ${exc}`);
     return null;
   }
 }
