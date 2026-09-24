@@ -173,6 +173,16 @@ body {
    antennae/chest light glow, independently, so nothing moves in perfect
    lockstep. */
 
+@keyframes chat-mascot-halo {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 10px rgb(34 230 224 / 0.45)) drop-shadow(0 14px 22px rgb(0 0 0 / 0.3));
+  }
+  50% {
+    filter: drop-shadow(0 0 22px rgb(34 230 224 / 0.75)) drop-shadow(0 14px 22px rgb(0 0 0 / 0.3));
+  }
+}
+
 @keyframes chat-mascot-jump {
   0%,
   100% {
@@ -229,6 +239,10 @@ body {
     opacity: 1;
     transform: scale(1.35);
   }
+}
+
+.chat-mascot-halo {
+  animation: chat-mascot-halo 2.6s ease-in-out infinite;
 }
 
 .chat-mascot-bob {

@@ -21,8 +21,8 @@ export function ChatMascot({ open }: { open: boolean }) {
       // this element on specificity alone, silently forcing every icon
       // inside a Button down to 16px regardless of what's set here. An
       // inline style is the one thing guaranteed to win over that.
-      style={{ width: "20rem", height: "20rem" }}
-      className="overflow-visible drop-shadow-[0_16px_28px_rgba(0,0,0,0.32)]"
+      style={{ width: "6rem", height: "6rem" }}
+      className="chat-mascot-halo overflow-visible"
       aria-hidden="true"
     >
       <defs>

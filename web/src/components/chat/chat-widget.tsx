@@ -9,7 +9,7 @@ import { sendChatMessage } from "@/lib/actions/chat";
 import type { ChatTurn } from "@/lib/gemini-chat";
 
 const STORAGE_KEY = "ti-chat-fab-pos";
-const FAB_SIZE = 320; // px — matches the size-80 button below
+const FAB_SIZE = 96; // px — matches the size-24 button below
 const PANEL_WIDTH = 352; // 22rem
 const PANEL_HEIGHT = 448; // 28rem
 const MARGIN = 16;
@@ -231,7 +231,7 @@ export function ChatWidget() {
         type="button"
         variant="ghost"
         size="icon"
-        className={`fixed z-40 size-80 touch-none rounded-full bg-transparent transition-transform duration-200 hover:bg-transparent active:scale-95 ${
+        className={`fixed z-40 size-24 touch-none rounded-full bg-transparent transition-transform duration-200 hover:bg-transparent active:scale-95 ${
           dragging ? "cursor-grabbing" : "cursor-grab hover:scale-110"
         } ${invitePulse && !dragging ? "chat-fab-idle" : ""}`}
         style={{ left: pos.x, top: pos.y }}
