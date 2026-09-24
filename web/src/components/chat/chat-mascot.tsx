@@ -16,7 +16,13 @@ export function ChatMascot({ open }: { open: boolean }) {
   return (
     <svg
       viewBox="0 0 64 64"
-      className="size-16 overflow-visible drop-shadow-[0_8px_14px_rgba(0,0,0,0.32)]"
+      // Inline, not a Tailwind size class: Button's own base styles include
+      // `[&_svg]:size-4`, a descendant selector that beats a plain class on
+      // this element on specificity alone, silently forcing every icon
+      // inside a Button down to 16px regardless of what's set here. An
+      // inline style is the one thing guaranteed to win over that.
+      style={{ width: "20rem", height: "20rem" }}
+      className="overflow-visible drop-shadow-[0_16px_28px_rgba(0,0,0,0.32)]"
       aria-hidden="true"
     >
       <defs>
