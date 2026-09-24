@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { normalizeUrl } from "./env";
 import type { Database } from "./types";
 
 /** service_role client — bypasses RLS entirely, the same way the Python
@@ -19,7 +20,7 @@ export function createServiceClient() {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !serviceKey) return null;
 
-  return createSupabaseClient<Database>(url, serviceKey, {
+  return createSupabaseClient<Database>(normalizeUrl(url), serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }
