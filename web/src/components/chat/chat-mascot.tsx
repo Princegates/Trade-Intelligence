@@ -16,7 +16,7 @@ export function ChatMascot({ open }: { open: boolean }) {
   return (
     <svg
       viewBox="0 0 64 64"
-      className="size-11 overflow-visible drop-shadow-[0_5px_10px_rgba(0,0,0,0.3)]"
+      className="size-16 overflow-visible drop-shadow-[0_8px_14px_rgba(0,0,0,0.32)]"
       aria-hidden="true"
     >
       <defs>

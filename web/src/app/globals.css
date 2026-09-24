@@ -81,7 +81,7 @@ body {
     box-shadow: 0 0 0 0 rgb(34 230 224 / 0.45);
   }
   70% {
-    box-shadow: 0 0 0 12px rgb(34 230 224 / 0);
+    box-shadow: 0 0 0 16px rgb(34 230 224 / 0);
   }
   100% {
     box-shadow: 0 0 0 0 rgb(34 230 224 / 0);
