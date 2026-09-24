@@ -181,7 +181,7 @@ export function DashboardShell({ title, nav, user, children }: DashboardShellPro
         <main className="flex-1 p-4 sm:p-6">{children}</main>
       </div>
 
-      <ChatWidget />
+      {fullAccess && <ChatWidget />}
     </div>
   );
 }

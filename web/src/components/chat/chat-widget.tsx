@@ -42,13 +42,15 @@ function panelPosition(fab: Point): Point {
   return { x, y: Math.max(MARGIN, y) };
 }
 
-/** A floating, draggable assistant available on every dashboard/admin page
- * — not restricted to questions about the displayed signal, not gated by
- * trial status, no per-message cap. Chat history lives in this component's
- * state only (nothing persisted), so it survives client-side navigation
- * within the dashboard shell but resets on a full reload. Its on-screen
- * position, however, is saved to localStorage — a per-viewer convenience,
- * not app state — so it stays wherever a person last dragged it. */
+/** Guda, a floating, draggable assistant — full-access only (DashboardShell
+ * only renders this for a user hasFullAccess() is true for; the server
+ * action re-checks it too, see src/lib/actions/chat.ts). Not restricted to
+ * questions about the displayed signal, no per-message cap, otherwise.
+ * Chat history lives in this component's state only (nothing persisted),
+ * so it survives client-side navigation within the dashboard shell but
+ * resets on a full reload. Its on-screen position, however, is saved to
+ * localStorage — a per-viewer convenience, not app state — so it stays
+ * wherever a person last dragged it. */
 export function ChatWidget() {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatTurn[]>([]);
