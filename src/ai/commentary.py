@@ -19,7 +19,7 @@ on settings["provider"], and an unknown provider just returns None.
 import requests
 
 TIMEOUT = 30
-DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite"
 
 # Keeps the paragraph short enough to sit comfortably in a signal card next
 # to the deterministic summary, not replace the page.

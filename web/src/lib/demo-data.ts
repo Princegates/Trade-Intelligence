@@ -288,7 +288,7 @@ export const SETTINGS_PROVIDERS: Record<SettingsCategory, ProviderDef[]> = {
     { provider: "fcm", label: "Firebase Cloud Messaging", fields: [{ key: "project_id", label: "Project ID" }, { key: "service_account_json", label: "Service Account JSON", secret: true }] },
   ],
   ai: [
-    { provider: "gemini", label: "Google Gemini (free tier)", fields: [{ key: "api_key", label: "API Key", secret: true }, { key: "model", label: "Model", placeholder: "gemini-2.5-flash" }] },
+    { provider: "gemini", label: "Google Gemini (free tier)", fields: [{ key: "api_key", label: "API Key", secret: true }, { key: "model", label: "Model", placeholder: "gemini-3.5-flash-lite" }] },
     { provider: "anthropic", label: "Anthropic (Claude)", fields: [{ key: "api_key", label: "API Key", secret: true }, { key: "model", label: "Model", placeholder: "claude-sonnet-5" }] },
     { provider: "openai", label: "OpenAI", fields: [{ key: "api_key", label: "API Key", secret: true }, { key: "model", label: "Model", placeholder: "gpt-5" }] },
   ],

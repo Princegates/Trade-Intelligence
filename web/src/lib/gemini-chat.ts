@@ -1,7 +1,7 @@
 import "server-only";
 import type { AiProvider } from "@/lib/ai-settings";
 
-const DEFAULT_MODEL = "gemini-2.5-flash";
+const DEFAULT_MODEL = "gemini-3.5-flash-lite";
 const MAX_OUTPUT_TOKENS = 1024;
 // Trims the payload sent on every turn, not the conversation the user sees —
 // the widget itself keeps the full history on screen.
