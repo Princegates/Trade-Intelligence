@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Send, X } from "lucide-react";
+import Link from "next/link";
+import { Lock, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ChatMascot } from "@/components/chat/chat-mascot";
@@ -42,16 +43,22 @@ function panelPosition(fab: Point): Point {
   return { x, y: Math.max(MARGIN, y) };
 }
 
-/** Guda, a floating, draggable assistant — full-access only (DashboardShell
- * only renders this for a user hasFullAccess() is true for; the server
- * action re-checks it too, see src/lib/actions/chat.ts). Not restricted to
- * questions about the displayed signal, no per-message cap, otherwise.
- * Chat history lives in this component's state only (nothing persisted),
- * so it survives client-side navigation within the dashboard shell but
- * resets on a full reload. Its on-screen position, however, is saved to
- * localStorage — a per-viewer convenience, not app state — so it stays
- * wherever a person last dragged it. */
-export function ChatWidget() {
+/** Guda, a floating, draggable assistant — visible to every signed-in user,
+ * but only usable with full access. A basic-view user still sees and can
+ * drag the mascot and open its panel, informed there's something there,
+ * same "visible, not accessible" treatment as the locked signal cards —
+ * opening it just shows a short unlock message instead of the chat, no
+ * message form. Actual enforcement is server-side regardless
+ * (src/lib/actions/chat.ts re-checks hasFullAccess on every send), so
+ * `fullAccess` here only controls what the UI offers, not what it trusts.
+ *
+ * Not restricted to questions about the displayed signal, no per-message
+ * cap, once unlocked. Chat history lives in this component's state only
+ * (nothing persisted), so it survives client-side navigation within the
+ * dashboard shell but resets on a full reload. Its on-screen position,
+ * however, is saved to localStorage — a per-viewer convenience, not app
+ * state — so it stays wherever a person last dragged it. */
+export function ChatWidget({ fullAccess }: { fullAccess: boolean }) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatTurn[]>([]);
   const [input, setInput] = useState("");
@@ -181,51 +188,69 @@ export function ChatWidget() {
             </button>
           </div>
 
-          <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-3 py-3">
-            {messages.length === 0 && (
-              <p className="chat-bubble-enter text-sm text-muted-foreground">
-                Hi, I&apos;m Guda — ask me anything, about your signals or anything else.
-              </p>
-            )}
-            {messages.map((m, i) => (
-              <div
-                key={i}
-                className={
-                  m.role === "user"
-                    ? "chat-bubble-enter ml-auto max-w-[85%] rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground"
-                    : "chat-bubble-enter mr-auto max-w-[85%] rounded-lg bg-muted px-3 py-2 text-sm text-foreground"
-                }
-              >
-                {m.text}
+          {fullAccess ? (
+            <>
+              <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-3 py-3">
+                {messages.length === 0 && (
+                  <p className="chat-bubble-enter text-sm text-muted-foreground">
+                    Hi, I&apos;m Guda — ask me anything, about your signals or anything else.
+                  </p>
+                )}
+                {messages.map((m, i) => (
+                  <div
+                    key={i}
+                    className={
+                      m.role === "user"
+                        ? "chat-bubble-enter ml-auto max-w-[85%] rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground"
+                        : "chat-bubble-enter mr-auto max-w-[85%] rounded-lg bg-muted px-3 py-2 text-sm text-foreground"
+                    }
+                  >
+                    {m.text}
+                  </div>
+                ))}
+                {pending && (
+                  <div className="chat-bubble-enter mr-auto flex items-center gap-1 rounded-lg bg-muted px-3 py-2.5">
+                    <span className="chat-typing-dot size-1.5 rounded-full bg-muted-foreground" style={{ animationDelay: "0ms" }} />
+                    <span className="chat-typing-dot size-1.5 rounded-full bg-muted-foreground" style={{ animationDelay: "150ms" }} />
+                    <span className="chat-typing-dot size-1.5 rounded-full bg-muted-foreground" style={{ animationDelay: "300ms" }} />
+                  </div>
+                )}
+                {error && <p className="chat-bubble-enter text-sm text-destructive">{error}</p>}
               </div>
-            ))}
-            {pending && (
-              <div className="chat-bubble-enter mr-auto flex items-center gap-1 rounded-lg bg-muted px-3 py-2.5">
-                <span className="chat-typing-dot size-1.5 rounded-full bg-muted-foreground" style={{ animationDelay: "0ms" }} />
-                <span className="chat-typing-dot size-1.5 rounded-full bg-muted-foreground" style={{ animationDelay: "150ms" }} />
-                <span className="chat-typing-dot size-1.5 rounded-full bg-muted-foreground" style={{ animationDelay: "300ms" }} />
-              </div>
-            )}
-            {error && <p className="chat-bubble-enter text-sm text-destructive">{error}</p>}
-          </div>
 
-          <form onSubmit={handleSend} className="flex items-center gap-2 border-t border-border p-2.5">
-            <Input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Type a message..."
-              disabled={pending}
-              className="h-9 transition-shadow"
-            />
-            <Button
-              type="submit"
-              size="sm"
-              disabled={pending || !input.trim()}
-              className="transition-transform active:scale-90"
-            >
-              <Send className="size-3.5" />
-            </Button>
-          </form>
+              <form onSubmit={handleSend} className="flex items-center gap-2 border-t border-border p-2.5">
+                <Input
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="Type a message..."
+                  disabled={pending}
+                  className="h-9 transition-shadow"
+                />
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={pending || !input.trim()}
+                  className="transition-transform active:scale-90"
+                >
+                  <Send className="size-3.5" />
+                </Button>
+              </form>
+            </>
+          ) : (
+            <div className="chat-bubble-enter flex flex-1 flex-col items-center justify-center gap-2 p-4 text-center">
+              <Lock className="size-5 text-muted-foreground" />
+              <p className="text-sm font-medium text-foreground">Full access required</p>
+              <p className="text-sm text-muted-foreground">
+                Guda is a full-access feature. Ask your admin for an access code to unlock it.
+              </p>
+              <Link
+                href="/dashboard/settings"
+                className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+              >
+                Redeem an access code
+              </Link>
+            </div>
+          )}
         </div>
       )}
 
@@ -241,9 +266,14 @@ export function ChatWidget() {
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
-        aria-label={open ? "Close Guda" : "Open Guda — drag to move"}
+        aria-label={open ? "Close Guda" : fullAccess ? "Open Guda — drag to move" : "Open Guda (requires full access) — drag to move"}
       >
         <ChatMascot open={open} />
+        {!fullAccess && (
+          <span className="pointer-events-none absolute bottom-1 right-1 flex size-6 items-center justify-center rounded-full border-2 border-background bg-muted text-muted-foreground">
+            <Lock className="size-3" />
+          </span>
+        )}
       </Button>
     </>
   );
