@@ -91,7 +91,12 @@ function latestPerPair(
   const seen = new Set<string>();
   const latest: SignalView[] = [];
   for (const row of rows) {
-    const key = `${row.symbol}:${row.timeframe}`;
+    // Includes strategy_version — a bare symbol:timeframe key would let two
+    // strategies (or two STRATEGY_VERSION generations mid-rollout)
+    // publishing on the same pair silently collide, keeping only whichever
+    // sorted first by generated_at. Matches getLatestLifecycle()'s own
+    // already-correct identity key below.
+    const key = `${row.symbol}:${row.timeframe}:${row.strategy_version}`;
     if (seen.has(key)) continue;
     seen.add(key);
     const identityKey = `${row.symbol}:${row.timeframe}:${row.candle_time}:${row.strategy_version}`;
@@ -100,26 +105,29 @@ function latestPerPair(
   return latest;
 }
 
-/** Latest AI commentary per (symbol, timeframe), keyed the same way
- * latestPerPair dedups signals — matches by recency rather than an exact
- * join to the signal's own identity, since commentary is written right
- * after its signal and the two are for all practical purposes always in
- * step. A stale pairing (commentary lagging a newer signal by a beat) is a
- * low-stakes, self-correcting edge case: the always-current deterministic
- * summary sits right above it either way. */
+/** Latest AI commentary per (symbol, timeframe, strategy_version), keyed
+ * the same way latestPerPair dedups signals — matches by recency rather
+ * than an exact join to the signal's own identity, since commentary is
+ * written right after its signal and the two are for all practical
+ * purposes always in step. A stale pairing (commentary lagging a newer
+ * signal by a beat) is a low-stakes, self-correcting edge case: the
+ * always-current deterministic summary sits right above it either way.
+ * strategy_version is included in the key for the same reason
+ * latestPerPair() includes it — without it, a second strategy's
+ * commentary on the same pair could surface under the wrong card. */
 async function getLatestCommentary(): Promise<Map<string, string>> {
   const supabase = await createClient();
   if (!supabase) return new Map();
 
   const { data } = await supabase
     .from("signal_commentary")
-    .select("symbol, timeframe, commentary, generated_at")
+    .select("symbol, timeframe, strategy_version, commentary, generated_at")
     .order("generated_at", { ascending: false })
     .limit(200);
 
   const map = new Map<string, string>();
-  for (const row of (data as Pick<CommentaryRow, "symbol" | "timeframe" | "commentary">[] | null) ?? []) {
-    const key = `${row.symbol}:${row.timeframe}`;
+  for (const row of (data as Pick<CommentaryRow, "symbol" | "timeframe" | "strategy_version" | "commentary">[] | null) ?? []) {
+    const key = `${row.symbol}:${row.timeframe}:${row.strategy_version}`;
     if (!map.has(key)) map.set(key, row.commentary);
   }
   return map;

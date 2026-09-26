@@ -93,6 +93,22 @@ type DemoSignalSeed = Omit<
 const DEMO_SIGNAL_SEEDS: DemoSignalSeed[] = [
   {
     symbol: "BTCUSDT",
+    timeframe: "15m",
+    generatedAt: now(),
+    ...demoLineage,
+    price: 68205.0,
+    verdict: "BUY",
+    score: 2,
+    reasoning: [
+      "Price above a bullishly stacked EMA line (EMA9=68190.30, EMA21=68140.60, EMA50=68050.10)",
+      "RSI(14) at 56.4 — neutral (30-70)",
+      "MACD 42.10 above signal line (30.80) — bullish",
+      "BOS at 68150.00 — price confirms the prevailing uptrend",
+      "ATR(14) at 62.40 — typical move per candle, used to size the levels below",
+    ],
+  },
+  {
+    symbol: "BTCUSDT",
     timeframe: "1h",
     generatedAt: now(),
     ...demoLineage,
@@ -204,6 +220,67 @@ export const DEMO_SIGNALS: DemoSignal[] = DEMO_SIGNAL_SEEDS.map((s) => ({
   entryZone: null,
   lifecycle: null,
 }));
+
+// Mirrors GudaSpecialSignalView's shape independently, same reasoning
+// DemoSignal above doesn't import SignalView — this file stays a
+// self-contained fixture module, not dependent on the real data layer.
+export interface DemoGudaSpecialSignal {
+  symbol: string;
+  timeframe: string;
+  generatedAt: string;
+  price: number;
+  verdict: "BUY" | "SELL" | "NO_TRADE";
+  reasoning: string;
+  noTradeReason: string | null;
+  strategyVersion: string;
+  bosKind: "BOS" | "CHoCH";
+  bosDirection: 1 | -1;
+  bosPrice: number;
+  breakStrength: "STRONG" | "NORMAL" | "WEAK" | null;
+  impulse: { start: number; end: number; atrMultiple: number } | null;
+  fib: { f50: number; f61_8: number; f72: number; f78_6: number } | null;
+  retracementQuality: "SHALLOW" | "VALID" | "DEEP" | "FAILED" | null;
+  retestConfirmed: boolean | null;
+  confirmationPattern: string | null;
+  candleQuality: "STRONG" | "NORMAL" | "WEAK" | null;
+  htfBias: string | null;
+  htfFilterOutcome: "ALIGNED" | "NEUTRAL" | "DOWNGRADED" | "REJECTED" | null;
+  levels: { entry: number; stop: number; target: number } | null;
+  riskReward: number | null;
+  regime: string | null;
+}
+
+// One example, mirroring DEMO_SIGNAL_SEEDS' hand-written style — GUDA
+// SPECIAL only ever runs on 15m, so unlike the confluence engine's demo set
+// there's at most one row per symbol to show, not one per timeframe.
+export const DEMO_GUDA_SPECIAL_SIGNALS: DemoGudaSpecialSignal[] = [
+  {
+    symbol: "BTCUSDT",
+    timeframe: "15m",
+    generatedAt: now(),
+    price: 68180.5,
+    verdict: "BUY",
+    reasoning:
+      "Bullish Engulfing (strong) confirmed inside the 50-79% retracement zone, strong break of structure at 68050.00, 1H bias (up) agrees with the call.",
+    noTradeReason: null,
+    strategyVersion: "demo",
+    bosKind: "BOS",
+    bosDirection: 1,
+    bosPrice: 68050.0,
+    breakStrength: "STRONG",
+    impulse: { start: 67420.0, end: 68310.0, atrMultiple: 2.4 },
+    fib: { f50: 67865.0, f61_8: 67760.4, f72: 67670.8, f78_6: 67613.7 },
+    retracementQuality: "VALID",
+    retestConfirmed: true,
+    confirmationPattern: "Bullish Engulfing",
+    candleQuality: "STRONG",
+    htfBias: "up",
+    htfFilterOutcome: "ALIGNED",
+    levels: { entry: 68180.5, stop: 67540.0, target: 69461.5 },
+    riskReward: 2.0,
+    regime: "TRENDING",
+  },
+];
 
 // Offsets from "now" rather than fixed dates, so the calendar always looks
 // current in demo mode instead of showing a week that has already passed.

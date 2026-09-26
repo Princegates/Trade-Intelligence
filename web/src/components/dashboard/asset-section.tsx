@@ -1,7 +1,9 @@
+import { Fragment } from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { ConsensusTile } from "@/components/dashboard/consensus-tile";
 import { SignalCard } from "@/components/dashboard/signal-card";
+import { GudaSpecialSignalCard } from "@/components/dashboard/guda-special-signal-card";
 import { ASSET_NAMES } from "@/lib/signals";
 import type { AssetPanelData } from "@/lib/asset-panel";
 
@@ -27,19 +29,29 @@ const ASSET_ROUTES: Record<string, string> = {
  *
  * `locked` still renders every card (a basic-view user sees there's a call
  * for each timeframe, not a gap) but blurs its content behind SignalCard's
- * own lock overlay — visible, not accessible, until full access. */
+ * own lock overlay — visible, not accessible, until full access.
+ *
+ * `gudaSpecialEnabled` is the admin on/off switch (web/src/lib/
+ * guda-special-settings.ts), not a data-availability check — false means
+ * the paired GudaSpecialSignalCard is never rendered at all, even as a
+ * "no signal yet" placeholder, keeping the feature fully hidden until an
+ * admin turns it on. When true, the card always appears next to the 15m
+ * confluence card (paired per the "two cards shown together" decision),
+ * showing "no signal yet" if `data.gudaSpecial` is null. */
 export function AssetSection({
   data,
   bordered = true,
   detailed = true,
   locked = false,
+  gudaSpecialEnabled = false,
 }: {
   data: AssetPanelData;
   bordered?: boolean;
   detailed?: boolean;
   locked?: boolean;
+  gudaSpecialEnabled?: boolean;
 }) {
-  const { symbol, group, consensus, candlesByTimeframe } = data;
+  const { symbol, group, consensus, candlesByTimeframe, gudaSpecial } = data;
   const route = ASSET_ROUTES[symbol];
 
   return (
@@ -66,7 +78,12 @@ export function AssetSection({
       {detailed && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {group.map((s) => (
-            <SignalCard key={`${s.symbol}-${s.timeframe}`} signal={s} locked={locked} />
+            <Fragment key={`${s.symbol}-${s.timeframe}`}>
+              <SignalCard signal={s} locked={locked} />
+              {gudaSpecialEnabled && s.timeframe === "15m" && (
+                <GudaSpecialSignalCard signal={gudaSpecial} locked={locked} />
+              )}
+            </Fragment>
           ))}
         </div>
       )}

@@ -55,8 +55,15 @@ function Row({ label, value, hint }: { label: string; value: string; hint: strin
 
 /** A verdict alone is not actionable: "BUY" does not say where you were
  * wrong. Levels are sized from ATR, so they scale with how much this market
- * actually moves rather than an arbitrary percentage. */
-function SignalLevels({
+ * actually moves rather than an arbitrary percentage.
+ *
+ * Exported for reuse by GudaSpecialSignalCard — that strategy's levels are
+ * always the directional shape (a single entry/stop/target, never a band),
+ * a strict subset of what this already handles, so it passes
+ * `buyAbove: null, sellBelow: null` and `entryZone`/`invalidationLevel` as
+ * `null` (neither concept exists for that strategy) rather than
+ * duplicating this JSX. */
+export function SignalLevels({
   levels,
   verdict,
   invalidationLevel,

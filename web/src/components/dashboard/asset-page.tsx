@@ -3,6 +3,8 @@ import { AssetSection } from "@/components/dashboard/asset-section";
 import { SuppressionList } from "@/components/dashboard/suppression-list";
 import { buildAssetPanel } from "@/lib/asset-panel";
 import { ASSET_NAMES, getLatestSignals, getRecentSuppressions, unresolvedSuppressions } from "@/lib/signals";
+import { getGudaSpecialSettings } from "@/lib/guda-special-settings";
+import { getLatestGudaSpecialSignals, type GudaSpecialSignalView } from "@/lib/guda-special";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth";
@@ -23,10 +25,20 @@ export async function AssetPage({ symbol }: { symbol: string }) {
   const user = await requireUser();
   const fullAccess = hasFullAccess(user);
 
-  const [{ source, signals }, allSuppressions] = await Promise.all([getLatestSignals(), getRecentSuppressions()]);
+  const [{ source, signals }, allSuppressions, { enabled: gudaSpecialEnabled }] = await Promise.all([
+    getLatestSignals(),
+    getRecentSuppressions(),
+    getGudaSpecialSettings(),
+  ]);
+
+  // Skipped entirely when the admin toggle is off — no point querying a
+  // table nothing on the page will render.
+  const gudaSpecialSignals: GudaSpecialSignalView[] = gudaSpecialEnabled
+    ? (await getLatestGudaSpecialSignals()).signals
+    : [];
 
   const suppressions = unresolvedSuppressions(allSuppressions, signals).filter((s) => s.symbol === symbol);
-  const data = await buildAssetPanel(symbol, signals);
+  const data = await buildAssetPanel(symbol, signals, gudaSpecialSignals);
 
   return (
     <div className="space-y-6">
@@ -69,7 +81,7 @@ export async function AssetPage({ symbol }: { symbol: string }) {
           </CardContent>
         </Card>
       ) : (
-        <AssetSection data={data} bordered={false} locked={!fullAccess} />
+        <AssetSection data={data} bordered={false} locked={!fullAccess} gudaSpecialEnabled={gudaSpecialEnabled} />
       )}
     </div>
   );
