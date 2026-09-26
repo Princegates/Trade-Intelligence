@@ -69,6 +69,11 @@ export function EngineSettingsForm({ settings }: { settings: EngineSettings }) {
   const [structureBufferAtr, setStructureBufferAtr] = useState(String(settings.structureBufferAtr));
   const [entryZoneWidthAtr, setEntryZoneWidthAtr] = useState(String(settings.entryZoneWidthAtr));
   const [maxEntryZoneDistanceAtr, setMaxEntryZoneDistanceAtr] = useState(String(settings.maxEntryZoneDistanceAtr));
+  const [lifecycleWatchZoneHalfWidths, setLifecycleWatchZoneHalfWidths] = useState(
+    String(settings.lifecycleWatchZoneHalfWidths)
+  );
+  const [lifecycleConfirmMoveR, setLifecycleConfirmMoveR] = useState(String(settings.lifecycleConfirmMoveR));
+  const [lifecycleExpiryCandles, setLifecycleExpiryCandles] = useState(String(settings.lifecycleExpiryCandles));
   const [state, formAction, pending] = useActionState(setEngineSettings, initialState);
 
   const unchanged =
@@ -81,7 +86,10 @@ export function EngineSettingsForm({ settings }: { settings: EngineSettings }) {
     requireConfluence === settings.requireHigherTimeframeConfluence &&
     structureBufferAtr === String(settings.structureBufferAtr) &&
     entryZoneWidthAtr === String(settings.entryZoneWidthAtr) &&
-    maxEntryZoneDistanceAtr === String(settings.maxEntryZoneDistanceAtr);
+    maxEntryZoneDistanceAtr === String(settings.maxEntryZoneDistanceAtr) &&
+    lifecycleWatchZoneHalfWidths === String(settings.lifecycleWatchZoneHalfWidths) &&
+    lifecycleConfirmMoveR === String(settings.lifecycleConfirmMoveR) &&
+    lifecycleExpiryCandles === String(settings.lifecycleExpiryCandles);
 
   return (
     <form action={formAction} className="space-y-4">
@@ -181,6 +189,44 @@ export function EngineSettingsForm({ settings }: { settings: EngineSettings }) {
           onChange={setMaxEntryZoneDistanceAtr}
           min={0.01}
           step="0.1"
+        />
+      </div>
+
+      <div className="space-y-0.5">
+        <p className="text-sm font-medium text-foreground">Signal lifecycle</p>
+        <p className="text-xs text-muted-foreground">
+          How a tracked signal&apos;s entry thesis is re-evaluated on every scheduled run, from WAIT through WATCH,
+          READY and CONFIRMED, or resolved early to INVALIDATED/EXPIRED. Only directional calls with real structural
+          entry-zone data are tracked at all.
+        </p>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-3">
+        <NumberField
+          id="lifecycleWatchZoneHalfWidths"
+          label="Watch distance (zone half-widths)"
+          help="How many entry-zone half-widths away counts as WATCH rather than WAIT."
+          value={lifecycleWatchZoneHalfWidths}
+          onChange={setLifecycleWatchZoneHalfWidths}
+          min={0.01}
+          step="0.1"
+        />
+        <NumberField
+          id="lifecycleConfirmMoveR"
+          label="Confirm move (risk-units)"
+          help="How far price must move favorably, as a multiple of the original risk (entry to stop), before a signal is CONFIRMED."
+          value={lifecycleConfirmMoveR}
+          onChange={setLifecycleConfirmMoveR}
+          min={0.01}
+          step="0.1"
+        />
+        <NumberField
+          id="lifecycleExpiryCandles"
+          label="Expiry (candles)"
+          help="How many candles of the signal's own timeframe can pass with no resolution before it's marked EXPIRED."
+          value={lifecycleExpiryCandles}
+          onChange={setLifecycleExpiryCandles}
+          min={1}
+          step="1"
         />
       </div>
 

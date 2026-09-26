@@ -154,6 +154,9 @@ export interface Database {
           structure_buffer_atr: number;
           entry_zone_width_atr: number;
           max_entry_zone_distance_atr: number;
+          lifecycle_watch_zone_half_widths: number;
+          lifecycle_confirm_move_r: number;
+          lifecycle_expiry_candles: number;
           updated_at: string;
           updated_by: string | null;
         };
@@ -169,6 +172,9 @@ export interface Database {
           structure_buffer_atr?: number;
           entry_zone_width_atr?: number;
           max_entry_zone_distance_atr?: number;
+          lifecycle_watch_zone_half_widths?: number;
+          lifecycle_confirm_move_r?: number;
+          lifecycle_expiry_candles?: number;
           updated_at?: string;
           updated_by?: string | null;
         };
@@ -184,6 +190,9 @@ export interface Database {
           structure_buffer_atr?: number;
           entry_zone_width_atr?: number;
           max_entry_zone_distance_atr?: number;
+          lifecycle_watch_zone_half_widths?: number;
+          lifecycle_confirm_move_r?: number;
+          lifecycle_expiry_candles?: number;
           updated_at?: string;
           updated_by?: string | null;
         };

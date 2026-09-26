@@ -12,6 +12,8 @@ export interface EngineSettingsFormState {
 }
 
 const positiveNumber = (label: string) => z.coerce.number().positive(`${label} must be greater than 0.`);
+const positiveInt = (label: string) =>
+  z.coerce.number().int(`${label} must be a whole number.`).positive(`${label} must be greater than 0.`);
 const percentage = (label: string) =>
   z.coerce.number().min(0, `${label} must be 0 or more.`).max(100, `${label} must be 100 or fewer.`);
 
@@ -26,6 +28,9 @@ const schema = z
     structureBufferAtr: positiveNumber("Structure buffer"),
     entryZoneWidthAtr: positiveNumber("Entry zone width"),
     maxEntryZoneDistanceAtr: positiveNumber("Maximum entry-zone distance"),
+    lifecycleWatchZoneHalfWidths: positiveNumber("Watch zone half-widths"),
+    lifecycleConfirmMoveR: positiveNumber("Confirm move (R)"),
+    lifecycleExpiryCandles: positiveInt("Expiry candles"),
   })
   .refine((v) => v.minConfidenceThreshold < v.confidenceHighThreshold, {
     message: "Minimum confidence must be below the high-confidence threshold.",
@@ -57,6 +62,9 @@ export async function setEngineSettings(
     structureBufferAtr: formData.get("structureBufferAtr"),
     entryZoneWidthAtr: formData.get("entryZoneWidthAtr"),
     maxEntryZoneDistanceAtr: formData.get("maxEntryZoneDistanceAtr"),
+    lifecycleWatchZoneHalfWidths: formData.get("lifecycleWatchZoneHalfWidths"),
+    lifecycleConfirmMoveR: formData.get("lifecycleConfirmMoveR"),
+    lifecycleExpiryCandles: formData.get("lifecycleExpiryCandles"),
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input." };
 
@@ -80,6 +88,9 @@ export async function setEngineSettings(
       structure_buffer_atr: parsed.data.structureBufferAtr,
       entry_zone_width_atr: parsed.data.entryZoneWidthAtr,
       max_entry_zone_distance_atr: parsed.data.maxEntryZoneDistanceAtr,
+      lifecycle_watch_zone_half_widths: parsed.data.lifecycleWatchZoneHalfWidths,
+      lifecycle_confirm_move_r: parsed.data.lifecycleConfirmMoveR,
+      lifecycle_expiry_candles: parsed.data.lifecycleExpiryCandles,
       updated_by: admin.id,
       updated_at: new Date().toISOString(),
     })
