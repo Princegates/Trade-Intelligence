@@ -45,6 +45,7 @@ export interface DemoSignal {
     sellBelow: number | null;
   } | null;
   aiCommentary: string | null;
+  confluenceBias: string | null;
 }
 
 const now = () => new Date().toISOString();
@@ -68,7 +69,7 @@ function demoLevels(price: number, verdict: DemoSignal["verdict"]): DemoSignal["
   return { entry: null, stop: null, target: null, buyAbove: price + stop, sellBelow: price - stop };
 }
 
-type DemoSignalSeed = Omit<DemoSignal, "patterns" | "levels" | "aiCommentary"> & {
+type DemoSignalSeed = Omit<DemoSignal, "patterns" | "levels" | "aiCommentary" | "confluenceBias"> & {
   patterns?: string[];
   aiCommentary?: string;
 };
@@ -180,6 +181,7 @@ export const DEMO_SIGNALS: DemoSignal[] = DEMO_SIGNAL_SEEDS.map((s) => ({
   patterns: s.patterns ?? [],
   levels: demoLevels(s.price, s.verdict),
   aiCommentary: s.aiCommentary ?? null,
+  confluenceBias: null,
 }));
 
 // Offsets from "now" rather than fixed dates, so the calendar always looks

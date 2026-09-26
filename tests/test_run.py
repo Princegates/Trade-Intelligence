@@ -253,7 +253,7 @@ def _buy_result():
 
 def test_a_high_impact_event_pulls_a_gold_buy_to_hold(temp_db, monkeypatch):
     _serve(monkeypatch, _feed(61, NOW))
-    monkeypatch.setattr(run.engine, "evaluate", lambda candles: _buy_result())
+    monkeypatch.setattr(run.engine, "evaluate", lambda candles, **kwargs: _buy_result())
 
     events = [{"title": "CPI m/m", "country": "USD", "impact": "High", "event_time": NOW}]
     message = run.process(GOLD, "1h", NOW, events=events)
@@ -264,7 +264,7 @@ def test_a_high_impact_event_pulls_a_gold_buy_to_hold(temp_db, monkeypatch):
 
 def test_an_event_outside_the_window_leaves_the_call_untouched(temp_db, monkeypatch):
     _serve(monkeypatch, _feed(61, NOW))
-    monkeypatch.setattr(run.engine, "evaluate", lambda candles: _buy_result())
+    monkeypatch.setattr(run.engine, "evaluate", lambda candles, **kwargs: _buy_result())
 
     events = [{"title": "CPI m/m", "country": "USD", "impact": "High", "event_time": NOW - 100 * HOUR}]
     message = run.process(GOLD, "1h", NOW, events=events)
@@ -274,7 +274,7 @@ def test_an_event_outside_the_window_leaves_the_call_untouched(temp_db, monkeypa
 
 def test_a_medium_impact_event_never_gates_a_call(temp_db, monkeypatch):
     _serve(monkeypatch, _feed(61, NOW))
-    monkeypatch.setattr(run.engine, "evaluate", lambda candles: _buy_result())
+    monkeypatch.setattr(run.engine, "evaluate", lambda candles, **kwargs: _buy_result())
 
     events = [{"title": "Retail Sales", "country": "USD", "impact": "Medium", "event_time": NOW}]
     message = run.process(GOLD, "1h", NOW, events=events)
@@ -286,7 +286,7 @@ def test_btc_is_never_gated_by_the_calendar(temp_db, monkeypatch):
     """BTC has no currency mapped in EVENT_RISK_CURRENCY at all — the same
     event that would hold gold back must not touch it."""
     _serve(monkeypatch, _feed(61, NOW))
-    monkeypatch.setattr(run.engine, "evaluate", lambda candles: _buy_result())
+    monkeypatch.setattr(run.engine, "evaluate", lambda candles, **kwargs: _buy_result())
 
     events = [{"title": "CPI m/m", "country": "USD", "impact": "High", "event_time": NOW}]
     message = run.process(INSTRUMENT, "1h", NOW, events=events)
@@ -298,7 +298,7 @@ def test_no_events_passed_defaults_to_no_gate(temp_db, monkeypatch):
     """The default is empty, not None, so a caller that forgets `events`
     entirely (every test above this one) never crashes on it."""
     _serve(monkeypatch, _feed(61, NOW))
-    monkeypatch.setattr(run.engine, "evaluate", lambda candles: _buy_result())
+    monkeypatch.setattr(run.engine, "evaluate", lambda candles, **kwargs: _buy_result())
 
     message = run.process(GOLD, "1h", NOW)
 
@@ -307,3 +307,116 @@ def test_no_events_passed_defaults_to_no_gate(temp_db, monkeypatch):
 
 def test_event_risk_currency_maps_gold_to_usd_only():
     assert config.EVENT_RISK_CURRENCY == {"XAUUSD": "USD"}
+
+
+# --- New in 3.0.0: confluence anchor wiring + engine_settings threading ---
+
+
+def test_process_works_with_no_engine_settings_argument(temp_db, monkeypatch):
+    """Every call above this point omits engine_settings entirely — the
+    default must keep working exactly as it did before this parameter
+    existed."""
+    _serve(monkeypatch, _feed(61, NOW))
+    message = run.process(INSTRUMENT, "1h", NOW)
+    assert "1h" in message
+
+
+# The same descending zigzag verified in test_confluence.py to read as a
+# clear "down" bias — reused here as seeded anchor-timeframe history.
+_ZIGZAG_DOWN = [220 - p for p in [100, 105, 110, 105, 100, 110, 120, 112, 104, 115, 130, 121, 112]]
+
+
+def _seed_anchor_candles(symbol, anchor_timeframe, prices, start=0, step=86400):
+    candles = [
+        {
+            "open_time": start + i * step,
+            "open": p - 0.1,
+            "high": p + 0.3,
+            "low": p - 0.3,
+            "close": p + 0.1,
+            "volume": 1.0,
+            "complete": True,
+        }
+        for i, p in enumerate(prices)
+    ]
+    db.upsert_candles(symbol, anchor_timeframe, candles)
+
+
+def test_process_reads_the_anchor_timeframes_bias_from_local_storage(temp_db, monkeypatch):
+    """The wiring seam: process() looks up confluence.ANCHOR_TIMEFRAME for
+    the timeframe being evaluated (1d, for a 1h call), reads that
+    timeframe's own stored candles, and passes the resulting bias into
+    engine.evaluate() — not re-testing bias detection itself
+    (test_confluence.py) or gate logic (test_engine.py), just that
+    process() connects the two for the right anchor and falls back to
+    local SQLite when Supabase isn't configured (as in every test here)."""
+    _serve(monkeypatch, _feed(61, NOW))
+    _seed_anchor_candles("BTCUSDT", "1d", _ZIGZAG_DOWN)
+
+    received = {}
+
+    def capture_evaluate(candles, **kwargs):
+        received.update(kwargs)
+        return {
+            "verdict": "HOLD",
+            "score": 0,
+            "reasoning": ["captured"],
+            "evidence_count": 0,
+            "confidence": None,
+            "patterns": [],
+            "levels": None,
+        }
+
+    monkeypatch.setattr(run.engine, "evaluate", capture_evaluate)
+
+    run.process(INSTRUMENT, "1h", NOW)
+
+    assert received.get("higher_timeframe_bias") == "down"
+
+
+def test_process_finds_no_anchor_bias_when_none_is_stored(temp_db, monkeypatch):
+    _serve(monkeypatch, _feed(61, NOW))
+
+    received = {}
+    monkeypatch.setattr(
+        run.engine,
+        "evaluate",
+        lambda candles, **kwargs: (received.update(kwargs), _buy_result())[1],
+    )
+
+    run.process(INSTRUMENT, "1h", NOW)
+
+    assert received.get("higher_timeframe_bias") is None
+
+
+def test_the_1d_timeframe_has_no_anchor_to_read():
+    """1d is the top of the fetched stack — nothing higher exists to check
+    against, so process() must not attempt an anchor read for it."""
+    from src.signals import confluence
+
+    assert confluence.ANCHOR_TIMEFRAME["1d"] is None
+
+
+def test_engine_settings_are_threaded_through_to_evaluate(temp_db, monkeypatch):
+    _serve(monkeypatch, _feed(61, NOW))
+
+    received = {}
+
+    def capture_evaluate(candles, **kwargs):
+        received.update(kwargs)
+        return {
+            "verdict": "HOLD",
+            "score": 0,
+            "reasoning": ["captured"],
+            "evidence_count": 0,
+            "confidence": None,
+            "patterns": [],
+            "levels": None,
+        }
+
+    monkeypatch.setattr(run.engine, "evaluate", capture_evaluate)
+
+    settings = {"min_confidence_threshold": 70}
+    run.process(INSTRUMENT, "1h", NOW, engine_settings=settings)
+
+    assert received.get("settings") == settings

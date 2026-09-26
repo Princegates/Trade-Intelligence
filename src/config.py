@@ -34,7 +34,20 @@ BINANCE_BASE_URL = os.environ.get("BINANCE_BASE_URL") or "https://api.binance.us
 # unchanged for identical inputs, but entry/stop/target are themselves part
 # of what a signal publishes, so a candle scored before this change and one
 # scored after it carry materially different levels under the same call.
-STRATEGY_VERSION = "2.1.1"
+#
+# 3.0.0: added three new veto-only gates (src/signals/engine.py::evaluate) —
+# cross-timeframe confluence (src/signals/confluence.py, opposing higher-
+# timeframe structure forces HOLD), a real minimum risk/reward filter, and
+# a minimum-confidence filter — plus a genuine (if intentionally modest,
+# non-calibrated) confidence score replacing the always-null placeholder.
+# All three new gates are admin-configurable via the engine_settings table
+# and stay fully inert (reproducing 2.1.1's exact behavior) until that
+# table is actually read and populated — but once it is, this is a real,
+# material change in what gets published for identical technical inputs,
+# same bar every prior bump here was held to. Major-versioned rather than
+# a patch bump because the gates are new decision surface, not a tuning
+# tweak to existing ones.
+STRATEGY_VERSION = "3.0.0"
 
 INSTRUMENTS = [
     {

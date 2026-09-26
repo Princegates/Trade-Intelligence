@@ -19,6 +19,7 @@ function signal(overrides: Partial<SignalView> = {}): SignalView {
     patterns: [],
     levels: { entry: 68420.5, stop: 68275.2, target: 68638.4, buyAbove: null, sellBelow: null },
     aiCommentary: null,
+    confluenceBias: null,
     ...overrides,
   };
 }

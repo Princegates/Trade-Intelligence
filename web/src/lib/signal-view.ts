@@ -32,6 +32,13 @@ export interface SignalView {
    * generated one (or generation failed) for this signal; see
    * src/lib/plain-language.ts for the always-available fallback. */
   aiCommentary: string | null;
+  /** Higher-timeframe structural bias ("up"/"down"/"range") the engine
+   * checked this call against, or null when no anchor-timeframe data was
+   * available at signal time. Not currently rendered anywhere on its own —
+   * an opposing bias already shows up as a HOLD with the reason spelled
+   * out in `reasoning` — stored for queryability. See
+   * src/signals/confluence.py. */
+  confluenceBias: string | null;
 }
 
 export interface SuppressionView {

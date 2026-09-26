@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS signals (
     target REAL,
     buy_above REAL,
     sell_below REAL,
+    confluence_bias TEXT,
     UNIQUE(symbol, timeframe, candle_time, strategy_version)
 );
 
@@ -83,6 +84,7 @@ ADDED_COLUMNS = {
         "target": "REAL",
         "buy_above": "REAL",
         "sell_below": "REAL",
+        "confluence_bias": "TEXT",
     },
 }
 
@@ -174,6 +176,7 @@ def record_signal(
     confidence=None,
     patterns="",
     levels=None,
+    confluence_bias=None,
 ):
     """Insert-only. A published signal is never rewritten (FR-SIG-004), so a
     re-run over the same closed candle is ignored rather than overwriting the
@@ -184,8 +187,8 @@ def record_signal(
             """INSERT OR IGNORE INTO signals
                (symbol, timeframe, generated_at, candle_time, price, verdict, score,
                 confidence, evidence_count, strategy_version, reasoning, patterns,
-                entry, stop, target, buy_above, sell_below)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                entry, stop, target, buy_above, sell_below, confluence_bias)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 symbol,
                 timeframe,
@@ -204,6 +207,7 @@ def record_signal(
                 levels.get("target"),
                 levels.get("buy_above"),
                 levels.get("sell_below"),
+                confluence_bias,
             ),
         )
         return cur.rowcount == 1

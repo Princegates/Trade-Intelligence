@@ -90,6 +90,7 @@ def publish_signal(
     confidence=None,
     patterns="",
     levels=None,
+    confluence_bias=None,
 ):
     levels = levels or {}
     return _insert(
@@ -112,9 +113,91 @@ def publish_signal(
             "target": levels.get("target"),
             "buy_above": levels.get("buy_above"),
             "sell_below": levels.get("sell_below"),
+            "confluence_bias": confluence_bias,
         },
         on_conflict=SIGNAL_IDENTITY,
     )
+
+
+def get_recent_candles(symbol, timeframe, limit=200):
+    """Closed candles only, oldest first, same dict shape as
+    db.get_recent_candles — used to read a higher ("anchor") timeframe's
+    own recent history for cross-timeframe confluence (src/signals/
+    confluence.py) without spending an extra fetch against the live
+    provider. Supabase's mirror is the only store that reliably outlives a
+    single run (see run.py::newest_stored's own reasoning for why), so this
+    is the read confluence needs even when the anchor timeframe hasn't been
+    evaluated yet in this same run.
+
+    Returns [] on any failure or when unconfigured — a missing/unreachable
+    anchor read degrades confluence to "no higher-timeframe data available"
+    rather than failing the whole run.
+    """
+    credentials = _credentials()
+    if credentials is None:
+        return []
+
+    url, key = credentials
+    try:
+        response = requests.get(
+            f"{url}/rest/v1/candles",
+            params={
+                "symbol": f"eq.{symbol}",
+                "timeframe": f"eq.{timeframe}",
+                "select": "open_time,open,high,low,close,volume",
+                "order": "open_time.desc",
+                "limit": str(limit),
+            },
+            headers={"apikey": key, "Authorization": f"Bearer {key}"},
+            timeout=TIMEOUT,
+        )
+        response.raise_for_status()
+        rows = response.json()
+    except Exception:
+        return []
+
+    rows.reverse()
+    return [
+        {
+            "open_time": datetime.fromisoformat(r["open_time"]).timestamp(),
+            "open": r["open"],
+            "high": r["high"],
+            "low": r["low"],
+            "close": r["close"],
+            "volume": r["volume"],
+        }
+        for r in rows
+    ]
+
+
+def get_engine_settings():
+    """Admin-configured entry-quality thresholds from the engine_settings
+    singleton row (web/supabase/migrations/0014_engine_settings.sql), or
+    None if unconfigured/unreachable/missing. Same shape and same
+    try/except-to-None degradation as get_active_ai_settings() above —
+    every caller in src/signals/engine.py applies these as per-field
+    overrides on top of its own hardcoded constants, so a missing table or
+    an unreachable Supabase project degrades to today's fixed behavior
+    rather than blocking a run.
+    """
+    credentials = _credentials()
+    if credentials is None:
+        return None
+
+    url, key = credentials
+    try:
+        response = requests.get(
+            f"{url}/rest/v1/engine_settings",
+            params={"id": "eq.true", "select": "*", "limit": "1"},
+            headers={"apikey": key, "Authorization": f"Bearer {key}"},
+            timeout=TIMEOUT,
+        )
+        response.raise_for_status()
+        rows = response.json()
+    except Exception:
+        return None
+
+    return rows[0] if rows else None
 
 
 def newest_mirrored_candle(symbol, timeframe):

@@ -55,6 +55,27 @@ def test_mirrored_signal_cannot_overwrite_an_existing_call(monkeypatch):
     assert "resolution=ignore-duplicates" in captured["headers"]["Prefer"]
 
 
+def test_published_signal_includes_confluence_bias(monkeypatch):
+    _configured(monkeypatch)
+    captured = _capture(monkeypatch)
+
+    supabase.publish_signal(
+        "BTCUSDT",
+        "5m",
+        generated_at=1_700_000_000,
+        candle_time=1_699_996_400,
+        price=50000.0,
+        verdict="BUY",
+        score=2,
+        reasoning="trend and structure agree",
+        evidence_count=2,
+        strategy_version="3.0.0",
+        confluence_bias="up",
+    )
+
+    assert captured["json"][0]["confluence_bias"] == "up"
+
+
 def test_epoch_timestamps_are_sent_as_utc(monkeypatch):
     _configured(monkeypatch)
     captured = _capture(monkeypatch)
@@ -273,3 +294,74 @@ def test_ai_settings_failure_is_swallowed_not_raised(monkeypatch):
     monkeypatch.setattr(supabase.requests, "get", boom)
 
     assert supabase.get_active_ai_settings() is None
+
+
+def test_engine_settings_are_not_read_when_unconfigured(monkeypatch):
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
+
+    assert supabase.get_engine_settings() is None
+
+
+def test_engine_settings_return_the_singleton_row(monkeypatch):
+    _configured(monkeypatch)
+    row = {
+        "atr_stop_multiplier": 0.75,
+        "reward_to_risk": 1.5,
+        "min_reward_to_risk": 1.5,
+        "min_confidence_threshold": 65,
+        "require_higher_timeframe_confluence": True,
+    }
+    monkeypatch.setattr(supabase.requests, "get", lambda *a, **k: _JsonResponse([row]))
+
+    assert supabase.get_engine_settings() == row
+
+
+def test_engine_settings_are_none_when_the_table_is_empty(monkeypatch):
+    _configured(monkeypatch)
+    monkeypatch.setattr(supabase.requests, "get", lambda *a, **k: _JsonResponse([]))
+
+    assert supabase.get_engine_settings() is None
+
+
+def test_engine_settings_failure_is_swallowed_not_raised(monkeypatch):
+    _configured(monkeypatch)
+
+    def boom(*a, **k):
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr(supabase.requests, "get", boom)
+
+    assert supabase.get_engine_settings() is None
+
+
+def test_recent_candles_are_empty_when_unconfigured(monkeypatch):
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
+
+    assert supabase.get_recent_candles("BTCUSDT", "1h") == []
+
+
+def test_recent_candles_are_reversed_to_oldest_first(monkeypatch):
+    _configured(monkeypatch)
+    rows = [
+        {"open_time": "2023-11-14T23:00:00+00:00", "open": 2, "high": 3, "low": 1, "close": 2.5, "volume": 1},
+        {"open_time": "2023-11-14T22:00:00+00:00", "open": 1, "high": 2, "low": 0.5, "close": 1.5, "volume": 1},
+    ]
+    monkeypatch.setattr(supabase.requests, "get", lambda *a, **k: _JsonResponse(rows))
+
+    candles = supabase.get_recent_candles("BTCUSDT", "1h", limit=10)
+
+    assert [c["close"] for c in candles] == [1.5, 2.5]
+    assert candles[0]["open_time"] < candles[1]["open_time"]
+
+
+def test_recent_candles_failure_is_swallowed_not_raised(monkeypatch):
+    _configured(monkeypatch)
+
+    def boom(*a, **k):
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr(supabase.requests, "get", boom)
+
+    assert supabase.get_recent_candles("BTCUSDT", "1h") == []

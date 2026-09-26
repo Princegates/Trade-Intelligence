@@ -23,6 +23,7 @@ function signal(timeframe: string, minutes: number, symbol = "XAUUSD"): SignalVi
     patterns: [],
     levels: null,
     aiCommentary: null,
+    confluenceBias: null,
   };
 }
 

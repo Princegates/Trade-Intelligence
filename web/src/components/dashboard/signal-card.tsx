@@ -154,7 +154,7 @@ export function SignalCard({ signal, locked = false }: { signal: SignalView; loc
           <p className="mt-3 border-t pt-2 text-xs text-muted-foreground">
             {signal.confidence === null
               ? "Confidence not yet calibrated"
-              : `Confidence ${(signal.confidence * 100).toFixed(0)}%`}
+              : `Confidence ${(signal.confidence * 100).toFixed(0)}% — confluence strength, not a win rate`}
             {" · "}
             strategy {signal.strategyVersion}
           </p>

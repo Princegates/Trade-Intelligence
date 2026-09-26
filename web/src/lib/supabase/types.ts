@@ -99,6 +99,7 @@ export interface Database {
           target: number | null;
           buy_above: number | null;
           sell_below: number | null;
+          confluence_bias: string | null;
         };
         Insert: {
           id?: number;
@@ -119,9 +120,49 @@ export interface Database {
           target?: number | null;
           buy_above?: number | null;
           sell_below?: number | null;
+          confluence_bias?: string | null;
         };
         // Published signals are immutable; 0002 drops the update policy.
         Update: never;
+        Relationships: [];
+      };
+      engine_settings: {
+        Row: {
+          id: boolean;
+          atr_stop_multiplier: number;
+          reward_to_risk: number;
+          min_reward_to_risk: number;
+          min_confidence_threshold: number;
+          confidence_high_threshold: number;
+          confidence_very_high_threshold: number;
+          require_higher_timeframe_confluence: boolean;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          id?: boolean;
+          atr_stop_multiplier?: number;
+          reward_to_risk?: number;
+          min_reward_to_risk?: number;
+          min_confidence_threshold?: number;
+          confidence_high_threshold?: number;
+          confidence_very_high_threshold?: number;
+          require_higher_timeframe_confluence?: boolean;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          id?: boolean;
+          atr_stop_multiplier?: number;
+          reward_to_risk?: number;
+          min_reward_to_risk?: number;
+          min_confidence_threshold?: number;
+          confidence_high_threshold?: number;
+          confidence_very_high_threshold?: number;
+          require_higher_timeframe_confluence?: boolean;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
         Relationships: [];
       };
       candles: {

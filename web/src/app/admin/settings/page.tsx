@@ -4,10 +4,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { ProviderSettingsForm } from "@/components/admin/provider-settings-form";
 import { PasswordForm } from "@/components/account/password-form";
 import { AccessPolicyForm } from "@/components/admin/access-policy-form";
+import { EngineSettingsForm } from "@/components/admin/engine-settings-form";
 import { Badge } from "@/components/ui/badge";
 import { SETTINGS_PROVIDERS } from "@/lib/demo-data";
 import { getAllProviderStates } from "@/lib/settings";
 import { getAccessPolicy } from "@/lib/access-policy";
+import { getEngineSettings } from "@/lib/engine-settings";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import type { SettingsCategory } from "@/lib/supabase/types";
 
@@ -20,9 +22,10 @@ const CATEGORIES: { key: SettingsCategory; label: string; icon: React.ReactNode 
 ];
 
 export default async function AdminSettingsPage() {
-  const [providersByCategory, { trialDays, codeExpiryDays }] = await Promise.all([
+  const [providersByCategory, { trialDays, codeExpiryDays }, engineSettings] = await Promise.all([
     Promise.all(CATEGORIES.map((c) => getAllProviderStates(c.key))),
     getAccessPolicy(),
+    getEngineSettings(),
   ]);
 
   return (
@@ -53,6 +56,20 @@ export default async function AdminSettingsPage() {
         </CardHeader>
         <CardContent>
           <AccessPolicyForm trialDays={trialDays} codeExpiryDays={codeExpiryDays} />
+        </CardContent>
+      </Card>
+
+      <Card className="max-w-2xl">
+        <CardHeader>
+          <CardTitle>Entry-quality engine</CardTitle>
+          <CardDescription>
+            Thresholds the signal engine checks before publishing a BUY/SELL call. Confidence is a transparent read
+            of how much of the engine&apos;s own evidence agrees with itself, not a calibrated win rate — see the
+            reasoning behind any signal for the full breakdown.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <EngineSettingsForm settings={engineSettings} />
         </CardContent>
       </Card>
 

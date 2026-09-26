@@ -17,7 +17,7 @@ project runs on. See README for what that leaves out and why.
 import math
 
 from .. import config
-from . import divergence, indicators as ind, patterns as pat, structure as struct
+from . import confluence, divergence, indicators as ind, patterns as pat, structure as struct
 
 BUY_THRESHOLD = config.BUY_THRESHOLD
 SELL_THRESHOLD = -config.BUY_THRESHOLD
@@ -231,15 +231,19 @@ def _volatility(candles, closes, atr_val):
     return {"ok": True, "reasons": []}
 
 
-def _levels(verdict, price, atr):
+def _levels(verdict, price, atr, stop_atrs=STOP_ATRS, reward_to_risk=REWARD_TO_RISK):
     """Entry, invalidation and target — or, for a HOLD, the two prices that
     would turn it into a call. Without ATR there is no honest way to size
-    these, so they are omitted rather than guessed."""
+    these, so they are omitted rather than guessed.
+
+    `stop_atrs`/`reward_to_risk` default to the module constants but can be
+    overridden per-run from an admin's engine_settings row (see evaluate()),
+    so an admin adjusting these doesn't require a code change + redeploy."""
     if atr is None or atr <= 0:
         return None
 
-    stop_distance = atr * STOP_ATRS
-    target_distance = stop_distance * REWARD_TO_RISK
+    stop_distance = atr * stop_atrs
+    target_distance = stop_distance * reward_to_risk
 
     if verdict == "BUY":
         return {
@@ -285,14 +289,205 @@ def apply_event_risk_override(result, candles, event, currency):
     result["reasoning"].append(
         f"Overridden to HOLD — {event['title']} ({currency}, high impact) scheduled within the event-risk window"
     )
+    # A directional call's confidence describes that call specifically —
+    # once it's overridden to HOLD there's no live call left for the number
+    # to be about, same "None means HOLD" contract engine.evaluate()'s own
+    # gates keep.
+    result["confidence"] = None
     result["verdict"] = "HOLD"
     result["levels"] = _levels("HOLD", candles[-1]["close"], atr_val)
     return result
 
 
-def evaluate(candles):
+# --- Confidence scoring -----------------------------------------------
+#
+# A transparent read of how much of the engine's OWN evidence lines up
+# behind a call — NOT a calibrated win probability. There is no outcome
+# tracking wired to this number: src/accuracy.py forward-checks published
+# signals against later closes, but nothing feeds that back here. Treat
+# "82/100" as "82% of the engine's own checks agree with itself", not
+# "82% chance this works" (see SE-005's reasoning for why a score-derived
+# number risks exactly that confusion).
+#
+# Eight categories, weighted to sum to 100 points, computed only from
+# evidence this run already gathered (no new detection machinery beyond
+# confluence.py and the existing structure/indicators functions):
+#   trend alignment 20, market structure 20, pullback quality 15,
+#   support/resistance 10, candle confirmation 10, ATR/volatility 10,
+#   momentum 10, liquidity context 5.
+#
+# Stored as a 0.0-1.0 fraction (divided by 100 before writing) to match the
+# existing `confidence: number | null` contract end-to-end — the web
+# dashboard's `(signal.confidence * 100).toFixed(0)%` display needs no
+# changes to start showing real numbers.
+
+
+def _vote_score(vote, direction, points, neutral_fraction=0.5):
+    """Shared scoring for the four vote-based categories (trend alignment,
+    market structure, momentum, candle confirmation): full marks when the
+    vote agrees with the call's direction, partial credit when it's
+    neutral/unavailable (absence of evidence isn't evidence against), zero
+    when it actively disagrees."""
+    if vote is None or vote == 0:
+        return points * neutral_fraction
+    if vote == direction:
+        return points
+    return 0.0
+
+
+def _trend_alignment_score(verdict, higher_bias, points=20):
+    """Higher-timeframe structural bias (confluence.py) vs. this call's
+    direction. A call that reached here already survived the confluence
+    veto (or it's disabled), so "opposes" is only reachable when an admin
+    has turned that veto off — kept for completeness, not normally hit."""
+    agree_bias = "up" if verdict == "BUY" else "down"
+    if higher_bias == agree_bias:
+        return points
+    if higher_bias in (None, "range"):
+        return points * 0.5
+    return 0.0
+
+
+def _pullback_quality_score(verdict, price, swings, atr_val, points=15):
+    """PROXY for true impulse/pullback-phase classification (that needs a
+    dedicated entry-zone module, not built yet) — graduated by ATR-scaled
+    distance from the nearest same-direction swing level, reusing the same
+    struct.nearest_levels() math _pattern() already uses. A call struck far
+    from any known level reads the same way "chasing an extended move"
+    would with the tools available today."""
+    if atr_val is None or atr_val <= 0:
+        return points * 0.5
+    levels = struct.nearest_levels(swings, price)
+    level = levels["support"] if verdict == "BUY" else levels["resistance"]
+    if level is None:
+        return points * 0.3
+    distance_atr = abs(price - level) / atr_val
+    if distance_atr <= 0.5:
+        return points
+    if distance_atr <= 1.0:
+        return points * 0.6
+    if distance_atr <= 2.0:
+        return points * 0.3
+    return 0.0
+
+
+def _sr_proximity_score(price, swings, atr_val, tolerance, points=10):
+    """Is price near a *pooled* (multi-touch) level from struct.equal_levels
+    — deliberately a different data source than pullback quality (tested/
+    pooled levels vs. the single nearest swing), so the two categories
+    aren't just restating each other."""
+    if atr_val is None or atr_val <= 0:
+        return 0.0
+    pools = struct.equal_levels(swings, tolerance)
+    if not pools:
+        return 0.0
+    near = any(struct.near_level(price, p["price"], atr_val) for p in pools)
+    return points if near else 0.0
+
+
+def _volatility_score(volatility, points=10):
+    """Clean volatility scores full; a call that's technically ok but
+    stretched outside its Bollinger Band scores partial, a caution the
+    existing _volatility() reasons already surface as text. Not-ok
+    volatility already vetoes the call outright before this runs."""
+    if not volatility.get("ok", True):
+        return 0.0
+    stretched = any("Bollinger Band" in r for r in volatility.get("reasons", []))
+    return points * 0.6 if stretched else points
+
+
+def _liquidity_score(verdict, swept, points=5):
+    """Full marks with no liquidity sweep flagged at all; reduced if a
+    sweep was flagged on the *opposite* side (informational, not
+    disqualifying); a matching-side sweep already vetoes the call outright
+    before this runs, so 0 is defensive, not normally reachable."""
+    if not swept:
+        return points
+    matching = (verdict == "BUY" and swept["kind"] == "high") or (verdict == "SELL" and swept["kind"] == "low")
+    return 0.0 if matching else points * 0.4
+
+
+def _confidence(verdict, votes, structure, volatility, higher_bias, price, atr_val, tolerance):
+    """Returns (confidence, reasoning_lines). confidence is None with no
+    reasoning for a HOLD — there's no live call left to be confident
+    about, whether HOLD was the original verdict or a gate overrode it."""
+    if verdict == "HOLD":
+        return None, []
+
+    direction = 1 if verdict == "BUY" else -1
+    swings = structure.get("swings") or []
+
+    trend_points = _trend_alignment_score(verdict, higher_bias)
+    structure_points = _vote_score(votes["structure"], direction, 20)
+    pullback_points = _pullback_quality_score(verdict, price, swings, atr_val)
+    sr_points = _sr_proximity_score(price, swings, atr_val, tolerance)
+    candle_points = _vote_score(votes["pattern"], direction, 10)
+    atr_points = _volatility_score(volatility)
+    momentum_points = _vote_score(votes["momentum"], direction, 10)
+    liquidity_points = _liquidity_score(verdict, structure.get("swept"))
+
+    total = (
+        trend_points + structure_points + pullback_points + sr_points
+        + candle_points + atr_points + momentum_points + liquidity_points
+    )
+    # Rounded once, here, to a single integer 0-100 — the one source of
+    # truth for both the breakdown text below and the fraction returned,
+    # so a reasoning line and the number a later gate compares against can
+    # never disagree over a rounding difference (59.5 formatting as "60"
+    # while round(0.595, 2) * 100 comes back as 59.0 due to floating-point
+    # representation was a real, observed discrepancy during development).
+    rounded_total = round(min(max(total, 0.0), 100.0))
+
+    reasoning = [
+        f"Confidence {rounded_total}/100 — confluence strength, not a win rate: "
+        f"trend {trend_points:.0f}/20, structure {structure_points:.0f}/20, "
+        f"pullback {pullback_points:.0f}/15, S/R {sr_points:.0f}/10, "
+        f"candle {candle_points:.0f}/10, ATR/volatility {atr_points:.0f}/10, "
+        f"momentum {momentum_points:.0f}/10, liquidity {liquidity_points:.0f}/5"
+    ]
+    return rounded_total / 100.0, reasoning
+
+
+def _rr_below_minimum(levels, min_rr):
+    """Real risk/reward computed from the actual entry/stop/target the
+    engine already produced — never re-derived or nudged to pass, per the
+    spec's own "do not artificially move take-profit to manufacture a
+    better RR" instruction. Returns False (does not block) when levels
+    can't be evaluated, rather than guessing.
+
+    The tiny epsilon below is not a loophole — it exists because
+    entry-stop/target-entry subtraction on real floats does not always
+    reproduce the exact ratio the levels were sized from (e.g. computed rr
+    landing at 1.4999999999999842 instead of exactly 1.5 was observed
+    during development); without it, min_reward_to_risk set equal to
+    reward_to_risk — the documented "inert by default" configuration —
+    could spuriously veto every signal on rounding noise alone."""
+    if not levels or levels.get("entry") is None:
+        return False
+    entry, stop, target = levels["entry"], levels["stop"], levels["target"]
+    if stop is None or target is None:
+        return False
+    risk = abs(entry - stop)
+    reward = abs(target - entry)
+    if risk <= 0:
+        return False
+    return (reward / risk) < (min_rr - 1e-9)
+
+
+def evaluate(candles, higher_timeframe_bias=None, settings=None):
     """`candles` are closed candles, oldest first, each with open/high/low/
-    close/volume."""
+    close/volume.
+
+    `higher_timeframe_bias` is confluence.higher_timeframe_bias() applied to
+    an anchor timeframe's own candles (see src/signals/confluence.py and
+    src/run.py — this function never fetches anything itself). `settings`
+    is an optional dict shaped like a row from the engine_settings table
+    (src/storage/supabase.py::get_engine_settings()), supplying per-field
+    overrides; a missing field falls back to today's fixed constant/
+    behavior individually, never all-or-nothing. Both parameters default to
+    values that reproduce exactly today's behavior when omitted, so every
+    existing caller and test keeps working unmodified."""
+    settings = settings or {}
     closes = [c["close"] for c in candles]
     atr_val = ind.atr(candles, 14)
 
@@ -351,17 +546,67 @@ def evaluate(candles):
         ):
             reasons.append("Overridden to HOLD — momentum divergence contradicts this call")
             verdict = "HOLD"
+        elif (
+            settings.get("require_higher_timeframe_confluence", True)
+            and confluence.opposes(verdict, higher_timeframe_bias)
+        ):
+            reasons.append(
+                f"Overridden to HOLD — the higher timeframe's structure is trending {higher_timeframe_bias}, opposing this call"
+            )
+            verdict = "HOLD"
 
-    # Confidence stays None until there is a track record to calibrate it
-    # against. A number derived from `score` would only restate how many
-    # categories agreed, which is not the same thing as how often that
-    # agreement has actually been right (SE-005).
+    stop_atrs = settings.get("atr_stop_multiplier", STOP_ATRS)
+    reward_to_risk_value = settings.get("reward_to_risk", REWARD_TO_RISK)
+    levels = _levels(verdict, closes[-1], atr_val, stop_atrs, reward_to_risk_value)
+
+    # R:R gate — only runs when an admin has actually configured a minimum
+    # (a fresh engine_settings row always has one; settings=None/{} never
+    # does, so this stays inert for every existing caller). Real risk/
+    # reward from the levels just computed above, never re-derived to force
+    # a pass. NOTE: because stop/target are still a fixed ATR multiple of
+    # each other today, every directional call computes to the exact same
+    # ratio — this gate is real and runs on every signal, but with the
+    # shipped defaults (min_reward_to_risk == reward_to_risk) it can't
+    # actually reject anything until stop/target become independently
+    # derived from structure (a later phase), or an admin deliberately
+    # widens the gap between the two settings.
+    if verdict != "HOLD" and "min_reward_to_risk" in settings:
+        min_rr = settings["min_reward_to_risk"]
+        if _rr_below_minimum(levels, min_rr):
+            reasons.append(
+                f"Overridden to HOLD — risk/reward does not clear the configured minimum of 1:{min_rr:g}"
+            )
+            verdict = "HOLD"
+            levels = _levels(verdict, closes[-1], atr_val, stop_atrs, reward_to_risk_value)
+
+    # Confidence is computed for whatever verdict survived every gate above
+    # — a call already overridden to HOLD reports no confidence, since
+    # there's no live call left to be confident about. See the
+    # "Confidence scoring" block above _vote_score for what this number is
+    # and, just as importantly, what it is not.
+    confidence, confidence_reasons = _confidence(
+        verdict, votes, structure, volatility, higher_timeframe_bias, closes[-1], atr_val, config.EQUAL_LEVEL_TOLERANCE
+    )
+    reasons += confidence_reasons
+
+    # Confidence-threshold gate — same "only when admin-configured" guard
+    # as the R:R gate above, so this stays inert for every existing caller.
+    if verdict != "HOLD" and "min_confidence_threshold" in settings and confidence is not None:
+        min_confidence = settings["min_confidence_threshold"]
+        if confidence * 100 < min_confidence:
+            reasons.append(
+                f"Overridden to HOLD — confidence {confidence * 100:.0f}/100 is below the configured minimum of {min_confidence:g}"
+            )
+            verdict = "HOLD"
+            levels = _levels(verdict, closes[-1], atr_val, stop_atrs, reward_to_risk_value)
+            confidence = None
+
     return {
         "verdict": verdict,
         "score": score,
         "reasoning": reasons,
         "evidence_count": evidence,
-        "confidence": None,
+        "confidence": confidence,
         "patterns": pattern["names"],
-        "levels": _levels(verdict, closes[-1], atr_val),
+        "levels": levels,
     }

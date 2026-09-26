@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from . import config, quality
 from .ai import commentary
 from .ingest import binance, calendar, twelvedata
-from .signals import engine, event_risk
+from .signals import confluence, engine, event_risk
 from .storage import db, supabase
 
 
@@ -89,7 +89,7 @@ def _generate_commentary(symbol, timeframe, candle_time, price, result):
         print(f"[info] {symbol}/{timeframe}: AI commentary generated and published ({len(text)} chars, {model})")
 
 
-def process(instrument, timeframe, now, events=()):
+def process(instrument, timeframe, now, events=(), engine_settings=None):
     """Evaluate one instrument/timeframe. Returns a status string for logging.
 
     Every path that declines to publish leaves a suppression record behind, so
@@ -100,6 +100,10 @@ def process(instrument, timeframe, now, events=()):
     either. Defaults to empty rather than None so a caller that never passes
     it (every existing test, and any instrument with no currency mapped in
     EVENT_RISK_CURRENCY) simply never trips the gate, instead of crashing.
+
+    `engine_settings` is the admin-configured engine_settings row (or None),
+    read once per run in main() and threaded straight through to
+    engine.evaluate() — see src/storage/supabase.py::get_engine_settings().
     """
     symbol = instrument["symbol"]
 
@@ -153,7 +157,24 @@ def process(instrument, timeframe, now, events=()):
         suppress(symbol, timeframe, now, "STALE_DATA", detail)
         return f"[skip] {symbol}/{timeframe}: stale feed — {detail}"
 
-    result = engine.evaluate(recent)
+    # Read-only, never fetched fresh: a higher timeframe's candle usually
+    # hasn't changed between two polls anyway, and Twelve Data's gold quota
+    # is already sized to fit today's usage exactly (see INSTRUMENTS above)
+    # — an extra fetch per lower timeframe would not fit. Supabase's mirror
+    # is the only store that reliably outlives a single run (see
+    # newest_stored()'s own reasoning), so the anchor read goes through it,
+    # not local SQLite, when Supabase is configured.
+    anchor_timeframe = confluence.ANCHOR_TIMEFRAME.get(timeframe)
+    higher_bias = None
+    if anchor_timeframe:
+        anchor_candles = (
+            supabase.get_recent_candles(symbol, anchor_timeframe, limit=config.CANDLE_FETCH_LIMIT)
+            if supabase.is_configured()
+            else db.get_recent_candles(symbol, anchor_timeframe, limit=config.CANDLE_FETCH_LIMIT)
+        )
+        higher_bias = confluence.higher_timeframe_bias(anchor_candles)
+
+    result = engine.evaluate(recent, higher_timeframe_bias=higher_bias, settings=engine_settings)
 
     currency = config.EVENT_RISK_CURRENCY.get(symbol)
     if currency:
@@ -177,6 +198,7 @@ def process(instrument, timeframe, now, events=()):
         "confidence": result["confidence"],
         "patterns": ", ".join(result["patterns"]),
         "levels": result["levels"],
+        "confluence_bias": higher_bias,
     }
 
     stored = db.record_signal(symbol, timeframe, **signal)
@@ -223,9 +245,18 @@ def main():
     print(f"[info] economic calendar: {len(events)} events loaded")
     _mirror(supabase.publish_events, events)
 
+    # Read once for the whole run, same reasoning as events above — every
+    # process() call gets the same admin-configured thresholds, not a
+    # fresh read per symbol/timeframe. None (unconfigured/unreachable)
+    # degrades every gate that depends on it to fully inert, reproducing
+    # pre-3.0.0 behavior exactly (see engine.evaluate()'s own docstring).
+    engine_settings = supabase.get_engine_settings()
+    if engine_settings is None:
+        print("[info] engine_settings not configured — entry-quality gates run with defaults only")
+
     for instrument in config.INSTRUMENTS:
         for timeframe in instrument["timeframes"]:
-            print(process(instrument, timeframe, now, events=events))
+            print(process(instrument, timeframe, now, events=events, engine_settings=engine_settings))
 
 
 if __name__ == "__main__":

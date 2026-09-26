@@ -72,7 +72,7 @@ def test_an_existing_database_gains_the_columns_added_since_it_was_written(tmp_p
 
     with db.connect() as conn:
         columns = {row[1] for row in conn.execute("PRAGMA table_info(signals)")}
-    assert {"patterns", "entry", "stop", "target", "buy_above", "sell_below"} <= columns
+    assert {"patterns", "entry", "stop", "target", "buy_above", "sell_below", "confluence_bias"} <= columns
 
     # and the insert that used to crash now works
     assert db.record_signal(**_signal(), patterns="Hammer", levels={"entry": 1.0, "stop": 0.9, "target": 1.2}) is True
@@ -125,6 +125,22 @@ def test_a_new_strategy_version_publishes_alongside_the_old_call(temp_db):
     assert db.record_signal(**_signal()) is True
     assert db.record_signal(**_signal(strategy_version="2.0.0", verdict="SELL")) is True
     assert len(db.signal_history("BTCUSDT", "1h")) == 2
+
+
+def test_confluence_bias_round_trips_through_the_signals_table(temp_db):
+    assert db.record_signal(**_signal(), confluence_bias="up") is True
+
+    with db.connect() as conn:
+        stored = conn.execute("SELECT confluence_bias FROM signals").fetchone()[0]
+    assert stored == "up"
+
+
+def test_confluence_bias_defaults_to_null_when_omitted(temp_db):
+    assert db.record_signal(**_signal()) is True
+
+    with db.connect() as conn:
+        stored = conn.execute("SELECT confluence_bias FROM signals").fetchone()[0]
+    assert stored is None
 
 
 def test_forming_candle_is_hidden_from_indicator_input(temp_db):

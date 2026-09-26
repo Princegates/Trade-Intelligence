@@ -44,6 +44,7 @@ function toView(row: SignalRow, aiCommentary: string | null = null): SignalView 
       .filter(Boolean),
     levels: toLevels(row),
     aiCommentary,
+    confluenceBias: row.confluence_bias ?? null,
   };
 }
 

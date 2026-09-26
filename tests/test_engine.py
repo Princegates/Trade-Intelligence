@@ -47,10 +47,10 @@ def _patch_categories(trend=(0, "flat", []), momentum=NEUTRAL_MOMENTUM, structur
     )
 
 
-def _evaluate_with(**overrides):
+def _evaluate_with(higher_timeframe_bias=None, settings=None, **overrides):
     patches = _patch_categories(**overrides)
     with patches[0], patches[1], patches[2], patches[3], patches[4]:
-        return engine.evaluate(_candles())
+        return engine.evaluate(_candles(), higher_timeframe_bias=higher_timeframe_bias, settings=settings)
 
 
 def test_two_agreeing_categories_produce_buy():
@@ -170,6 +170,128 @@ def test_bullish_divergence_does_not_veto_a_buy():
 
 def test_confidence_is_absent_until_it_can_be_calibrated():
     assert _evaluate_with()["confidence"] is None
+
+
+# --- New in 3.0.0: cross-timeframe confluence, R:R gate, confidence -------
+#
+# All three default to fully inert (higher_timeframe_bias=None, settings=
+# None) so every test above this point — none of which passes either
+# argument — keeps asserting exactly the same thing it did before these
+# gates existed. That's the backward-compatibility contract; these tests
+# cover the new, opt-in behavior specifically.
+
+_AGREE = dict(
+    trend=(1, "up", []),
+    structure={"vote": 1, "reasons": [], "regime": "TRENDING", "swings": [], "swept": None},
+)
+
+
+def test_omitting_both_new_params_reproduces_todays_behavior():
+    with_defaults = _evaluate_with(**_AGREE)
+    explicit_none = _evaluate_with(higher_timeframe_bias=None, settings=None, **_AGREE)
+    assert with_defaults["verdict"] == explicit_none["verdict"] == "BUY"
+    assert with_defaults["score"] == explicit_none["score"]
+
+
+def test_an_opposing_higher_timeframe_overrides_a_buy_to_hold():
+    result = _evaluate_with(higher_timeframe_bias="down", **_AGREE)
+    assert result["verdict"] == "HOLD"
+    assert any("higher timeframe's structure is trending down" in r for r in result["reasoning"])
+
+
+def test_an_opposing_higher_timeframe_overrides_a_sell_to_hold():
+    result = _evaluate_with(
+        higher_timeframe_bias="up",
+        trend=(-1, "down", []),
+        structure={"vote": -1, "reasons": [], "regime": "TRENDING", "swings": [], "swept": None},
+    )
+    assert result["verdict"] == "HOLD"
+
+
+def test_an_agreeing_higher_timeframe_does_not_veto():
+    result = _evaluate_with(higher_timeframe_bias="up", **_AGREE)
+    assert result["verdict"] == "BUY"
+
+
+def test_no_higher_timeframe_data_does_not_veto():
+    result = _evaluate_with(higher_timeframe_bias=None, **_AGREE)
+    assert result["verdict"] == "BUY"
+
+
+def test_confluence_gate_can_be_turned_off():
+    result = _evaluate_with(
+        higher_timeframe_bias="down",
+        settings={"require_higher_timeframe_confluence": False},
+        **_AGREE,
+    )
+    assert result["verdict"] == "BUY"
+
+
+def test_rr_gate_is_inert_without_a_configured_minimum():
+    result = _evaluate_with(settings={}, **_AGREE)
+    assert result["verdict"] == "BUY"
+
+
+def test_rr_gate_overrides_to_hold_when_the_fixed_ratio_is_below_the_minimum():
+    # Today's fixed REWARD_TO_RISK is 1.5 — asking for more than that can
+    # never be met until stop/target stop being a fixed multiple of each
+    # other (a later phase), so this is real, computed, and deterministic.
+    result = _evaluate_with(settings={"min_reward_to_risk": 3.0}, **_AGREE)
+    assert result["verdict"] == "HOLD"
+    assert any("risk/reward does not clear" in r for r in result["reasoning"])
+
+
+def test_rr_gate_passes_when_the_minimum_is_at_or_below_the_fixed_ratio():
+    result = _evaluate_with(settings={"min_reward_to_risk": 1.5}, **_AGREE)
+    assert result["verdict"] == "BUY"
+
+
+def test_atr_stop_multiplier_and_reward_to_risk_are_overridable():
+    default = _evaluate_with(**_AGREE)
+    overridden = _evaluate_with(settings={"atr_stop_multiplier": 1.5, "reward_to_risk": 2.0}, **_AGREE)
+    d, o = default["levels"], overridden["levels"]
+    assert o["entry"] == d["entry"]
+    assert abs(o["entry"] - o["stop"]) > abs(d["entry"] - d["stop"])
+    assert abs(o["target"] - o["entry"]) / abs(o["entry"] - o["stop"]) == 2.0
+
+
+def test_confidence_is_populated_for_a_surviving_directional_call():
+    result = _evaluate_with(**_AGREE)
+    assert result["confidence"] is not None
+    assert 0.0 <= result["confidence"] <= 1.0
+    assert any("Confidence" in r and "confluence strength, not a win rate" in r for r in result["reasoning"])
+
+
+def test_confidence_is_none_when_a_gate_overrides_the_call():
+    result = _evaluate_with(higher_timeframe_bias="down", **_AGREE)
+    assert result["verdict"] == "HOLD"
+    assert result["confidence"] is None
+
+
+def test_confidence_improves_when_the_higher_timeframe_agrees():
+    against = _evaluate_with(higher_timeframe_bias=None, **_AGREE)
+    with_agreement = _evaluate_with(higher_timeframe_bias="up", **_AGREE)
+    assert with_agreement["confidence"] > against["confidence"]
+
+
+def test_confidence_threshold_gate_is_inert_without_a_configured_minimum():
+    result = _evaluate_with(settings={}, **_AGREE)
+    assert result["verdict"] == "BUY"
+
+
+def test_confidence_threshold_gate_overrides_a_low_confidence_call_to_hold():
+    baseline = _evaluate_with(**_AGREE)
+    threshold_above_baseline = round(baseline["confidence"] * 100) + 1
+    result = _evaluate_with(settings={"min_confidence_threshold": threshold_above_baseline}, **_AGREE)
+    assert result["verdict"] == "HOLD"
+    assert result["confidence"] is None
+    assert any("is below the configured minimum" in r for r in result["reasoning"])
+
+
+def test_confidence_threshold_gate_passes_a_lenient_minimum():
+    result = _evaluate_with(settings={"min_confidence_threshold": 0}, **_AGREE)
+    assert result["verdict"] == "BUY"
+    assert result["confidence"] is not None
 
 
 def test_evaluate_runs_end_to_end_on_real_data():
