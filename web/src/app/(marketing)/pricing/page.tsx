@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Badge } from "@/components/ui/badge";
 import { ASSET_NAMES, ASSET_ORDER } from "@/lib/signal-view";
 import { CHART_TIMEFRAMES } from "@/lib/candle-view";
+import { getAccessPolicy } from "@/lib/access-policy";
 
 // Pulled from the same constants the dashboard itself renders from, not
 // retyped here — an asset or timeframe added to the real system (both have
@@ -15,54 +16,55 @@ const assetList = new Intl.ListFormat(undefined, { style: "long", type: "conjunc
 );
 const timeframeList = CHART_TIMEFRAMES.join(", ");
 
-const tiers = [
-  {
-    name: "Free",
-    price: "$0",
-    period: "",
-    description: "Everything the system actually does today — nothing held back.",
-    features: [
-      `${assetList} across ${timeframeList}`,
-      "Full signal history, not a preview of it",
-      "Reasoning shown for every call",
-      "Community support",
-    ],
-    cta: "Create free account",
-    href: "/signup",
-    highlighted: false,
-  },
-  {
-    name: "Pro",
-    price: "$19",
-    period: "/mo",
-    description: "Reserved for what isn't built yet — nothing here is withheld from Free today.",
-    features: ["Everything in Free", "Accuracy / track-record view (coming soon)", "Priority support"],
-    cta: "Get notified",
-    href: "/about",
-    highlighted: true,
-  },
-  {
-    name: "Team",
-    price: "Custom",
-    period: "",
-    description: "Multiple seats and a direct line for feature requests.",
-    features: ["Everything in Pro", "Multiple team members", "Custom alert delivery (coming soon)", "Dedicated onboarding"],
-    cta: "Contact us",
-    href: "/about",
-    highlighted: false,
-  },
-];
+// trialDays is admin-configurable and can change at any time — must never be
+// baked into a build-time static render, same rule as the homepage's live
+// signal data (see (marketing)/page.tsx).
+export const dynamic = "force-dynamic";
 
-export default function PricingPage() {
+export default async function PricingPage() {
+  const { trialDays } = await getAccessPolicy();
+
+  const tiers = [
+    {
+      name: "Free trial",
+      price: "$0",
+      period: "",
+      description: "Every account starts here. Once an admin approves your sign-up, you get full access to try it.",
+      features: [
+        `${assetList} across ${timeframeList}`,
+        `Full signal history and reasoning for ${trialDays} day${trialDays === 1 ? "" : "s"}`,
+        "Requires admin approval after signup",
+      ],
+      cta: "Create free account",
+      href: "/signup",
+      highlighted: false,
+    },
+    {
+      name: "Full access",
+      price: "By request",
+      period: "",
+      description:
+        "After the trial ends, you drop to the latest signal only until an admin sends you a renewal code — there's no self-serve payment yet.",
+      features: [
+        "Everything in the free trial",
+        "Full signal history & reasoning, renewed via an access code",
+        "Renewed manually — no card, no subscription",
+      ],
+      cta: "Request access",
+      href: "mailto:hello@signalsvaultai.com",
+      highlighted: true,
+    },
+  ];
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
       <div className="mx-auto max-w-2xl text-center">
         <h1 className="text-4xl font-bold tracking-tight">Simple pricing</h1>
         <p className="mt-3 text-muted-foreground">
-          There is no automated billing or paywall yet — every account gets full access today. These tiers describe
-          where things are headed as paid features actually ship, not what&apos;s being withheld right now.
+          There&apos;s no automated billing yet — access is granted directly by an admin. Every account gets a free
+          trial, then drops to the latest signal only until it&apos;s renewed.
         </p>
-        <Badge variant="outline" className="mt-4">No card required — nothing is gated yet</Badge>
+        <Badge variant="outline" className="mt-4">No card required — access is admin-granted</Badge>
       </div>
 
       <p className="mx-auto mt-4 max-w-2xl text-center text-xs text-muted-foreground">
@@ -73,11 +75,11 @@ export default function PricingPage() {
         .
       </p>
 
-      <div className="mx-auto mt-14 grid max-w-5xl gap-6 lg:grid-cols-3">
+      <div className="mx-auto mt-14 grid max-w-3xl gap-6 sm:grid-cols-2">
         {tiers.map((tier) => (
           <Card key={tier.name} className={tier.highlighted ? "border-primary shadow-md" : undefined}>
             <CardHeader>
-              {tier.highlighted && <Badge className="mb-2 w-fit">Most popular</Badge>}
+              {tier.highlighted && <Badge className="mb-2 w-fit">Next step</Badge>}
               <CardTitle>{tier.name}</CardTitle>
               <div className="flex items-baseline gap-1">
                 <span className="text-3xl font-bold">{tier.price}</span>

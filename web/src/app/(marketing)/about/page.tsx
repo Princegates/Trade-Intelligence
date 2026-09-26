@@ -42,7 +42,7 @@ export default function AboutPage() {
       <div className="mt-12">
         <h2 className="text-2xl font-semibold">Get in touch</h2>
         <p className="mt-3 text-muted-foreground">
-          For Pro/Team plans, feature requests, or anything else, reach out at{" "}
+          For full-access requests, feature requests, or anything else, reach out at{" "}
           <a href="mailto:hello@signalsvaultai.com" className="text-primary underline underline-offset-4">
             hello@signalsvaultai.com
           </a>
