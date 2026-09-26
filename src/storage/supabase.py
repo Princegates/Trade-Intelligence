@@ -20,6 +20,16 @@ TIMEOUT = 15
 # already been called, so the mirror cannot rewrite a published signal either.
 SIGNAL_IDENTITY = "symbol,timeframe,candle_time,strategy_version"
 
+# ALIVEDESTINY's own identity tuples — a setup is keyed on the candle whose
+# close confirmed its BOS (a candle can produce at most one BOS, see
+# structure.break_of_structure()'s exclusive-branch structure), a published
+# signal on the same tuple once the setup resolves. Separate constants
+# because the two tables' column order/names differ from `signals`' own,
+# even though the underlying idea (identity = the tuple, not a surrogate
+# key) is the same. See web/supabase/migrations/0020_alivedestiny_setups.sql.
+ALIVEDESTINY_SETUP_IDENTITY = "symbol,timeframe,strategy_version,bos_candle_time"
+ALIVEDESTINY_SIGNAL_IDENTITY = "symbol,timeframe,bos_candle_time,strategy_version"
+
 
 REST_SUFFIX = "/rest/v1"
 
@@ -483,6 +493,220 @@ def get_signal_by_identity(symbol, timeframe, candle_time, strategy_version):
     row = rows[0]
     row["candle_time"] = datetime.fromisoformat(row["candle_time"]).timestamp()
     return row
+
+
+def get_alivedestiny_settings():
+    """ALIVEDESTINY's own admin-configured thresholds (web/supabase/
+    migrations/0021_alivedestiny_settings.sql), or None if unconfigured/
+    unreachable/missing — same shape and degradation as
+    get_engine_settings(). Every gate in src/signals/setups.py applies
+    these as settings.get(key, DEFAULT), so a missing table degrades to
+    each module's own hardcoded default rather than blocking a run.
+    """
+    credentials = _credentials()
+    if credentials is None:
+        return None
+
+    url, key = credentials
+    try:
+        response = requests.get(
+            f"{url}/rest/v1/alivedestiny_settings",
+            params={"id": "eq.true", "select": "*", "limit": "1"},
+            headers={"apikey": key, "Authorization": f"Bearer {key}"},
+            timeout=TIMEOUT,
+        )
+        response.raise_for_status()
+        rows = response.json()
+    except Exception:
+        return None
+
+    return rows[0] if rows else None
+
+
+def publish_alivedestiny_setup(
+    setup_id,
+    symbol,
+    timeframe,
+    strategy_version,
+    bos_candle_time,
+    bos_kind,
+    bos_direction,
+    bos_price,
+    break_strength,
+    state,
+    entered_at,
+    updated_at,
+    impulse_start_price=None,
+    impulse_end_price=None,
+    impulse_atr_multiple=None,
+    fib_50=None,
+    fib_61_8=None,
+    fib_72=None,
+    fib_78_6=None,
+    invalidation_reason=None,
+    resolution="merge-duplicates",
+):
+    """Upserts one alivedestiny_setups row. `resolution` defaults to
+    merge-duplicates because — unlike every signals-table-adjacent writer
+    in this file — this row is genuinely mutable across many runs (BOS
+    detected -> impulse frozen -> retracement -> retest -> confirmation ->
+    published/invalidated/expired). Detection-time creation
+    (src/run.py::detect_alivedestiny_setups()) passes resolution=
+    "ignore-duplicates" instead, so a setup already created by an earlier
+    run is never clobbered by a fresh (and immediately discarded) id."""
+    return _insert(
+        "alivedestiny_setups",
+        {
+            "id": setup_id,
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "strategy_version": strategy_version,
+            "bos_candle_time": _utc(bos_candle_time),
+            "bos_kind": bos_kind,
+            "bos_direction": bos_direction,
+            "bos_price": bos_price,
+            "break_strength": break_strength,
+            "state": state,
+            "impulse_start_price": impulse_start_price,
+            "impulse_end_price": impulse_end_price,
+            "impulse_atr_multiple": impulse_atr_multiple,
+            "fib_50": fib_50,
+            "fib_61_8": fib_61_8,
+            "fib_72": fib_72,
+            "fib_78_6": fib_78_6,
+            "entered_at": _utc(entered_at),
+            "updated_at": _utc(updated_at),
+            "invalidation_reason": invalidation_reason,
+        },
+        on_conflict=ALIVEDESTINY_SETUP_IDENTITY,
+        resolution=resolution,
+    )
+
+
+def publish_alivedestiny_setup_transition(setup_id, from_state, to_state, price):
+    """Logs an actual setup state change — never called for a re-check
+    that leaves the state unchanged, same "transitions only, not every
+    poll" shape as publish_lifecycle_transition."""
+    return _insert(
+        "alivedestiny_setup_transitions",
+        {"setup_id": setup_id, "from_state": from_state, "to_state": to_state, "price": price},
+    )
+
+
+def publish_alivedestiny_signal(
+    symbol,
+    timeframe,
+    setup_id,
+    bos_candle_time,
+    generated_at,
+    strategy_version,
+    verdict,
+    price,
+    reasoning,
+    no_trade_reason=None,
+    bos_kind=None,
+    bos_direction=None,
+    bos_price=None,
+    break_strength=None,
+    impulse_start_price=None,
+    impulse_end_price=None,
+    impulse_atr_multiple=None,
+    fib_50=None,
+    fib_61_8=None,
+    fib_72=None,
+    fib_78_6=None,
+    retracement_quality=None,
+    retest_confirmed=None,
+    confirmation_pattern=None,
+    candle_quality=None,
+    htf_bias=None,
+    htf_filter_outcome=None,
+    entry=None,
+    stop=None,
+    target=None,
+    risk_reward=None,
+    regime=None,
+):
+    """Published output — BUY/SELL or a structured NO_TRADE, always exactly
+    one row per resolved setup (default ignore-duplicates, same
+    never-rewrite contract as publish_signal)."""
+    return _insert(
+        "alivedestiny_signals",
+        {
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "setup_id": setup_id,
+            "bos_candle_time": _utc(bos_candle_time),
+            "generated_at": _utc(generated_at),
+            "strategy_version": strategy_version,
+            "verdict": verdict,
+            "price": price,
+            "reasoning": reasoning,
+            "no_trade_reason": no_trade_reason,
+            "bos_kind": bos_kind,
+            "bos_direction": bos_direction,
+            "bos_price": bos_price,
+            "break_strength": break_strength,
+            "impulse_start_price": impulse_start_price,
+            "impulse_end_price": impulse_end_price,
+            "impulse_atr_multiple": impulse_atr_multiple,
+            "fib_50": fib_50,
+            "fib_61_8": fib_61_8,
+            "fib_72": fib_72,
+            "fib_78_6": fib_78_6,
+            "retracement_quality": retracement_quality,
+            "retest_confirmed": retest_confirmed,
+            "confirmation_pattern": confirmation_pattern,
+            "candle_quality": candle_quality,
+            "htf_bias": htf_bias,
+            "htf_filter_outcome": htf_filter_outcome,
+            "entry": entry,
+            "stop": stop,
+            "target": target,
+            "risk_reward": risk_reward,
+            "regime": regime,
+        },
+        on_conflict=ALIVEDESTINY_SIGNAL_IDENTITY,
+    )
+
+
+def get_open_alivedestiny_setups():
+    """Every alivedestiny_setups row still in a non-terminal state, across
+    every pair — same "fetch everything once, let the caller group by
+    (symbol, timeframe) itself" shape as get_open_lifecycle_rows(), so
+    src/run.py::advance_alivedestiny_setups() can dedupe candle reads
+    across multiple open setups sharing a pair. Timestamps come back
+    converted to epoch seconds. Returns [] on any failure or when
+    unconfigured.
+    """
+    credentials = _credentials()
+    if credentials is None:
+        return []
+
+    url, key = credentials
+    try:
+        response = requests.get(
+            f"{url}/rest/v1/alivedestiny_setups",
+            params={
+                "state": "not.in.(PUBLISHED,INVALIDATED,EXPIRED)",
+                "select": (
+                    "id,symbol,timeframe,strategy_version,bos_candle_time,bos_kind,bos_direction,bos_price,"
+                    "break_strength,state,impulse_start_price,impulse_end_price,impulse_atr_multiple,"
+                    "fib_50,fib_61_8,fib_72,fib_78_6,entered_at"
+                ),
+            },
+            headers={"apikey": key, "Authorization": f"Bearer {key}"},
+            timeout=TIMEOUT,
+        )
+        response.raise_for_status()
+        rows = response.json()
+    except Exception:
+        return []
+
+    for row in rows:
+        row["bos_candle_time"] = datetime.fromisoformat(row["bos_candle_time"]).timestamp()
+        row["entered_at"] = datetime.fromisoformat(row["entered_at"]).timestamp()
+    return rows
 
 
 def publish_suppression(symbol, timeframe, observed_at, reason, detail=""):

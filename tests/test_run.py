@@ -643,3 +643,164 @@ def test_recheck_lifecycles_is_a_no_op_with_no_open_rows(monkeypatch):
     run.recheck_lifecycles(NOW, engine_settings=None)
 
     assert calls == []
+
+
+# --- New in ALIVEDESTINY Phase 1a: detect_alivedestiny_setups / advance_alivedestiny_setups ---
+
+
+def test_detect_alivedestiny_setups_creates_a_setup_row(monkeypatch):
+    candles = [{"open_time": i * 900, "close": 100.0 + i} for i in range(61)]
+    monkeypatch.setattr(run.supabase, "get_recent_candles", lambda symbol, timeframe, limit: candles)
+    monkeypatch.setattr(
+        run.setups,
+        "detect_new_setups",
+        lambda candles, settings=None: {
+            "bos_candle_time": 54000, "bos_kind": "BOS", "bos_direction": 1, "bos_price": 150.0, "break_strength": "STRONG",
+        },
+    )
+
+    calls = []
+    monkeypatch.setattr(run.supabase, "publish_alivedestiny_setup", lambda *a, **k: calls.append((a, k)))
+
+    run.detect_alivedestiny_setups(NOW, alivedestiny_settings=None)
+
+    assert len(calls) == 2  # one BTCUSDT, one XAUUSD (both in config.INSTRUMENTS)
+    args, kwargs = calls[0]
+    assert args[1] == "BTCUSDT"
+    assert args[2] == "15m"
+    assert args[5] == "BOS"  # bos_kind
+    assert kwargs["resolution"] == "ignore-duplicates"
+
+
+def test_detect_alivedestiny_setups_skips_with_insufficient_history(monkeypatch):
+    monkeypatch.setattr(run.supabase, "get_recent_candles", lambda symbol, timeframe, limit: [{"open_time": 0, "close": 100.0}])
+    detect_calls = []
+    monkeypatch.setattr(run.setups, "detect_new_setups", lambda *a, **k: detect_calls.append(1))
+
+    run.detect_alivedestiny_setups(NOW, alivedestiny_settings=None)
+
+    assert detect_calls == []
+
+
+def test_detect_alivedestiny_setups_is_a_no_op_without_a_break(monkeypatch):
+    candles = [{"open_time": i * 900, "close": 100.0 + i} for i in range(61)]
+    monkeypatch.setattr(run.supabase, "get_recent_candles", lambda symbol, timeframe, limit: candles)
+    monkeypatch.setattr(run.setups, "detect_new_setups", lambda *a, **k: None)
+    publish_calls = []
+    monkeypatch.setattr(run.supabase, "publish_alivedestiny_setup", lambda *a, **k: publish_calls.append(1))
+
+    run.detect_alivedestiny_setups(NOW, alivedestiny_settings=None)
+
+    assert publish_calls == []
+
+
+def _open_setup(symbol="BTCUSDT", timeframe="15m", state="RETEST_PENDING"):
+    return {
+        "id": "11111111-1111-1111-1111-111111111111",
+        "symbol": symbol, "timeframe": timeframe, "strategy_version": "alivedestiny-1.0.0",
+        "bos_candle_time": 0, "bos_kind": "BOS", "bos_direction": 1, "bos_price": 100.0,
+        "break_strength": "STRONG", "state": state,
+        "impulse_start_price": 90.0, "impulse_end_price": 100.0, "impulse_atr_multiple": 5.0,
+        "fib_50": 95.0, "fib_61_8": 93.82, "fib_72": 92.8, "fib_78_6": 92.14,
+        "entered_at": 0,
+    }
+
+
+def test_advance_alivedestiny_setups_publishes_setup_and_signal_on_a_state_change(monkeypatch):
+    monkeypatch.setattr(run.supabase, "get_open_alivedestiny_setups", lambda: [_open_setup()])
+    monkeypatch.setattr(run.supabase, "get_recent_candles", lambda symbol, timeframe, limit: [{"open_time": HOUR, "close": 101.0}])
+
+    signal = {"verdict": "BUY", "price": 101.0, "no_trade_reason": None, "bos_kind": "BOS", "bos_direction": 1,
+              "bos_price": 100.0, "break_strength": "STRONG", "impulse_start_price": 90.0, "impulse_end_price": 100.0,
+              "impulse_atr_multiple": 5.0, "fib_50": 95.0, "fib_61_8": 93.82, "fib_72": 92.8, "fib_78_6": 92.14,
+              "retracement_quality": "VALID", "retest_confirmed": True, "confirmation_pattern": "Bullish Engulfing",
+              "candle_quality": "STRONG", "htf_bias": "up", "htf_filter_outcome": "ALIGNED", "entry": 101.0,
+              "stop": 98.0, "target": 107.0, "risk_reward": 2.0, "regime": "TRENDING"}
+
+    monkeypatch.setattr(
+        run.setups, "advance_setup",
+        lambda setup, candles, htf_candles, timeframe_seconds, settings=None: (
+            {"setup": {**setup, "state": "PUBLISHED"}, "signal": signal}
+        ),
+    )
+
+    setup_calls, transition_calls, signal_calls = [], [], []
+    monkeypatch.setattr(run.supabase, "publish_alivedestiny_setup", lambda *a, **k: setup_calls.append((a, k)))
+    monkeypatch.setattr(run.supabase, "publish_alivedestiny_setup_transition", lambda *a, **k: transition_calls.append(a))
+    monkeypatch.setattr(run.supabase, "publish_alivedestiny_signal", lambda *a, **k: signal_calls.append((a, k)))
+
+    run.advance_alivedestiny_setups(NOW, alivedestiny_settings=None)
+
+    assert len(setup_calls) == 1
+    assert setup_calls[0][0][9] == "PUBLISHED"  # state positional arg
+    assert len(transition_calls) == 1
+    assert transition_calls[0][1:3] == ("RETEST_PENDING", "PUBLISHED")
+    assert len(signal_calls) == 1
+    assert signal_calls[0][1]["verdict"] == "BUY"
+
+
+def test_advance_alivedestiny_setups_does_not_log_a_transition_when_unchanged(monkeypatch):
+    monkeypatch.setattr(run.supabase, "get_open_alivedestiny_setups", lambda: [_open_setup(state="AWAITING_CONFIRMATION")])
+    monkeypatch.setattr(run.supabase, "get_recent_candles", lambda symbol, timeframe, limit: [{"open_time": HOUR, "close": 96.0}])
+    monkeypatch.setattr(
+        run.setups, "advance_setup",
+        lambda setup, candles, htf_candles, timeframe_seconds, settings=None: (
+            {"setup": {**setup, "state": "AWAITING_CONFIRMATION"}, "signal": None}
+        ),
+    )
+
+    transition_calls, signal_calls = [], []
+    monkeypatch.setattr(run.supabase, "publish_alivedestiny_setup", lambda *a, **k: None)
+    monkeypatch.setattr(run.supabase, "publish_alivedestiny_setup_transition", lambda *a, **k: transition_calls.append(1))
+    monkeypatch.setattr(run.supabase, "publish_alivedestiny_signal", lambda *a, **k: signal_calls.append(1))
+
+    run.advance_alivedestiny_setups(NOW, alivedestiny_settings=None)
+
+    assert transition_calls == []
+    assert signal_calls == []
+
+
+def test_advance_alivedestiny_setups_skips_a_pair_with_no_candles(monkeypatch):
+    monkeypatch.setattr(run.supabase, "get_open_alivedestiny_setups", lambda: [_open_setup()])
+    monkeypatch.setattr(run.supabase, "get_recent_candles", lambda symbol, timeframe, limit: [])
+    advance_calls = []
+    monkeypatch.setattr(run.setups, "advance_setup", lambda *a, **k: advance_calls.append(1))
+
+    run.advance_alivedestiny_setups(NOW, alivedestiny_settings=None)
+
+    assert advance_calls == []
+
+
+def test_advance_alivedestiny_setups_reuses_candle_reads_across_setups_sharing_a_pair(monkeypatch):
+    monkeypatch.setattr(
+        run.supabase, "get_open_alivedestiny_setups",
+        lambda: [_open_setup(state="RETEST_PENDING"), _open_setup(state="AWAITING_CONFIRMATION")],
+    )
+    calls = []
+
+    def counting_get_recent_candles(symbol, timeframe, limit):
+        calls.append((symbol, timeframe))
+        return [{"open_time": HOUR, "close": 96.0}]
+
+    monkeypatch.setattr(run.supabase, "get_recent_candles", counting_get_recent_candles)
+    monkeypatch.setattr(
+        run.setups, "advance_setup",
+        lambda setup, candles, htf_candles, timeframe_seconds, settings=None: {"setup": setup, "signal": None},
+    )
+    monkeypatch.setattr(run.supabase, "publish_alivedestiny_setup", lambda *a, **k: None)
+
+    run.advance_alivedestiny_setups(NOW, alivedestiny_settings=None)
+
+    # One 15m read + one 1h (HTF) read, each shared across both setups.
+    assert calls.count(("BTCUSDT", "15m")) == 1
+    assert calls.count(("BTCUSDT", "1h")) == 1
+
+
+def test_advance_alivedestiny_setups_is_a_no_op_with_no_open_setups(monkeypatch):
+    monkeypatch.setattr(run.supabase, "get_open_alivedestiny_setups", lambda: [])
+    calls = []
+    monkeypatch.setattr(run.supabase, "get_recent_candles", lambda *a, **k: calls.append(1))
+
+    run.advance_alivedestiny_setups(NOW, alivedestiny_settings=None)
+
+    assert calls == []
