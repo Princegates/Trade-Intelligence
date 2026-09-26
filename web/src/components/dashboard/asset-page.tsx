@@ -13,9 +13,10 @@ import { hasFullAccess } from "@/lib/access";
  * instrument rather than both. Shared by /dashboard/bitcoin and
  * /dashboard/gold so the two never drift into two different layouts.
  *
- * The per-timeframe detail (reasoning, levels, patterns, AI take) is the
- * one thing this page has that the Overview doesn't — same "basic view"
- * gate as the History page, just gating detail instead of row count. */
+ * The per-timeframe cards (reasoning, levels, patterns, AI take) always
+ * render, even in basic view — a basic-view user sees there's a call for
+ * every timeframe, just blurred behind SignalCard's own lock overlay,
+ * rather than the detail not being on the page at all. */
 export async function AssetPage({ symbol }: { symbol: string }) {
   const name = ASSET_NAMES[symbol] ?? symbol;
 
@@ -45,8 +46,8 @@ export async function AssetPage({ symbol }: { symbol: string }) {
         <Card>
           <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-muted-foreground">
-              You&apos;re on the basic view — only the consensus verdict is shown. Ask your admin for an access code
-              to unlock full reasoning, levels, and patterns for every timeframe.
+              You&apos;re on the basic view — the cards below are locked. Ask your admin for an access code to
+              unlock full reasoning, levels, and patterns for every timeframe.
             </p>
             <Link
               href="/dashboard/settings"
@@ -68,7 +69,7 @@ export async function AssetPage({ symbol }: { symbol: string }) {
           </CardContent>
         </Card>
       ) : (
-        <AssetSection data={data} bordered={false} detailed={fullAccess} showAllLink={false} />
+        <AssetSection data={data} bordered={false} locked={!fullAccess} />
       )}
     </div>
   );

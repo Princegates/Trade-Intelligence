@@ -25,21 +25,19 @@ const ASSET_ROUTES: Record<string, string> = {
  * these sit stacked on one page (the Overview), off, when the asset already
  * has the whole page to itself (its own dashboard entry).
  *
- * `showAllLink` controls the "All N timeframes" link that appears whenever
- * `detailed` is off — the Overview needs it (that's how you get to the
- * detail), but the asset's own page (AssetPage) doesn't: when it renders
- * `detailed={false}` for a basic-view user, the link's target would be the
- * very page already on screen. */
+ * `locked` still renders every card (a basic-view user sees there's a call
+ * for each timeframe, not a gap) but blurs its content behind SignalCard's
+ * own lock overlay — visible, not accessible, until full access. */
 export function AssetSection({
   data,
   bordered = true,
   detailed = true,
-  showAllLink = true,
+  locked = false,
 }: {
   data: AssetPanelData;
   bordered?: boolean;
   detailed?: boolean;
-  showAllLink?: boolean;
+  locked?: boolean;
 }) {
   const { symbol, group, consensus, candlesByTimeframe } = data;
   const route = ASSET_ROUTES[symbol];
@@ -51,7 +49,7 @@ export function AssetSection({
           <h3 className="text-base font-semibold">{ASSET_NAMES[symbol] ?? symbol}</h3>
           <span className="text-xs uppercase tracking-wide text-muted-foreground">{symbol}</span>
         </div>
-        {!detailed && showAllLink && route && (
+        {!detailed && route && (
           <Link
             href={route}
             className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
@@ -68,7 +66,7 @@ export function AssetSection({
       {detailed && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {group.map((s) => (
-            <SignalCard key={`${s.symbol}-${s.timeframe}`} signal={s} />
+            <SignalCard key={`${s.symbol}-${s.timeframe}`} signal={s} locked={locked} />
           ))}
         </div>
       )}

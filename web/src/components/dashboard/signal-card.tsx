@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { Lock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { plainLanguageSummary } from "@/lib/plain-language";
@@ -67,7 +69,12 @@ function SignalLevels({
   );
 }
 
-export function SignalCard({ signal }: { signal: SignalView }) {
+/** `locked` keeps the card's existence and timeframe/price visible (so a
+ * basic-view user can see there's a call for every timeframe, not just a
+ * gap) while blurring the actual verdict/reasoning/levels underneath a
+ * lock overlay — informed that it's there and how to unlock it, rather
+ * than the detail simply not existing on the page. */
+export function SignalCard({ signal, locked = false }: { signal: SignalView; locked?: boolean }) {
   const stale = isStale(signal);
 
   return (
@@ -82,74 +89,89 @@ export function SignalCard({ signal }: { signal: SignalView }) {
           {new Date(signal.generatedAt).toLocaleString()}
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        {/* A stale card shows no direction at all. The verdict was sound when
-            it was published, but a BUY or SELL read at a glance is acted on as
-            current advice, and a warning label beside it does not undo that.
-            The expired call stays available below as history. */}
-        {stale ? (
-          <div className="mb-3">
-            <Badge variant="outline" className="border-destructive text-destructive">
-              No current signal — feed has not updated
-            </Badge>
-            <p className="mt-3 text-sm text-foreground">
-              The last call for this timeframe is too old to act on, so it is not shown. A new one
-              appears once the feed updates.
-            </p>
-          </div>
-        ) : (
-          <>
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-              <Badge variant={verdictVariant(signal.verdict)}>{signal.verdict}</Badge>
-              <span className="text-xs text-muted-foreground">
-                score {signal.score > 0 ? `+${signal.score}` : signal.score}
-              </span>
+      <CardContent className={locked ? "relative" : undefined}>
+        <div className={locked ? "pointer-events-none select-none blur-sm" : undefined} aria-hidden={locked}>
+          {/* A stale card shows no direction at all. The verdict was sound when
+              it was published, but a BUY or SELL read at a glance is acted on as
+              current advice, and a warning label beside it does not undo that.
+              The expired call stays available below as history. */}
+          {stale ? (
+            <div className="mb-3">
+              <Badge variant="outline" className="border-destructive text-destructive">
+                No current signal — feed has not updated
+              </Badge>
+              <p className="mt-3 text-sm text-foreground">
+                The last call for this timeframe is too old to act on, so it is not shown. A new one
+                appears once the feed updates.
+              </p>
             </div>
-            <p className="mb-3 text-sm text-foreground">{plainLanguageSummary(signal)}</p>
-            {signal.aiCommentary && (
-              <AiTakeDialog commentary={signal.aiCommentary} symbol={signal.symbol} timeframe={signal.timeframe} />
-            )}
-          </>
-        )}
-
-        {!stale && signal.levels && <SignalLevels levels={signal.levels} verdict={signal.verdict} />}
-
-        {!stale && signal.patterns.length > 0 && (
-          <p className="mb-3 text-xs text-muted-foreground">
-            Candlestick evidence: <span className="text-foreground">{signal.patterns.join(", ")}</span>
-          </p>
-        )}
-
-        <details className="group">
-          <summary className="cursor-pointer text-xs font-medium text-muted-foreground select-none hover:text-foreground">
-            {stale ? "Show the expired call" : "Show the technical details"}
-          </summary>
-          <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
-            {stale && (
-              <li className="flex gap-2">
-                <span className="select-none text-border">&bull;</span>
-                <span>
-                  Last published {signal.verdict} (score{" "}
-                  {signal.score > 0 ? `+${signal.score}` : signal.score}) — expired, not current
+          ) : (
+            <>
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <Badge variant={verdictVariant(signal.verdict)}>{signal.verdict}</Badge>
+                <span className="text-xs text-muted-foreground">
+                  score {signal.score > 0 ? `+${signal.score}` : signal.score}
                 </span>
-              </li>
-            )}
-            {signal.reasoning.map((r, i) => (
-              <li key={i} className="flex gap-2">
-                <span className="select-none text-border">&bull;</span>
-                <span>{r}</span>
-              </li>
-            ))}
-          </ul>
-        </details>
+              </div>
+              <p className="mb-3 text-sm text-foreground">{plainLanguageSummary(signal)}</p>
+              {signal.aiCommentary && (
+                <AiTakeDialog commentary={signal.aiCommentary} symbol={signal.symbol} timeframe={signal.timeframe} />
+              )}
+            </>
+          )}
 
-        <p className="mt-3 border-t pt-2 text-xs text-muted-foreground">
-          {signal.confidence === null
-            ? "Confidence not yet calibrated"
-            : `Confidence ${(signal.confidence * 100).toFixed(0)}%`}
-          {" · "}
-          strategy {signal.strategyVersion}
-        </p>
+          {!stale && signal.levels && <SignalLevels levels={signal.levels} verdict={signal.verdict} />}
+
+          {!stale && signal.patterns.length > 0 && (
+            <p className="mb-3 text-xs text-muted-foreground">
+              Candlestick evidence: <span className="text-foreground">{signal.patterns.join(", ")}</span>
+            </p>
+          )}
+
+          <details className="group">
+            <summary className="cursor-pointer text-xs font-medium text-muted-foreground select-none hover:text-foreground">
+              {stale ? "Show the expired call" : "Show the technical details"}
+            </summary>
+            <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+              {stale && (
+                <li className="flex gap-2">
+                  <span className="select-none text-border">&bull;</span>
+                  <span>
+                    Last published {signal.verdict} (score{" "}
+                    {signal.score > 0 ? `+${signal.score}` : signal.score}) — expired, not current
+                  </span>
+                </li>
+              )}
+              {signal.reasoning.map((r, i) => (
+                <li key={i} className="flex gap-2">
+                  <span className="select-none text-border">&bull;</span>
+                  <span>{r}</span>
+                </li>
+              ))}
+            </ul>
+          </details>
+
+          <p className="mt-3 border-t pt-2 text-xs text-muted-foreground">
+            {signal.confidence === null
+              ? "Confidence not yet calibrated"
+              : `Confidence ${(signal.confidence * 100).toFixed(0)}%`}
+            {" · "}
+            strategy {signal.strategyVersion}
+          </p>
+        </div>
+
+        {locked && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-b-xl bg-background/70 p-4 text-center backdrop-blur-[1px]">
+            <Lock className="size-5 text-muted-foreground" />
+            <p className="text-sm font-medium text-foreground">Full access required</p>
+            <Link
+              href="/dashboard/settings"
+              className="text-xs font-medium text-primary underline-offset-4 hover:underline"
+            >
+              Redeem an access code
+            </Link>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
