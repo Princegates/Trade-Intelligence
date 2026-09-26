@@ -64,6 +64,9 @@ export default async function HomePage() {
     <div>
       <section className="mx-auto max-w-6xl px-4 pb-16 pt-20 sm:px-6 sm:pt-28">
         <div className="mx-auto max-w-3xl text-center">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            Market Intelligence
+          </p>
           <Badge variant="outline" className="mb-4">BTC &amp; Gold signal intelligence</Badge>
           <h1 className="text-4xl font-bold tracking-tight sm:text-6xl">
             Trading signals that show their work
