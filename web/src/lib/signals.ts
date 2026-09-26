@@ -23,8 +23,9 @@ export interface SignalFeed {
 type SignalRow = Database["public"]["Tables"]["signals"]["Row"];
 type SuppressionRow = Database["public"]["Tables"]["signal_suppressions"]["Row"];
 type CommentaryRow = Database["public"]["Tables"]["signal_commentary"]["Row"];
+type LifecycleRow = Database["public"]["Tables"]["signal_lifecycle"]["Row"];
 
-function toView(row: SignalRow, aiCommentary: string | null = null): SignalView {
+function toView(row: SignalRow, aiCommentary: string | null = null, lifecycle: SignalView["lifecycle"] = null): SignalView {
   return {
     symbol: row.symbol,
     timeframe: row.timeframe,
@@ -49,6 +50,7 @@ function toView(row: SignalRow, aiCommentary: string | null = null): SignalView 
     marketPhase: row.market_phase ?? null,
     invalidationLevel: row.invalidation_level ?? null,
     entryZone: toEntryZone(row),
+    lifecycle,
   };
 }
 
@@ -81,14 +83,19 @@ function toLevels(row: SignalRow): SignalView["levels"] {
   return { entry, stop, target, buyAbove, sellBelow };
 }
 
-function latestPerPair(rows: SignalRow[], commentary: Map<string, string>): SignalView[] {
+function latestPerPair(
+  rows: SignalRow[],
+  commentary: Map<string, string>,
+  lifecycle: Map<string, SignalView["lifecycle"]>
+): SignalView[] {
   const seen = new Set<string>();
   const latest: SignalView[] = [];
   for (const row of rows) {
     const key = `${row.symbol}:${row.timeframe}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    latest.push(toView(row, commentary.get(key) ?? null));
+    const identityKey = `${row.symbol}:${row.timeframe}:${row.candle_time}:${row.strategy_version}`;
+    latest.push(toView(row, commentary.get(key) ?? null, lifecycle.get(identityKey) ?? null));
   }
   return latest;
 }
@@ -118,6 +125,31 @@ async function getLatestCommentary(): Promise<Map<string, string>> {
   return map;
 }
 
+/** Lifecycle state per signal, keyed by the FULL 4-column identity tuple
+ * (symbol, timeframe, candle_time, strategy_version) — unlike
+ * getLatestCommentary()'s deliberately lossy 2-column (symbol, timeframe)
+ * recency match, this has to join to one specific signal exactly: a
+ * signal's own lifecycle status is not something "whichever is most
+ * recent" can stand in for. */
+async function getLatestLifecycle(): Promise<Map<string, SignalView["lifecycle"]>> {
+  const supabase = await createClient();
+  if (!supabase) return new Map();
+
+  const { data } = await supabase
+    .from("signal_lifecycle")
+    .select("symbol, timeframe, candle_time, strategy_version, state, entered_at");
+
+  const map = new Map<string, SignalView["lifecycle"]>();
+  for (const row of (data as Pick<
+    LifecycleRow,
+    "symbol" | "timeframe" | "candle_time" | "strategy_version" | "state" | "entered_at"
+  >[] | null) ?? []) {
+    const key = `${row.symbol}:${row.timeframe}:${row.candle_time}:${row.strategy_version}`;
+    map.set(key, { state: row.state, enteredAt: row.entered_at });
+  }
+  return map;
+}
+
 /** Latest signal per (symbol, timeframe). */
 export async function getLatestSignals(): Promise<SignalFeed> {
   if (!isSupabaseConfigured()) return { source: "demo", signals: DEMO_SIGNALS };
@@ -125,16 +157,17 @@ export async function getLatestSignals(): Promise<SignalFeed> {
   const supabase = await createClient();
   if (!supabase) return { source: "unavailable", signals: [] };
 
-  const [{ data, error }, commentary] = await Promise.all([
+  const [{ data, error }, commentary, lifecycle] = await Promise.all([
     supabase.from("signals").select("*").order("generated_at", { ascending: false }).limit(500),
     getLatestCommentary(),
+    getLatestLifecycle(),
   ]);
 
   if (error || !data) return { source: "unavailable", signals: [] };
 
   // An empty table is a live feed that has not published yet, not a reason to
   // fall back to sample prices.
-  return { source: "live", signals: latestPerPair(data, commentary) };
+  return { source: "live", signals: latestPerPair(data, commentary, lifecycle) };
 }
 
 export async function getSignalHistory(symbol: string, timeframe: string, limit = 25): Promise<SignalView[]> {

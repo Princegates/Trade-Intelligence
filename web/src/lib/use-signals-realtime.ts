@@ -36,6 +36,13 @@ export function useSignalsRealtime() {
       .on("postgres_changes", { event: "*", schema: "public", table: "candles" }, () => {
         router.refresh();
       })
+      // A tracked signal's lifecycle state changes on every scheduled run's
+      // recheck pass (src/run.py::recheck_lifecycles()), independent of any
+      // new signal/candle event — without this handler the badge would only
+      // ever update on the next unrelated refresh.
+      .on("postgres_changes", { event: "*", schema: "public", table: "signal_lifecycle" }, () => {
+        router.refresh();
+      })
       .subscribe((status) => {
         setConnected(status === "SUBSCRIBED");
       });

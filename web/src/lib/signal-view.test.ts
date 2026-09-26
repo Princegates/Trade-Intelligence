@@ -24,6 +24,7 @@ function signal(overrides: Partial<SignalView> = {}): SignalView {
     marketPhase: null,
     invalidationLevel: null,
     entryZone: null,
+    lifecycle: null,
     ...overrides,
   };
 }

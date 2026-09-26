@@ -4,7 +4,7 @@
 // up. None of this is persisted; edits in demo mode are visual-only.
 
 import type { SessionUser } from "@/lib/auth";
-import type { SettingsCategory } from "@/lib/supabase/types";
+import type { LifecycleState, SettingsCategory } from "@/lib/supabase/types";
 import type { CalendarEvent } from "@/lib/calendar-view";
 
 export const DEMO_USER: SessionUser = {
@@ -50,6 +50,7 @@ export interface DemoSignal {
   marketPhase: string | null;
   invalidationLevel: number | null;
   entryZone: { low: number; high: number } | null;
+  lifecycle: { state: LifecycleState; enteredAt: string } | null;
 }
 
 const now = () => new Date().toISOString();
@@ -75,7 +76,15 @@ function demoLevels(price: number, verdict: DemoSignal["verdict"]): DemoSignal["
 
 type DemoSignalSeed = Omit<
   DemoSignal,
-  "patterns" | "levels" | "aiCommentary" | "confluenceBias" | "regime" | "marketPhase" | "invalidationLevel" | "entryZone"
+  | "patterns"
+  | "levels"
+  | "aiCommentary"
+  | "confluenceBias"
+  | "regime"
+  | "marketPhase"
+  | "invalidationLevel"
+  | "entryZone"
+  | "lifecycle"
 > & {
   patterns?: string[];
   aiCommentary?: string;
@@ -193,6 +202,7 @@ export const DEMO_SIGNALS: DemoSignal[] = DEMO_SIGNAL_SEEDS.map((s) => ({
   marketPhase: null,
   invalidationLevel: null,
   entryZone: null,
+  lifecycle: null,
 }));
 
 // Offsets from "now" rather than fixed dates, so the calendar always looks

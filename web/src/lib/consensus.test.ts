@@ -24,6 +24,7 @@ function signal(timeframe: string, verdict: SignalView["verdict"], minutesAgo = 
     marketPhase: null,
     invalidationLevel: null,
     entryZone: null,
+    lifecycle: null,
   };
 }
 

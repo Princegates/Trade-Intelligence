@@ -435,3 +435,211 @@ def test_engine_settings_are_threaded_through_to_evaluate(temp_db, monkeypatch):
     run.process(INSTRUMENT, "1h", NOW, engine_settings=settings)
 
     assert received.get("settings") == settings
+
+
+# --- New in 3.1.0 (Phase 2b): lifecycle row creation + recheck_lifecycles ---
+
+
+def _tracked_buy_result():
+    """A BUY with real structural data — the shape lifecycle.tracks()
+    requires. _buy_result() above is deliberately the opposite (ATR-
+    fallback, no structural fields) and is reused as-is for the "no row"
+    test below."""
+    result = _buy_result()
+    result["invalidation_level"] = 94.0
+    result["entry_zone_low"] = 99.0
+    result["entry_zone_high"] = 101.0
+    return result
+
+
+def test_a_tracked_signal_gets_a_wait_lifecycle_row(temp_db, monkeypatch):
+    _serve(monkeypatch, _feed(61, NOW))
+    monkeypatch.setattr(run.engine, "evaluate", lambda candles, **kwargs: _tracked_buy_result())
+    monkeypatch.setattr(run.supabase, "publish_signal", lambda *a, **k: True)
+
+    lifecycle_calls = []
+    monkeypatch.setattr(run.supabase, "publish_lifecycle", lambda *a, **k: lifecycle_calls.append(a))
+
+    run.process(INSTRUMENT, "1h", NOW)
+
+    assert len(lifecycle_calls) == 1
+    symbol, timeframe, candle_time, strategy_version, state, entered_at, updated_at, price, last_checked = lifecycle_calls[0]
+    assert (symbol, timeframe, state) == ("BTCUSDT", "1h", "WAIT")
+
+
+def test_an_atr_fallback_signal_gets_no_lifecycle_row(temp_db, monkeypatch):
+    # _buy_result() (not _tracked_buy_result()) has no structural fields —
+    # nothing for WAIT/WATCH/READY to describe.
+    _serve(monkeypatch, _feed(61, NOW))
+    monkeypatch.setattr(run.engine, "evaluate", lambda candles, **kwargs: _buy_result())
+    monkeypatch.setattr(run.supabase, "publish_signal", lambda *a, **k: True)
+
+    lifecycle_calls = []
+    monkeypatch.setattr(run.supabase, "publish_lifecycle", lambda *a, **k: lifecycle_calls.append(a))
+
+    run.process(INSTRUMENT, "1h", NOW)
+
+    assert lifecycle_calls == []
+
+
+def test_a_hold_signal_gets_no_lifecycle_row(temp_db, monkeypatch):
+    hold_result = {
+        "verdict": "HOLD",
+        "score": 0,
+        "reasoning": ["neutral"],
+        "evidence_count": 0,
+        "confidence": None,
+        "patterns": [],
+        "levels": None,
+        "regime": "RANGING",
+        "market_phase": "CONSOLIDATION",
+        "invalidation_level": None,
+        "entry_zone_low": None,
+        "entry_zone_high": None,
+    }
+    _serve(monkeypatch, _feed(61, NOW))
+    monkeypatch.setattr(run.engine, "evaluate", lambda candles, **kwargs: hold_result)
+    monkeypatch.setattr(run.supabase, "publish_signal", lambda *a, **k: True)
+
+    lifecycle_calls = []
+    monkeypatch.setattr(run.supabase, "publish_lifecycle", lambda *a, **k: lifecycle_calls.append(a))
+
+    run.process(INSTRUMENT, "1h", NOW)
+
+    assert lifecycle_calls == []
+
+
+def test_a_re_sent_signal_does_not_get_a_second_lifecycle_row(temp_db, monkeypatch):
+    # publish_signal succeeding on a re-poll that finds nothing new
+    # (stored=False) must not re-create the row — mirrors the existing
+    # "only for a signal this run actually just recorded" commentary gate.
+    _serve(monkeypatch, _feed(61, NOW))
+    monkeypatch.setattr(run.engine, "evaluate", lambda candles, **kwargs: _tracked_buy_result())
+    monkeypatch.setattr(run.supabase, "publish_signal", lambda *a, **k: True)
+
+    lifecycle_calls = []
+    monkeypatch.setattr(run.supabase, "publish_lifecycle", lambda *a, **k: lifecycle_calls.append(a))
+
+    run.process(INSTRUMENT, "1h", NOW)
+    assert len(lifecycle_calls) == 1
+
+    run.process(INSTRUMENT, "1h", NOW)  # same candle, nothing new
+    assert len(lifecycle_calls) == 1
+
+
+def _lifecycle_row(state="WATCH", symbol="BTCUSDT", timeframe="1h", candle_time=0, entered_at=0):
+    return {
+        "symbol": symbol,
+        "timeframe": timeframe,
+        "candle_time": candle_time,
+        "strategy_version": "3.1.0",
+        "state": state,
+        "entered_at": entered_at,
+    }
+
+
+def _tracked_signal(entry=100.0, stop=95.0, inval=94.0, zone_low=99.0, zone_high=101.0, candle_time=0):
+    return {
+        "verdict": "BUY",
+        "entry": entry,
+        "stop": stop,
+        "candle_time": candle_time,
+        "invalidation_level": inval,
+        "entry_zone_low": zone_low,
+        "entry_zone_high": zone_high,
+    }
+
+
+def test_recheck_lifecycles_advances_a_row_and_logs_the_transition(monkeypatch):
+    monkeypatch.setattr(run.supabase, "get_open_lifecycle_rows", lambda: [_lifecycle_row("WATCH")])
+    monkeypatch.setattr(run.supabase, "get_recent_candles", lambda symbol, timeframe, limit=1: [{"close": 100.0, "open_time": HOUR}])
+    monkeypatch.setattr(run.supabase, "get_signal_by_identity", lambda *a: _tracked_signal())
+
+    lifecycle_calls = []
+    transition_calls = []
+    monkeypatch.setattr(run.supabase, "publish_lifecycle", lambda *a, **k: lifecycle_calls.append(a))
+    monkeypatch.setattr(run.supabase, "publish_lifecycle_transition", lambda *a, **k: transition_calls.append(a))
+
+    run.recheck_lifecycles(NOW, engine_settings=None)
+
+    assert len(lifecycle_calls) == 1
+    assert lifecycle_calls[0][4] == "READY"  # price 100.0 sits inside the [99, 101] zone
+    assert len(transition_calls) == 1
+    assert transition_calls[0][4:6] == ("WATCH", "READY")
+
+
+def test_recheck_lifecycles_does_not_log_a_transition_when_the_state_is_unchanged(monkeypatch):
+    monkeypatch.setattr(run.supabase, "get_open_lifecycle_rows", lambda: [_lifecycle_row("WAIT")])
+    # Price far from the zone and not favorable enough to confirm — stays WAIT.
+    monkeypatch.setattr(run.supabase, "get_recent_candles", lambda symbol, timeframe, limit=1: [{"close": 104.0, "open_time": HOUR}])
+    monkeypatch.setattr(run.supabase, "get_signal_by_identity", lambda *a: _tracked_signal())
+
+    lifecycle_calls = []
+    transition_calls = []
+    monkeypatch.setattr(run.supabase, "publish_lifecycle", lambda *a, **k: lifecycle_calls.append(a))
+    monkeypatch.setattr(run.supabase, "publish_lifecycle_transition", lambda *a, **k: transition_calls.append(a))
+
+    run.recheck_lifecycles(NOW, engine_settings=None)
+
+    assert lifecycle_calls[0][4] == "WAIT"
+    assert transition_calls == []
+
+
+def test_recheck_lifecycles_skips_a_row_with_no_current_candle(monkeypatch):
+    monkeypatch.setattr(run.supabase, "get_open_lifecycle_rows", lambda: [_lifecycle_row("WAIT")])
+    monkeypatch.setattr(run.supabase, "get_recent_candles", lambda symbol, timeframe, limit=1: [])
+    monkeypatch.setattr(run.supabase, "get_signal_by_identity", lambda *a: _tracked_signal())
+
+    lifecycle_calls = []
+    monkeypatch.setattr(run.supabase, "publish_lifecycle", lambda *a, **k: lifecycle_calls.append(a))
+
+    run.recheck_lifecycles(NOW, engine_settings=None)
+
+    assert lifecycle_calls == []
+
+
+def test_recheck_lifecycles_skips_a_row_whose_signal_is_missing(monkeypatch):
+    monkeypatch.setattr(run.supabase, "get_open_lifecycle_rows", lambda: [_lifecycle_row("WAIT")])
+    monkeypatch.setattr(run.supabase, "get_recent_candles", lambda symbol, timeframe, limit=1: [{"close": 100.0, "open_time": HOUR}])
+    monkeypatch.setattr(run.supabase, "get_signal_by_identity", lambda *a: None)
+
+    lifecycle_calls = []
+    monkeypatch.setattr(run.supabase, "publish_lifecycle", lambda *a, **k: lifecycle_calls.append(a))
+
+    run.recheck_lifecycles(NOW, engine_settings=None)
+
+    assert lifecycle_calls == []
+
+
+def test_recheck_lifecycles_reuses_one_candle_read_per_symbol_timeframe(monkeypatch):
+    # Two open rows sharing the same symbol/timeframe must only spend one
+    # get_recent_candles call between them.
+    monkeypatch.setattr(
+        run.supabase,
+        "get_open_lifecycle_rows",
+        lambda: [_lifecycle_row("WATCH", candle_time=0), _lifecycle_row("WAIT", candle_time=HOUR)],
+    )
+    calls = []
+
+    def counting_get_recent_candles(symbol, timeframe, limit=1):
+        calls.append((symbol, timeframe))
+        return [{"close": 100.0, "open_time": HOUR}]
+
+    monkeypatch.setattr(run.supabase, "get_recent_candles", counting_get_recent_candles)
+    monkeypatch.setattr(run.supabase, "get_signal_by_identity", lambda *a: _tracked_signal(candle_time=a[2]))
+    monkeypatch.setattr(run.supabase, "publish_lifecycle", lambda *a, **k: None)
+    monkeypatch.setattr(run.supabase, "publish_lifecycle_transition", lambda *a, **k: None)
+
+    run.recheck_lifecycles(NOW, engine_settings=None)
+
+    assert len(calls) == 1
+
+
+def test_recheck_lifecycles_is_a_no_op_with_no_open_rows(monkeypatch):
+    monkeypatch.setattr(run.supabase, "get_open_lifecycle_rows", lambda: [])
+    calls = []
+    monkeypatch.setattr(run.supabase, "get_recent_candles", lambda *a, **k: calls.append(1))
+
+    run.recheck_lifecycles(NOW, engine_settings=None)
+
+    assert calls == []

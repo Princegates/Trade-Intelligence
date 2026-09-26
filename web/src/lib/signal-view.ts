@@ -3,7 +3,7 @@
 // consensus maths and the staleness rule are ordinary functions, and keeping
 // them behind a server-only import made them untestable.
 
-import type { SuppressionReason, Verdict } from "@/lib/supabase/types";
+import type { LifecycleState, SuppressionReason, Verdict } from "@/lib/supabase/types";
 
 export interface SignalView {
   symbol: string;
@@ -56,6 +56,13 @@ export interface SignalView {
    * HOLD or when unavailable, same contract as invalidationLevel (see
    * src/signals/entry_zone.py::entry_zone()). */
   entryZone: { low: number; high: number } | null;
+  /** How this signal's entry thesis is progressing since publication —
+   * re-evaluated on every scheduled run (src/run.py::recheck_lifecycles()),
+   * unlike every other field here which is fixed at generation time. Null
+   * for HOLD and ATR-fallback calls, which never get a lifecycle row at
+   * all (src/signals/lifecycle.py::tracks()). See src/signals/
+   * lifecycle.py for what each state means. */
+  lifecycle: { state: LifecycleState; enteredAt: string } | null;
 }
 
 export interface SuppressionView {

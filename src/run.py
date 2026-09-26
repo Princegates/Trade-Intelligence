@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from . import config, quality
 from .ai import commentary
 from .ingest import binance, calendar, twelvedata
-from .signals import confluence, engine, event_risk
+from .signals import confluence, engine, event_risk, lifecycle
 from .storage import db, supabase
 
 
@@ -226,11 +226,89 @@ def process(instrument, timeframe, now, events=(), engine_settings=None):
         # signal over and over for nothing new to say.
         if stored:
             _generate_commentary(symbol, timeframe, candle_time, price, result)
+            if lifecycle.tracks(result):
+                _mirror(
+                    supabase.publish_lifecycle,
+                    symbol,
+                    timeframe,
+                    candle_time,
+                    config.STRATEGY_VERSION,
+                    "WAIT",
+                    now,
+                    now,
+                    price,
+                    candle_time,
+                )
 
     if not stored:
         return f"[kept] {symbol}/{timeframe}: candle already called, original signal left untouched"
 
     return f"{symbol}/{timeframe}: {result['verdict']} (score {result['score']:+d}) @ {price} — {reasoning_text}"
+
+
+def recheck_lifecycles(now, engine_settings=None):
+    """Re-evaluates every open (WAIT/WATCH/READY) signal_lifecycle row
+    against the latest closed candle for its symbol/timeframe — the one
+    piece of this job that revisits something already published, since
+    everything else in src/run.py only ever looks at the newest candle
+    going forward (see src/signals/lifecycle.py for why signals can't just
+    be re-scored in place: it's hard append-only).
+
+    Reads only Supabase's own already-mirrored signals/candles tables —
+    never a fresh fetch from Binance/Twelve Data — so this costs zero
+    provider-quota requests regardless of how many rows are open.
+    `candle_cache` avoids a redundant candles read per row when several
+    open rows share the same symbol/timeframe.
+    """
+    open_rows = supabase.get_open_lifecycle_rows()
+    if not open_rows:
+        return
+
+    candle_cache = {}
+    for row in open_rows:
+        key = (row["symbol"], row["timeframe"])
+        if key not in candle_cache:
+            recent = supabase.get_recent_candles(*key, limit=1)
+            candle_cache[key] = recent[-1] if recent else None
+        candle = candle_cache[key]
+        if candle is None:
+            continue
+
+        signal = supabase.get_signal_by_identity(
+            row["symbol"], row["timeframe"], row["candle_time"], row["strategy_version"]
+        )
+        if signal is None:
+            continue
+
+        timeframe_seconds = config.TIMEFRAME_SECONDS[row["timeframe"]]
+        new_state = lifecycle.next_state(
+            row, signal, candle["close"], candle["open_time"], timeframe_seconds, engine_settings
+        )
+        entered_at = now if new_state != row["state"] else row["entered_at"]
+
+        _mirror(
+            supabase.publish_lifecycle,
+            row["symbol"],
+            row["timeframe"],
+            row["candle_time"],
+            row["strategy_version"],
+            new_state,
+            entered_at,
+            now,
+            candle["close"],
+            candle["open_time"],
+        )
+        if new_state != row["state"]:
+            _mirror(
+                supabase.publish_lifecycle_transition,
+                row["symbol"],
+                row["timeframe"],
+                row["candle_time"],
+                row["strategy_version"],
+                row["state"],
+                new_state,
+                candle["close"],
+            )
 
 
 def main():
@@ -262,6 +340,11 @@ def main():
     for instrument in config.INSTRUMENTS:
         for timeframe in instrument["timeframes"]:
             print(process(instrument, timeframe, now, events=events, engine_settings=engine_settings))
+
+    # After every pair has had a chance to mirror its freshest candle —
+    # recheck_lifecycles() reads that mirror back, so it must run last.
+    if supabase.is_configured():
+        recheck_lifecycles(now, engine_settings)
 
 
 if __name__ == "__main__":

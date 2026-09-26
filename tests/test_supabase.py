@@ -395,3 +395,142 @@ def test_recent_candles_failure_is_swallowed_not_raised(monkeypatch):
     monkeypatch.setattr(supabase.requests, "get", boom)
 
     assert supabase.get_recent_candles("BTCUSDT", "1h") == []
+
+
+def test_lifecycle_is_published_with_a_merge_on_conflict(monkeypatch):
+    # Unlike every other _insert() caller (signals, commentary — all
+    # ignore-duplicates), a lifecycle row must genuinely overwrite the
+    # existing row for this identity, since its whole point is to change.
+    _configured(monkeypatch)
+    captured = _capture(monkeypatch)
+
+    ok = supabase.publish_lifecycle(
+        "BTCUSDT", "1h", 1_699_996_400, "3.1.0", "READY", 1_700_000_000, 1_700_000_100, 50250.0, 1_699_996_400
+    )
+
+    assert ok is True
+    assert captured["url"] == "https://project.supabase.co/rest/v1/signal_lifecycle"
+    assert captured["params"]["on_conflict"] == "symbol,timeframe,candle_time,strategy_version"
+    assert "resolution=merge-duplicates" in captured["headers"]["Prefer"]
+    row = captured["json"][0]
+    assert row["state"] == "READY"
+    assert row["last_price"] == 50250.0
+
+
+def test_lifecycle_transition_is_published_without_a_merge_on_conflict(monkeypatch):
+    # A transition, once logged, is never meant to be overwritten — the
+    # default ignore-duplicates behavior is correct here, unlike
+    # publish_lifecycle above.
+    _configured(monkeypatch)
+    captured = _capture(monkeypatch)
+
+    ok = supabase.publish_lifecycle_transition("BTCUSDT", "1h", 1_699_996_400, "3.1.0", "WATCH", "READY", 50250.0)
+
+    assert ok is True
+    assert captured["url"] == "https://project.supabase.co/rest/v1/signal_lifecycle_transitions"
+    assert "resolution=merge-duplicates" not in captured["headers"]["Prefer"]
+    row = captured["json"][0]
+    assert row["from_state"] == "WATCH"
+    assert row["to_state"] == "READY"
+
+
+def test_open_lifecycle_rows_are_empty_when_unconfigured(monkeypatch):
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
+
+    assert supabase.get_open_lifecycle_rows() == []
+
+
+def test_open_lifecycle_rows_filter_to_non_terminal_states(monkeypatch):
+    _configured(monkeypatch)
+    captured = {}
+
+    def fake_get(url, **kwargs):
+        captured.update(kwargs)
+        return _JsonResponse(
+            [
+                {
+                    "symbol": "BTCUSDT",
+                    "timeframe": "1h",
+                    "candle_time": "2023-11-14T22:13:20+00:00",
+                    "strategy_version": "3.1.0",
+                    "state": "WATCH",
+                    "entered_at": "2023-11-14T22:13:20+00:00",
+                }
+            ]
+        )
+
+    monkeypatch.setattr(supabase.requests, "get", fake_get)
+
+    rows = supabase.get_open_lifecycle_rows()
+
+    assert captured["params"]["state"] == "in.(WAIT,WATCH,READY)"
+    assert len(rows) == 1
+    assert rows[0]["state"] == "WATCH"
+    assert rows[0]["candle_time"] == 1_700_000_000.0
+
+
+def test_open_lifecycle_rows_failure_is_swallowed_not_raised(monkeypatch):
+    _configured(monkeypatch)
+
+    def boom(*a, **k):
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr(supabase.requests, "get", boom)
+
+    assert supabase.get_open_lifecycle_rows() == []
+
+
+def test_signal_by_identity_is_none_when_unconfigured(monkeypatch):
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
+
+    assert supabase.get_signal_by_identity("BTCUSDT", "1h", 1_699_996_400, "3.1.0") is None
+
+
+def test_signal_by_identity_queries_the_full_tuple(monkeypatch):
+    _configured(monkeypatch)
+    captured = {}
+
+    def fake_get(url, **kwargs):
+        captured.update(kwargs)
+        return _JsonResponse(
+            [
+                {
+                    "verdict": "BUY",
+                    "entry": 50000.0,
+                    "stop": 49500.0,
+                    "candle_time": "2023-11-14T22:13:20+00:00",
+                    "invalidation_level": 49400.0,
+                    "entry_zone_low": 49900.0,
+                    "entry_zone_high": 50100.0,
+                }
+            ]
+        )
+
+    monkeypatch.setattr(supabase.requests, "get", fake_get)
+
+    signal = supabase.get_signal_by_identity("BTCUSDT", "1h", 1_699_996_400, "3.1.0")
+
+    assert captured["params"]["candle_time"] == "eq.2023-11-14T21:13:20+00:00"
+    assert captured["params"]["strategy_version"] == "eq.3.1.0"
+    assert signal["verdict"] == "BUY"
+    assert signal["candle_time"] == 1_700_000_000.0
+
+
+def test_signal_by_identity_is_none_when_no_row_matches(monkeypatch):
+    _configured(monkeypatch)
+    monkeypatch.setattr(supabase.requests, "get", lambda *a, **k: _JsonResponse([]))
+
+    assert supabase.get_signal_by_identity("BTCUSDT", "1h", 1_699_996_400, "3.1.0") is None
+
+
+def test_signal_by_identity_failure_is_swallowed_not_raised(monkeypatch):
+    _configured(monkeypatch)
+
+    def boom(*a, **k):
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr(supabase.requests, "get", boom)
+
+    assert supabase.get_signal_by_identity("BTCUSDT", "1h", 1_699_996_400, "3.1.0") is None

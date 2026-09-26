@@ -16,6 +16,11 @@ export type SuppressionReason =
   | "INSUFFICIENT_HISTORY"
   | "STALE_DATA";
 
+// Mirrors src/signals/lifecycle.py's ORDER + TERMINAL. Only a directional
+// call with real structural entry-zone/invalidation data ever gets a row
+// (lifecycle.py::tracks()) — HOLD and ATR-fallback calls never do.
+export type LifecycleState = "WAIT" | "WATCH" | "READY" | "CONFIRMED" | "INVALIDATED" | "EXPIRED";
+
 export interface Database {
   public: {
     Tables: {
@@ -354,6 +359,41 @@ export interface Database {
         // Written once by the cron job's service_role key; nothing in the
         // web app ever updates a row here.
         Update: never;
+        Relationships: [];
+      };
+      signal_lifecycle: {
+        Row: {
+          symbol: string;
+          timeframe: string;
+          candle_time: string;
+          strategy_version: string;
+          state: LifecycleState;
+          entered_at: string;
+          updated_at: string;
+          last_price: number | null;
+          last_checked_candle_time: string | null;
+        };
+        Insert: {
+          symbol: string;
+          timeframe: string;
+          candle_time: string;
+          strategy_version: string;
+          state?: LifecycleState;
+          entered_at?: string;
+          updated_at?: string;
+          last_price?: number | null;
+          last_checked_candle_time?: string | null;
+        };
+        // Genuinely mutable, unlike every other table here — the cron
+        // job's service_role key re-upserts this row on every re-check
+        // (src/run.py::recheck_lifecycles()).
+        Update: {
+          state?: LifecycleState;
+          entered_at?: string;
+          updated_at?: string;
+          last_price?: number | null;
+          last_checked_candle_time?: string | null;
+        };
         Relationships: [];
       };
     };

@@ -48,7 +48,14 @@ def _utc(epoch_seconds):
     return datetime.fromtimestamp(epoch_seconds, timezone.utc).isoformat()
 
 
-def _insert(table, row, on_conflict=None):
+def _insert(table, row, on_conflict=None, resolution="ignore-duplicates"):
+    """`resolution` only matters when `on_conflict` is given — defaults to
+    ignore-duplicates (never rewrite an existing row, the correct behavior
+    for every append-only-flavored table this function serves). Pass
+    "merge-duplicates" for a genuinely upsertable table (e.g.
+    signal_lifecycle), matching how publish_candles/publish_events already
+    hand-roll that Prefer header themselves rather than going through this
+    function."""
     credentials = _credentials()
     if credentials is None:
         return False
@@ -58,7 +65,7 @@ def _insert(table, row, on_conflict=None):
     params = {}
     if on_conflict:
         params["on_conflict"] = on_conflict
-        prefer.append("resolution=ignore-duplicates")
+        prefer.append(f"resolution={resolution}")
 
     response = requests.post(
         f"{url}/rest/v1/{table}",
@@ -340,6 +347,142 @@ def publish_commentary(symbol, timeframe, candle_time, strategy_version, comment
         },
         on_conflict=SIGNAL_IDENTITY,
     )
+
+
+def publish_lifecycle(
+    symbol,
+    timeframe,
+    candle_time,
+    strategy_version,
+    state,
+    entered_at,
+    updated_at,
+    last_price,
+    last_checked_candle_time,
+):
+    """Upserts a tracked signal's current lifecycle state (src/signals/
+    lifecycle.py, web/supabase/migrations/0018_signal_lifecycle.sql) —
+    genuinely overwrites the existing row for this identity, unlike every
+    other _insert() caller here, since state must change over the row's
+    life. See src/run.py::recheck_lifecycles()."""
+    return _insert(
+        "signal_lifecycle",
+        {
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "candle_time": _utc(candle_time),
+            "strategy_version": strategy_version,
+            "state": state,
+            "entered_at": _utc(entered_at),
+            "updated_at": _utc(updated_at),
+            "last_price": last_price,
+            "last_checked_candle_time": _utc(last_checked_candle_time),
+        },
+        on_conflict=SIGNAL_IDENTITY,
+        resolution="merge-duplicates",
+    )
+
+
+def publish_lifecycle_transition(symbol, timeframe, candle_time, strategy_version, from_state, to_state, price):
+    """Logs an actual state change — never called for a re-check that
+    leaves the state unchanged, so this table stays a small, append-only
+    record of transitions rather than growing on every ~5-minute poll."""
+    return _insert(
+        "signal_lifecycle_transitions",
+        {
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "candle_time": _utc(candle_time),
+            "strategy_version": strategy_version,
+            "from_state": from_state,
+            "to_state": to_state,
+            "price": price,
+        },
+    )
+
+
+def get_open_lifecycle_rows():
+    """Every signal_lifecycle row still in a non-terminal state (WAIT/
+    WATCH/READY), for src/run.py::recheck_lifecycles() to re-evaluate.
+    Timestamps come back converted to epoch seconds (same
+    datetime.fromisoformat(...).timestamp() pattern as get_recent_candles/
+    newest_mirrored_candle above), since src/signals/lifecycle.py::
+    next_state() does epoch arithmetic. Returns [] on any failure or when
+    unconfigured — a missing/unreachable project simply re-checks nothing
+    this run rather than failing it.
+    """
+    credentials = _credentials()
+    if credentials is None:
+        return []
+
+    url, key = credentials
+    try:
+        response = requests.get(
+            f"{url}/rest/v1/signal_lifecycle",
+            params={
+                "state": "in.(WAIT,WATCH,READY)",
+                "select": "symbol,timeframe,candle_time,strategy_version,state,entered_at",
+            },
+            headers={"apikey": key, "Authorization": f"Bearer {key}"},
+            timeout=TIMEOUT,
+        )
+        response.raise_for_status()
+        rows = response.json()
+    except Exception:
+        return []
+
+    return [
+        {
+            "symbol": r["symbol"],
+            "timeframe": r["timeframe"],
+            "candle_time": datetime.fromisoformat(r["candle_time"]).timestamp(),
+            "strategy_version": r["strategy_version"],
+            "state": r["state"],
+            "entered_at": datetime.fromisoformat(r["entered_at"]).timestamp(),
+        }
+        for r in rows
+    ]
+
+
+def get_signal_by_identity(symbol, timeframe, candle_time, strategy_version):
+    """The one signal matching this exact identity tuple — the read
+    primitive nothing in this codebase needed before Phase 2b, since every
+    other read is "latest" or "most recent N". Used by
+    src/run.py::recheck_lifecycles() to fetch a tracked signal's own fixed
+    verdict/entry/stop/invalidation_level/entry_zone for re-evaluation,
+    never recomputed. Returns None on any failure, no match, or when
+    unconfigured.
+    """
+    credentials = _credentials()
+    if credentials is None:
+        return None
+
+    url, key = credentials
+    try:
+        response = requests.get(
+            f"{url}/rest/v1/signals",
+            params={
+                "symbol": f"eq.{symbol}",
+                "timeframe": f"eq.{timeframe}",
+                "candle_time": f"eq.{_utc(candle_time)}",
+                "strategy_version": f"eq.{strategy_version}",
+                "select": "verdict,entry,stop,candle_time,invalidation_level,entry_zone_low,entry_zone_high",
+                "limit": "1",
+            },
+            headers={"apikey": key, "Authorization": f"Bearer {key}"},
+            timeout=TIMEOUT,
+        )
+        response.raise_for_status()
+        rows = response.json()
+    except Exception:
+        return None
+
+    if not rows:
+        return None
+
+    row = rows[0]
+    row["candle_time"] = datetime.fromisoformat(row["candle_time"]).timestamp()
+    return row
 
 
 def publish_suppression(symbol, timeframe, observed_at, reason, detail=""):

@@ -25,6 +25,21 @@ function marketPhaseVariant(phase: string) {
   return "warning" as const; // IMPULSE — a leg already underway, worth a second look before chasing.
 }
 
+/** Same local-function-per-file convention as verdictVariant/
+ * marketPhaseVariant above — see src/signals/lifecycle.py for what each
+ * state means. CONFIRMED reuses "success" (the favorable outcome),
+ * INVALIDATED reuses "destructive" (the call was wrong), READY gets the
+ * theme's own accent color since it's the one state that means "act now."
+ */
+function lifecycleVariant(state: string) {
+  if (state === "CONFIRMED") return "success" as const;
+  if (state === "INVALIDATED") return "destructive" as const;
+  if (state === "READY") return "default" as const;
+  if (state === "WATCH") return "warning" as const;
+  if (state === "EXPIRED") return "secondary" as const;
+  return "outline" as const; // WAIT
+}
+
 const money = (n: number) => `$${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
 function Row({ label, value, hint }: { label: string; value: string; hint: string }) {
@@ -148,6 +163,9 @@ export function SignalCard({ signal, locked = false }: { signal: SignalView; loc
             <>
               <div className="mb-3 flex flex-wrap items-center gap-2">
                 <Badge variant={verdictVariant(signal.verdict)}>{signal.verdict}</Badge>
+                {signal.lifecycle && (
+                  <Badge variant={lifecycleVariant(signal.lifecycle.state)}>{signal.lifecycle.state}</Badge>
+                )}
                 <span className="text-xs text-muted-foreground">
                   score {signal.score > 0 ? `+${signal.score}` : signal.score}
                 </span>
@@ -194,6 +212,14 @@ export function SignalCard({ signal, locked = false }: { signal: SignalView; loc
                   <span>{r}</span>
                 </li>
               ))}
+              {signal.lifecycle && (
+                <li className="flex gap-2">
+                  <span className="select-none text-border">&bull;</span>
+                  <span>
+                    Lifecycle: {signal.lifecycle.state} since {new Date(signal.lifecycle.enteredAt).toLocaleString()}
+                  </span>
+                </li>
+              )}
             </ul>
           </details>
 
