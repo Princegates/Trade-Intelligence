@@ -20,15 +20,16 @@ TIMEOUT = 15
 # already been called, so the mirror cannot rewrite a published signal either.
 SIGNAL_IDENTITY = "symbol,timeframe,candle_time,strategy_version"
 
-# ALIVEDESTINY's own identity tuples — a setup is keyed on the candle whose
+# GUDA SPECIAL's own identity tuples — a setup is keyed on the candle whose
 # close confirmed its BOS (a candle can produce at most one BOS, see
 # structure.break_of_structure()'s exclusive-branch structure), a published
 # signal on the same tuple once the setup resolves. Separate constants
 # because the two tables' column order/names differ from `signals`' own,
 # even though the underlying idea (identity = the tuple, not a surrogate
-# key) is the same. See web/supabase/migrations/0020_alivedestiny_setups.sql.
-ALIVEDESTINY_SETUP_IDENTITY = "symbol,timeframe,strategy_version,bos_candle_time"
-ALIVEDESTINY_SIGNAL_IDENTITY = "symbol,timeframe,bos_candle_time,strategy_version"
+# key) is the same. See web/supabase/migrations/0020_alivedestiny_setups.sql
+# (table names since renamed — see 0022_rename_alivedestiny_to_guda_special.sql).
+GUDA_SPECIAL_SETUP_IDENTITY = "symbol,timeframe,strategy_version,bos_candle_time"
+GUDA_SPECIAL_SIGNAL_IDENTITY = "symbol,timeframe,bos_candle_time,strategy_version"
 
 
 REST_SUFFIX = "/rest/v1"
@@ -495,9 +496,10 @@ def get_signal_by_identity(symbol, timeframe, candle_time, strategy_version):
     return row
 
 
-def get_alivedestiny_settings():
-    """ALIVEDESTINY's own admin-configured thresholds (web/supabase/
-    migrations/0021_alivedestiny_settings.sql), or None if unconfigured/
+def get_guda_special_settings():
+    """GUDA SPECIAL's own admin-configured thresholds (web/supabase/
+    migrations/0021_alivedestiny_settings.sql, table since renamed — see
+    0022_rename_alivedestiny_to_guda_special.sql), or None if unconfigured/
     unreachable/missing — same shape and degradation as
     get_engine_settings(). Every gate in src/signals/setups.py applies
     these as settings.get(key, DEFAULT), so a missing table degrades to
@@ -510,7 +512,7 @@ def get_alivedestiny_settings():
     url, key = credentials
     try:
         response = requests.get(
-            f"{url}/rest/v1/alivedestiny_settings",
+            f"{url}/rest/v1/guda_special_settings",
             params={"id": "eq.true", "select": "*", "limit": "1"},
             headers={"apikey": key, "Authorization": f"Bearer {key}"},
             timeout=TIMEOUT,
@@ -523,7 +525,7 @@ def get_alivedestiny_settings():
     return rows[0] if rows else None
 
 
-def publish_alivedestiny_setup(
+def publish_guda_special_setup(
     setup_id,
     symbol,
     timeframe,
@@ -546,16 +548,16 @@ def publish_alivedestiny_setup(
     invalidation_reason=None,
     resolution="merge-duplicates",
 ):
-    """Upserts one alivedestiny_setups row. `resolution` defaults to
+    """Upserts one guda_special_setups row. `resolution` defaults to
     merge-duplicates because — unlike every signals-table-adjacent writer
     in this file — this row is genuinely mutable across many runs (BOS
     detected -> impulse frozen -> retracement -> retest -> confirmation ->
     published/invalidated/expired). Detection-time creation
-    (src/run.py::detect_alivedestiny_setups()) passes resolution=
+    (src/run.py::detect_guda_special_setups()) passes resolution=
     "ignore-duplicates" instead, so a setup already created by an earlier
     run is never clobbered by a fresh (and immediately discarded) id."""
     return _insert(
-        "alivedestiny_setups",
+        "guda_special_setups",
         {
             "id": setup_id,
             "symbol": symbol,
@@ -578,22 +580,22 @@ def publish_alivedestiny_setup(
             "updated_at": _utc(updated_at),
             "invalidation_reason": invalidation_reason,
         },
-        on_conflict=ALIVEDESTINY_SETUP_IDENTITY,
+        on_conflict=GUDA_SPECIAL_SETUP_IDENTITY,
         resolution=resolution,
     )
 
 
-def publish_alivedestiny_setup_transition(setup_id, from_state, to_state, price):
+def publish_guda_special_setup_transition(setup_id, from_state, to_state, price):
     """Logs an actual setup state change — never called for a re-check
     that leaves the state unchanged, same "transitions only, not every
     poll" shape as publish_lifecycle_transition."""
     return _insert(
-        "alivedestiny_setup_transitions",
+        "guda_special_setup_transitions",
         {"setup_id": setup_id, "from_state": from_state, "to_state": to_state, "price": price},
     )
 
 
-def publish_alivedestiny_signal(
+def publish_guda_special_signal(
     symbol,
     timeframe,
     setup_id,
@@ -631,7 +633,7 @@ def publish_alivedestiny_signal(
     one row per resolved setup (default ignore-duplicates, same
     never-rewrite contract as publish_signal)."""
     return _insert(
-        "alivedestiny_signals",
+        "guda_special_signals",
         {
             "symbol": symbol,
             "timeframe": timeframe,
@@ -666,15 +668,15 @@ def publish_alivedestiny_signal(
             "risk_reward": risk_reward,
             "regime": regime,
         },
-        on_conflict=ALIVEDESTINY_SIGNAL_IDENTITY,
+        on_conflict=GUDA_SPECIAL_SIGNAL_IDENTITY,
     )
 
 
-def get_open_alivedestiny_setups():
-    """Every alivedestiny_setups row still in a non-terminal state, across
+def get_open_guda_special_setups():
+    """Every guda_special_setups row still in a non-terminal state, across
     every pair — same "fetch everything once, let the caller group by
     (symbol, timeframe) itself" shape as get_open_lifecycle_rows(), so
-    src/run.py::advance_alivedestiny_setups() can dedupe candle reads
+    src/run.py::advance_guda_special_setups() can dedupe candle reads
     across multiple open setups sharing a pair. Timestamps come back
     converted to epoch seconds. Returns [] on any failure or when
     unconfigured.
@@ -686,7 +688,7 @@ def get_open_alivedestiny_setups():
     url, key = credentials
     try:
         response = requests.get(
-            f"{url}/rest/v1/alivedestiny_setups",
+            f"{url}/rest/v1/guda_special_setups",
             params={
                 "state": "not.in.(PUBLISHED,INVALIDATED,EXPIRED)",
                 "select": (

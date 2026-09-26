@@ -1,4 +1,4 @@
-"""ALIVEDESTINY orchestrator — the setup state machine.
+"""GUDA SPECIAL orchestrator — the setup state machine.
 
 Two entry points: `detect_new_setups()` finds a fresh Break of Structure
 and starts tracking it; `advance_setup()` walks an already-open setup
@@ -59,7 +59,7 @@ def detect_new_setups(candles, settings=None):
 
 def advance_setup(setup, candles, htf_candles, timeframe_seconds, settings=None):
     """Walks one open setup forward given fresh candle history. Returns
-    {"setup": <updated fields>, "signal": <alivedestiny_signals row or
+    {"setup": <updated fields>, "signal": <guda_special_signals row or
     None>}. `setup` is the current signal_lifecycle-style row (state,
     bos_direction, bos_price, bos_candle_time, and, once frozen, the
     impulse/fib fields — see below). `candles`/`htf_candles` are this

@@ -1,4 +1,4 @@
-"""Structure-retest validation for ALIVEDESTINY.
+"""Structure-retest validation for GUDA SPECIAL.
 
 Touching the Fibonacci band is not, on its own, evidence the broken
 structure level is holding as new support/resistance — that requires price

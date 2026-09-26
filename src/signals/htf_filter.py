@@ -1,8 +1,8 @@
-"""Graduated higher-timeframe filter for ALIVEDESTINY.
+"""Graduated higher-timeframe filter for GUDA SPECIAL.
 
 `confluence.higher_timeframe_bias()` (reused here unchanged) gives the raw
 1H read; `confluence.opposes()` is strictly binary veto-only, built for the
-confluence engine's own gate chain. ALIVEDESTINY wants a genuinely
+confluence engine's own gate chain. GUDA SPECIAL wants a genuinely
 graduated response instead — prefer aligned/neutral, and let an admin
 choose whether a conflict is only noted, downgrades the setup, or rejects
 it outright — so this is new logic layered on top of the same raw bias
@@ -14,7 +14,7 @@ still needs untouched).
 def evaluate(verdict_direction, htf_bias, mode):
     """`verdict_direction` is 1 for a bullish call, -1 for bearish.
     `htf_bias` is "up"/"down"/"range"/None. `mode` is
-    alivedestiny_settings.htf_filter_mode: "advisory" (never blocks),
+    guda_special_settings.htf_filter_mode: "advisory" (never blocks),
     "downgrade" (flagged but never blocks), or "strict_veto" (a real
     conflict rejects the setup). Returns {"outcome", "reason"} —
     "outcome" is one of ALIGNED/NEUTRAL/DOWNGRADED/REJECTED."""

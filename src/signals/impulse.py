@@ -1,4 +1,4 @@
-"""Break classification and impulse measurement for ALIVEDESTINY.
+"""Break classification and impulse measurement for GUDA SPECIAL.
 
 `structure.break_of_structure()` already enforces "a wick alone doesn't
 qualify" (it only fires on a closed candle's close, never a high/low) — so

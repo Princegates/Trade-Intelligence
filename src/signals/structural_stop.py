@@ -1,9 +1,9 @@
-"""Structural stop/target engine for ALIVEDESTINY.
+"""Structural stop/target engine for GUDA SPECIAL.
 
 Deliberately its own module rather than an extension of entry_zone.py:
 that module's every function is keyed to the confluence engine's own
 `nearest_levels()` shape (nearest support/resistance to CURRENT price).
-ALIVEDESTINY's stop is anchored to the confirmation-candle FORMATION
+GUDA SPECIAL's stop is anchored to the confirmation-candle FORMATION
 itself (spec: "SL = lowest low of the formation" for a Morning Star, "SL =
 relevant confirmation structure low" for an Engulfing) — a different,
 setup-specific anchor, not "nearest level to price."

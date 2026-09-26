@@ -1,4 +1,4 @@
-"""Confirmation-candle quality classification for ALIVEDESTINY.
+"""Confirmation-candle quality classification for GUDA SPECIAL.
 
 `patterns.detect()` already decides WHETHER a candle is a valid Bullish/
 Bearish Engulfing or Morning/Evening Star. This module classifies HOW

@@ -1,4 +1,4 @@
-"""Fibonacci retracement engine for ALIVEDESTINY.
+"""Fibonacci retracement engine for GUDA SPECIAL.
 
 These levels are never automatic entry points (spec's own instruction) —
 they define the price band `setups.py` watches for a valid candlestick

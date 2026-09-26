@@ -536,25 +536,25 @@ def test_signal_by_identity_failure_is_swallowed_not_raised(monkeypatch):
     assert supabase.get_signal_by_identity("BTCUSDT", "1h", 1_699_996_400, "3.1.0") is None
 
 
-# --- ALIVEDESTINY ---------------------------------------------------------
+# --- GUDA SPECIAL -----------------------------------------------------
 
 
-def test_alivedestiny_settings_are_not_read_when_unconfigured(monkeypatch):
+def test_guda_special_settings_are_not_read_when_unconfigured(monkeypatch):
     monkeypatch.delenv("SUPABASE_URL", raising=False)
     monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
 
-    assert supabase.get_alivedestiny_settings() is None
+    assert supabase.get_guda_special_settings() is None
 
 
-def test_alivedestiny_settings_return_the_singleton_row(monkeypatch):
+def test_guda_special_settings_return_the_singleton_row(monkeypatch):
     _configured(monkeypatch)
     row = {"swing_lookback": 2, "min_impulse_atr_multiple": 1.5, "htf_filter_mode": "downgrade"}
     monkeypatch.setattr(supabase.requests, "get", lambda *a, **k: _JsonResponse([row]))
 
-    assert supabase.get_alivedestiny_settings() == row
+    assert supabase.get_guda_special_settings() == row
 
 
-def test_alivedestiny_settings_failure_is_swallowed_not_raised(monkeypatch):
+def test_guda_special_settings_failure_is_swallowed_not_raised(monkeypatch):
     _configured(monkeypatch)
 
     def boom(*a, **k):
@@ -562,21 +562,21 @@ def test_alivedestiny_settings_failure_is_swallowed_not_raised(monkeypatch):
 
     monkeypatch.setattr(supabase.requests, "get", boom)
 
-    assert supabase.get_alivedestiny_settings() is None
+    assert supabase.get_guda_special_settings() is None
 
 
-def test_alivedestiny_setup_is_published_with_a_merge_on_conflict(monkeypatch):
+def test_guda_special_setup_is_published_with_a_merge_on_conflict(monkeypatch):
     # Like publish_lifecycle, a setup row is genuinely mutable across runs.
     _configured(monkeypatch)
     captured = _capture(monkeypatch)
 
-    ok = supabase.publish_alivedestiny_setup(
-        "11111111-1111-1111-1111-111111111111", "BTCUSDT", "15m", "alivedestiny-1.0.0",
+    ok = supabase.publish_guda_special_setup(
+        "11111111-1111-1111-1111-111111111111", "BTCUSDT", "15m", "guda-special-1.0.0",
         1_699_996_400, "BOS", 1, 50000.0, "STRONG", "IMPULSE_VALID", 1_700_000_000, 1_700_000_100,
     )
 
     assert ok is True
-    assert captured["url"] == "https://project.supabase.co/rest/v1/alivedestiny_setups"
+    assert captured["url"] == "https://project.supabase.co/rest/v1/guda_special_setups"
     assert captured["params"]["on_conflict"] == "symbol,timeframe,strategy_version,bos_candle_time"
     assert "resolution=merge-duplicates" in captured["headers"]["Prefer"]
     row = captured["json"][0]
@@ -584,12 +584,12 @@ def test_alivedestiny_setup_is_published_with_a_merge_on_conflict(monkeypatch):
     assert row["bos_direction"] == 1
 
 
-def test_alivedestiny_setup_creation_can_use_ignore_duplicates(monkeypatch):
+def test_guda_special_setup_creation_can_use_ignore_duplicates(monkeypatch):
     _configured(monkeypatch)
     captured = _capture(monkeypatch)
 
-    supabase.publish_alivedestiny_setup(
-        "11111111-1111-1111-1111-111111111111", "BTCUSDT", "15m", "alivedestiny-1.0.0",
+    supabase.publish_guda_special_setup(
+        "11111111-1111-1111-1111-111111111111", "BTCUSDT", "15m", "guda-special-1.0.0",
         1_699_996_400, "BOS", 1, 50000.0, "STRONG", "BOS_DETECTED", 1_700_000_000, 1_700_000_000,
         resolution="ignore-duplicates",
     )
@@ -597,47 +597,47 @@ def test_alivedestiny_setup_creation_can_use_ignore_duplicates(monkeypatch):
     assert "resolution=ignore-duplicates" in captured["headers"]["Prefer"]
 
 
-def test_alivedestiny_setup_transition_is_published_without_a_merge(monkeypatch):
+def test_guda_special_setup_transition_is_published_without_a_merge(monkeypatch):
     _configured(monkeypatch)
     captured = _capture(monkeypatch)
 
-    ok = supabase.publish_alivedestiny_setup_transition(
+    ok = supabase.publish_guda_special_setup_transition(
         "11111111-1111-1111-1111-111111111111", "RETEST_PENDING", "AWAITING_CONFIRMATION", 50100.0
     )
 
     assert ok is True
-    assert captured["url"] == "https://project.supabase.co/rest/v1/alivedestiny_setup_transitions"
+    assert captured["url"] == "https://project.supabase.co/rest/v1/guda_special_setup_transitions"
     assert "resolution=merge-duplicates" not in captured["headers"]["Prefer"]
     row = captured["json"][0]
     assert row["from_state"] == "RETEST_PENDING"
     assert row["to_state"] == "AWAITING_CONFIRMATION"
 
 
-def test_alivedestiny_signal_is_published_with_the_identity_on_conflict(monkeypatch):
+def test_guda_special_signal_is_published_with_the_identity_on_conflict(monkeypatch):
     _configured(monkeypatch)
     captured = _capture(monkeypatch)
 
-    ok = supabase.publish_alivedestiny_signal(
+    ok = supabase.publish_guda_special_signal(
         "BTCUSDT", "15m", "11111111-1111-1111-1111-111111111111", 1_699_996_400, 1_700_000_100,
-        "alivedestiny-1.0.0", "BUY", 50100.0, "Bullish Engulfing confirmed in the retracement zone.",
+        "guda-special-1.0.0", "BUY", 50100.0, "Bullish Engulfing confirmed in the retracement zone.",
         entry=50100.0, stop=49800.0, target=50700.0, risk_reward=2.0,
     )
 
     assert ok is True
-    assert captured["url"] == "https://project.supabase.co/rest/v1/alivedestiny_signals"
+    assert captured["url"] == "https://project.supabase.co/rest/v1/guda_special_signals"
     assert captured["params"]["on_conflict"] == "symbol,timeframe,bos_candle_time,strategy_version"
     row = captured["json"][0]
     assert row["verdict"] == "BUY"
     assert row["entry"] == 50100.0
 
 
-def test_alivedestiny_no_trade_signal_carries_its_reason(monkeypatch):
+def test_guda_special_no_trade_signal_carries_its_reason(monkeypatch):
     _configured(monkeypatch)
     captured = _capture(monkeypatch)
 
-    supabase.publish_alivedestiny_signal(
+    supabase.publish_guda_special_signal(
         "BTCUSDT", "15m", "11111111-1111-1111-1111-111111111111", 1_699_996_400, 1_700_000_100,
-        "alivedestiny-1.0.0", "NO_TRADE", 50100.0, "NO TRADE — setup expired with no resolution.",
+        "guda-special-1.0.0", "NO_TRADE", 50100.0, "NO TRADE — setup expired with no resolution.",
         no_trade_reason="setup expired with no resolution",
     )
 
@@ -647,14 +647,14 @@ def test_alivedestiny_no_trade_signal_carries_its_reason(monkeypatch):
     assert row["entry"] is None
 
 
-def test_open_alivedestiny_setups_are_empty_when_unconfigured(monkeypatch):
+def test_open_guda_special_setups_are_empty_when_unconfigured(monkeypatch):
     monkeypatch.delenv("SUPABASE_URL", raising=False)
     monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
 
-    assert supabase.get_open_alivedestiny_setups() == []
+    assert supabase.get_open_guda_special_setups() == []
 
 
-def test_open_alivedestiny_setups_filter_to_non_terminal_states(monkeypatch):
+def test_open_guda_special_setups_filter_to_non_terminal_states(monkeypatch):
     _configured(monkeypatch)
     captured = {}
 
@@ -666,7 +666,7 @@ def test_open_alivedestiny_setups_filter_to_non_terminal_states(monkeypatch):
                     "id": "11111111-1111-1111-1111-111111111111",
                     "symbol": "BTCUSDT",
                     "timeframe": "15m",
-                    "strategy_version": "alivedestiny-1.0.0",
+                    "strategy_version": "guda-special-1.0.0",
                     "bos_candle_time": "2023-11-14T22:13:20+00:00",
                     "bos_kind": "BOS",
                     "bos_direction": 1,
@@ -687,7 +687,7 @@ def test_open_alivedestiny_setups_filter_to_non_terminal_states(monkeypatch):
 
     monkeypatch.setattr(supabase.requests, "get", fake_get)
 
-    rows = supabase.get_open_alivedestiny_setups()
+    rows = supabase.get_open_guda_special_setups()
 
     assert captured["params"]["state"] == "not.in.(PUBLISHED,INVALIDATED,EXPIRED)"
     assert len(rows) == 1
@@ -696,7 +696,7 @@ def test_open_alivedestiny_setups_filter_to_non_terminal_states(monkeypatch):
     assert rows[0]["entered_at"] == 1_700_000_000.0
 
 
-def test_open_alivedestiny_setups_failure_is_swallowed_not_raised(monkeypatch):
+def test_open_guda_special_setups_failure_is_swallowed_not_raised(monkeypatch):
     _configured(monkeypatch)
 
     def boom(*a, **k):
@@ -704,4 +704,4 @@ def test_open_alivedestiny_setups_failure_is_swallowed_not_raised(monkeypatch):
 
     monkeypatch.setattr(supabase.requests, "get", boom)
 
-    assert supabase.get_open_alivedestiny_setups() == []
+    assert supabase.get_open_guda_special_setups() == []

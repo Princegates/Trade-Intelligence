@@ -68,13 +68,13 @@ BINANCE_BASE_URL = os.environ.get("BINANCE_BASE_URL") or "https://api.binance.us
 # point totals, more accurate inputs.
 STRATEGY_VERSION = "3.1.0"
 
-# ALIVEDESTINY is a second, independent strategy (15m Break & Retest ->
+# GUDA SPECIAL is a second, independent strategy (15m Break & Retest ->
 # Fibonacci retracement -> candlestick confirmation) published alongside
 # the confluence engine above, never replacing it — its own lineage, own
-# tables (alivedestiny_setups/alivedestiny_signals), own version string, so
+# tables (guda_special_setups/guda_special_signals), own version string, so
 # the two are never confusable in a query or a dashboard filter. See
 # src/signals/setups.py.
-ALIVEDESTINY_STRATEGY_VERSION = "alivedestiny-1.0.0"
+GUDA_SPECIAL_STRATEGY_VERSION = "guda-special-1.0.0"
 
 INSTRUMENTS = [
     {
