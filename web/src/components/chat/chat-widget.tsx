@@ -10,7 +10,7 @@ import { sendChatMessage } from "@/lib/actions/chat";
 import type { ChatTurn } from "@/lib/gemini-chat";
 
 const STORAGE_KEY = "ti-chat-fab-pos";
-const FAB_SIZE = 96; // px — matches the size-24 button below
+const FAB_SIZE = 48; // px — matches the size-12 button below (half the previous 96px)
 const PANEL_WIDTH = 352; // 22rem
 const PANEL_HEIGHT = 448; // 28rem
 const MARGIN = 16;
@@ -258,7 +258,7 @@ export function ChatWidget({ fullAccess }: { fullAccess: boolean }) {
         type="button"
         variant="ghost"
         size="icon"
-        className={`fixed z-40 size-24 touch-none rounded-full bg-transparent transition-transform duration-200 hover:bg-transparent active:scale-95 ${
+        className={`fixed z-40 size-12 touch-none rounded-full bg-transparent transition-transform duration-200 hover:bg-transparent active:scale-95 ${
           dragging ? "cursor-grabbing" : "cursor-grab hover:scale-110"
         } ${invitePulse && !dragging ? "chat-fab-idle" : ""}`}
         style={{ left: pos.x, top: pos.y }}
@@ -268,10 +268,10 @@ export function ChatWidget({ fullAccess }: { fullAccess: boolean }) {
         onPointerCancel={handlePointerUp}
         aria-label={open ? "Close Guda" : fullAccess ? "Open Guda — drag to move" : "Open Guda (requires full access) — drag to move"}
       >
-        <ChatMascot open={open} />
+        <ChatMascot open={open} size="3rem" />
         {!fullAccess && (
-          <span className="pointer-events-none absolute bottom-1 right-1 flex size-6 items-center justify-center rounded-full border-2 border-background bg-muted text-muted-foreground">
-            <Lock className="size-3" />
+          <span className="pointer-events-none absolute bottom-0 right-0 flex size-4 items-center justify-center rounded-full border border-background bg-muted text-muted-foreground">
+            <Lock className="size-2.5" />
           </span>
         )}
       </Button>
