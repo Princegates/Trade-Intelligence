@@ -1,16 +1,26 @@
+import Link from "next/link";
 import { AssetSection } from "@/components/dashboard/asset-section";
 import { SuppressionList } from "@/components/dashboard/suppression-list";
 import { buildAssetPanel } from "@/lib/asset-panel";
 import { ASSET_NAMES, getLatestSignals, getRecentSuppressions, unresolvedSuppressions } from "@/lib/signals";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { requireUser } from "@/lib/auth";
+import { hasFullAccess } from "@/lib/access";
 
 /** One asset's own dashboard entry — the same section the Overview page
  * shows, on a page of its own, with feed health scoped to just this
  * instrument rather than both. Shared by /dashboard/bitcoin and
- * /dashboard/gold so the two never drift into two different layouts. */
+ * /dashboard/gold so the two never drift into two different layouts.
+ *
+ * The per-timeframe detail (reasoning, levels, patterns, AI take) is the
+ * one thing this page has that the Overview doesn't — same "basic view"
+ * gate as the History page, just gating detail instead of row count. */
 export async function AssetPage({ symbol }: { symbol: string }) {
   const name = ASSET_NAMES[symbol] ?? symbol;
+
+  const user = await requireUser();
+  const fullAccess = hasFullAccess(user);
 
   const [{ source, signals }, allSuppressions] = await Promise.all([getLatestSignals(), getRecentSuppressions()]);
 
@@ -31,6 +41,23 @@ export async function AssetPage({ symbol }: { symbol: string }) {
         </Badge>
       )}
 
+      {!fullAccess && (
+        <Card>
+          <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">
+              You&apos;re on the basic view — only the consensus verdict is shown. Ask your admin for an access code
+              to unlock full reasoning, levels, and patterns for every timeframe.
+            </p>
+            <Link
+              href="/dashboard/settings"
+              className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+            >
+              Redeem a code
+            </Link>
+          </CardContent>
+        </Card>
+      )}
+
       <SuppressionList suppressions={suppressions} showSymbol={false} />
 
       {source === "live" && data.group.length === 0 ? (
@@ -41,7 +68,7 @@ export async function AssetPage({ symbol }: { symbol: string }) {
           </CardContent>
         </Card>
       ) : (
-        <AssetSection data={data} bordered={false} />
+        <AssetSection data={data} bordered={false} detailed={fullAccess} showAllLink={false} />
       )}
     </div>
   );

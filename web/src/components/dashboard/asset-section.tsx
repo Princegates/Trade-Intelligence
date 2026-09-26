@@ -23,15 +23,23 @@ const ASSET_ROUTES: Record<string, string> = {
  *
  * `bordered` draws its own box around the section — on, when several of
  * these sit stacked on one page (the Overview), off, when the asset already
- * has the whole page to itself (its own dashboard entry). */
+ * has the whole page to itself (its own dashboard entry).
+ *
+ * `showAllLink` controls the "All N timeframes" link that appears whenever
+ * `detailed` is off — the Overview needs it (that's how you get to the
+ * detail), but the asset's own page (AssetPage) doesn't: when it renders
+ * `detailed={false}` for a basic-view user, the link's target would be the
+ * very page already on screen. */
 export function AssetSection({
   data,
   bordered = true,
   detailed = true,
+  showAllLink = true,
 }: {
   data: AssetPanelData;
   bordered?: boolean;
   detailed?: boolean;
+  showAllLink?: boolean;
 }) {
   const { symbol, group, consensus, candlesByTimeframe } = data;
   const route = ASSET_ROUTES[symbol];
@@ -43,7 +51,7 @@ export function AssetSection({
           <h3 className="text-base font-semibold">{ASSET_NAMES[symbol] ?? symbol}</h3>
           <span className="text-xs uppercase tracking-wide text-muted-foreground">{symbol}</span>
         </div>
-        {!detailed && route && (
+        {!detailed && showAllLink && route && (
           <Link
             href={route}
             className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
