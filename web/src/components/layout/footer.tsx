@@ -16,6 +16,17 @@ export function Footer() {
           <Link href="/login" className="hover:text-foreground">Log in</Link>
         </nav>
       </div>
+      <div className="border-t border-border py-4 text-center text-xs text-muted-foreground">
+        Powered by{" "}
+        <a
+          href="https://www.anknovate.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-medium hover:text-foreground"
+        >
+          Anknovate IT Services
+        </a>
+      </div>
     </footer>
   );
 }
