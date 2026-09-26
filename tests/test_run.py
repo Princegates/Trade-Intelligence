@@ -248,6 +248,11 @@ def _buy_result():
         "confidence": None,
         "patterns": [],
         "levels": {"entry": 100.0, "stop": 95.0, "target": 107.5, "buy_above": None, "sell_below": None},
+        "regime": "TRENDING",
+        "market_phase": "IMPULSE",
+        "invalidation_level": None,
+        "entry_zone_low": None,
+        "entry_zone_high": None,
     }
 
 
@@ -365,6 +370,11 @@ def test_process_reads_the_anchor_timeframes_bias_from_local_storage(temp_db, mo
             "confidence": None,
             "patterns": [],
             "levels": None,
+            "regime": "RANGING",
+            "market_phase": "CONSOLIDATION",
+            "invalidation_level": None,
+            "entry_zone_low": None,
+            "entry_zone_high": None,
         }
 
     monkeypatch.setattr(run.engine, "evaluate", capture_evaluate)
@@ -412,6 +422,11 @@ def test_engine_settings_are_threaded_through_to_evaluate(temp_db, monkeypatch):
             "confidence": None,
             "patterns": [],
             "levels": None,
+            "regime": "RANGING",
+            "market_phase": "CONSOLIDATION",
+            "invalidation_level": None,
+            "entry_zone_low": None,
+            "entry_zone_high": None,
         }
 
     monkeypatch.setattr(run.engine, "evaluate", capture_evaluate)

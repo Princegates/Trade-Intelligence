@@ -45,7 +45,22 @@ function toView(row: SignalRow, aiCommentary: string | null = null): SignalView 
     levels: toLevels(row),
     aiCommentary,
     confluenceBias: row.confluence_bias ?? null,
+    regime: row.regime ?? null,
+    marketPhase: row.market_phase ?? null,
+    invalidationLevel: row.invalidation_level ?? null,
+    entryZone: toEntryZone(row),
   };
+}
+
+/** Same "only usable as a complete set" reasoning as toLevels() above — a
+ * database that predates migration 0016 returns `undefined` for these
+ * columns rather than null, and a half-populated band is worse than no
+ * band. */
+function toEntryZone(row: SignalRow): SignalView["entryZone"] {
+  const low = row.entry_zone_low ?? null;
+  const high = row.entry_zone_high ?? null;
+  if (low === null || high === null) return null;
+  return { low, high };
 }
 
 /** Levels are only usable as a complete set, and a database that predates

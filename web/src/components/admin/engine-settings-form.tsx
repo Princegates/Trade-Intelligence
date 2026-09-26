@@ -66,6 +66,9 @@ export function EngineSettingsForm({ settings }: { settings: EngineSettings }) {
     String(settings.confidenceVeryHighThreshold)
   );
   const [requireConfluence, setRequireConfluence] = useState(settings.requireHigherTimeframeConfluence);
+  const [structureBufferAtr, setStructureBufferAtr] = useState(String(settings.structureBufferAtr));
+  const [entryZoneWidthAtr, setEntryZoneWidthAtr] = useState(String(settings.entryZoneWidthAtr));
+  const [maxEntryZoneDistanceAtr, setMaxEntryZoneDistanceAtr] = useState(String(settings.maxEntryZoneDistanceAtr));
   const [state, formAction, pending] = useActionState(setEngineSettings, initialState);
 
   const unchanged =
@@ -75,7 +78,10 @@ export function EngineSettingsForm({ settings }: { settings: EngineSettings }) {
     minConfidenceThreshold === String(settings.minConfidenceThreshold) &&
     confidenceHighThreshold === String(settings.confidenceHighThreshold) &&
     confidenceVeryHighThreshold === String(settings.confidenceVeryHighThreshold) &&
-    requireConfluence === settings.requireHigherTimeframeConfluence;
+    requireConfluence === settings.requireHigherTimeframeConfluence &&
+    structureBufferAtr === String(settings.structureBufferAtr) &&
+    entryZoneWidthAtr === String(settings.entryZoneWidthAtr) &&
+    maxEntryZoneDistanceAtr === String(settings.maxEntryZoneDistanceAtr);
 
   return (
     <form action={formAction} className="space-y-4">
@@ -145,6 +151,36 @@ export function EngineSettingsForm({ settings }: { settings: EngineSettings }) {
           name="requireHigherTimeframeConfluence"
           checked={requireConfluence}
           onCheckedChange={setRequireConfluence}
+        />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <NumberField
+          id="structureBufferAtr"
+          label="Structure buffer (ATR)"
+          help="How far a structural stop sits beyond its swing level."
+          value={structureBufferAtr}
+          onChange={setStructureBufferAtr}
+          min={0.01}
+          step="0.05"
+        />
+        <NumberField
+          id="entryZoneWidthAtr"
+          label="Entry zone width (ATR)"
+          help="Half-width of the preferred-entry band around a structural level."
+          value={entryZoneWidthAtr}
+          onChange={setEntryZoneWidthAtr}
+          min={0.01}
+          step="0.05"
+        />
+        <NumberField
+          id="maxEntryZoneDistanceAtr"
+          label="Max entry-zone distance (ATR)"
+          help="A call whose price has run this many ATRs from its own entry zone is held instead of published. Live by default, not opt-in — unlike the R:R/confidence gates above."
+          value={maxEntryZoneDistanceAtr}
+          onChange={setMaxEntryZoneDistanceAtr}
+          min={0.01}
+          step="0.1"
         />
       </div>
 

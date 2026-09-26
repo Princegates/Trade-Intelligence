@@ -24,6 +24,10 @@ function signal(timeframe: string, minutes: number, symbol = "XAUUSD"): SignalVi
     levels: null,
     aiCommentary: null,
     confluenceBias: null,
+    regime: null,
+    marketPhase: null,
+    invalidationLevel: null,
+    entryZone: null,
   };
 }
 

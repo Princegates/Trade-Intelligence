@@ -12,6 +12,19 @@ function verdictVariant(v: string) {
   return "secondary" as const;
 }
 
+/** Mirrors verdictVariant's color language: destructive already means
+ * "something to be cautious about" (SELL), success already means the
+ * favorable read (BUY) — REVERSAL and PULLBACK reuse those same signals
+ * for a market-state label rather than a call. See
+ * src/signals/entry_zone.py::market_phase() for what each phase means. */
+function marketPhaseVariant(phase: string) {
+  if (phase === "PULLBACK") return "success" as const;
+  if (phase === "REVERSAL") return "destructive" as const;
+  if (phase === "CONSOLIDATION") return "secondary" as const;
+  if (phase === "BREAKOUT") return "outline" as const;
+  return "warning" as const; // IMPULSE — a leg already underway, worth a second look before chasing.
+}
+
 const money = (n: number) => `$${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
 function Row({ label, value, hint }: { label: string; value: string; hint: string }) {
@@ -31,9 +44,13 @@ function Row({ label, value, hint }: { label: string; value: string; hint: strin
 function SignalLevels({
   levels,
   verdict,
+  invalidationLevel,
+  entryZone,
 }: {
   levels: NonNullable<SignalView["levels"]>;
   verdict: SignalView["verdict"];
+  invalidationLevel: SignalView["invalidationLevel"];
+  entryZone: SignalView["entryZone"];
 }) {
   // A partial set is not renderable, and a signal predating the levels
   // migration has none. Showing nothing beats showing "$undefined".
@@ -42,12 +59,24 @@ function SignalLevels({
   const band = buyAbove != null && sellBelow != null;
   if (!directional && !band) return null;
 
+  // The structural level itself is only worth a separate row when it
+  // differs from the buffered stop — on an ATR-fallback call (no nearby
+  // structure yet) invalidationLevel is null and this never renders.
+  const showInvalidation = directional && invalidationLevel != null && invalidationLevel !== stop;
+
   return (
     <div className="mb-3 rounded-md border bg-muted/40 p-2.5">
       {directional ? (
         <>
           <Row label="Entry" value={money(entry)} hint="price when called" />
           <Row label="Stop" value={money(stop)} hint="exit; the call was wrong" />
+          {showInvalidation && (
+            <Row
+              label="Invalidation"
+              value={money(invalidationLevel!)}
+              hint="structural level the stop buffers beyond"
+            />
+          )}
           <Row label="Target" value={money(target)} hint="where to take profit" />
         </>
       ) : (
@@ -58,6 +87,11 @@ function SignalLevels({
           <Row label="Buy above" value={money(buyAbove!)} hint="breaks upward" />
           <Row label="Sell below" value={money(sellBelow!)} hint="breaks downward" />
         </>
+      )}
+      {directional && entryZone && (
+        <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
+          Preferred entry zone: {money(entryZone.low)}–{money(entryZone.high)}
+        </p>
       )}
       <p className="mt-2 border-t pt-1.5 text-[11px] leading-snug text-muted-foreground">
         {directional
@@ -82,7 +116,12 @@ export function SignalCard({ signal, locked = false }: { signal: SignalView; loc
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base">{signal.symbol}</CardTitle>
-          <Badge variant="outline">{signal.timeframe}</Badge>
+          <div className="flex items-center gap-1.5">
+            {!stale && signal.marketPhase && (
+              <Badge variant={marketPhaseVariant(signal.marketPhase)}>{signal.marketPhase}</Badge>
+            )}
+            <Badge variant="outline">{signal.timeframe}</Badge>
+          </div>
         </div>
         <CardDescription>
           ${signal.price.toLocaleString(undefined, { maximumFractionDigits: 2 })} &middot;{" "}
@@ -120,7 +159,14 @@ export function SignalCard({ signal, locked = false }: { signal: SignalView; loc
             </>
           )}
 
-          {!stale && signal.levels && <SignalLevels levels={signal.levels} verdict={signal.verdict} />}
+          {!stale && signal.levels && (
+            <SignalLevels
+              levels={signal.levels}
+              verdict={signal.verdict}
+              invalidationLevel={signal.invalidationLevel}
+              entryZone={signal.entryZone}
+            />
+          )}
 
           {!stale && signal.patterns.length > 0 && (
             <p className="mb-3 text-xs text-muted-foreground">

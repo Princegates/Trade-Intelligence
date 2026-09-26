@@ -41,6 +41,11 @@ CREATE TABLE IF NOT EXISTS signals (
     buy_above REAL,
     sell_below REAL,
     confluence_bias TEXT,
+    regime TEXT,
+    market_phase TEXT,
+    invalidation_level REAL,
+    entry_zone_low REAL,
+    entry_zone_high REAL,
     UNIQUE(symbol, timeframe, candle_time, strategy_version)
 );
 
@@ -85,6 +90,11 @@ ADDED_COLUMNS = {
         "buy_above": "REAL",
         "sell_below": "REAL",
         "confluence_bias": "TEXT",
+        "regime": "TEXT",
+        "market_phase": "TEXT",
+        "invalidation_level": "REAL",
+        "entry_zone_low": "REAL",
+        "entry_zone_high": "REAL",
     },
 }
 
@@ -177,6 +187,11 @@ def record_signal(
     patterns="",
     levels=None,
     confluence_bias=None,
+    regime=None,
+    market_phase=None,
+    invalidation_level=None,
+    entry_zone_low=None,
+    entry_zone_high=None,
 ):
     """Insert-only. A published signal is never rewritten (FR-SIG-004), so a
     re-run over the same closed candle is ignored rather than overwriting the
@@ -187,8 +202,9 @@ def record_signal(
             """INSERT OR IGNORE INTO signals
                (symbol, timeframe, generated_at, candle_time, price, verdict, score,
                 confidence, evidence_count, strategy_version, reasoning, patterns,
-                entry, stop, target, buy_above, sell_below, confluence_bias)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                entry, stop, target, buy_above, sell_below, confluence_bias,
+                regime, market_phase, invalidation_level, entry_zone_low, entry_zone_high)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 symbol,
                 timeframe,
@@ -208,6 +224,11 @@ def record_signal(
                 levels.get("buy_above"),
                 levels.get("sell_below"),
                 confluence_bias,
+                regime,
+                market_phase,
+                invalidation_level,
+                entry_zone_low,
+                entry_zone_high,
             ),
         )
         return cur.rowcount == 1

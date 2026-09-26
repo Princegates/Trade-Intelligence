@@ -17,7 +17,7 @@ project runs on. See README for what that leaves out and why.
 import math
 
 from .. import config
-from . import confluence, divergence, indicators as ind, patterns as pat, structure as struct
+from . import confluence, divergence, entry_zone as ez, indicators as ind, patterns as pat, structure as struct
 
 BUY_THRESHOLD = config.BUY_THRESHOLD
 SELL_THRESHOLD = -config.BUY_THRESHOLD
@@ -30,6 +30,14 @@ EMA_PERIODS = (9, 21, 50, 100, 200)
 # so it tightens along with the stop rather than staying fixed.
 STOP_ATRS = 0.75
 REWARD_TO_RISK = 1.5
+
+# Phase 2a structural defaults — read via settings.get(key, DEFAULT) so
+# these always-on features work correctly even when settings is None/{},
+# unlike the veto gates below which need an explicit settings row to
+# activate at all.
+STRUCTURE_BUFFER_ATR = 0.25
+ENTRY_ZONE_WIDTH_ATR = 0.5
+TOUCHES_FOR_FULL_SCORE = 4
 
 
 def _ema_trend(closes):
@@ -139,6 +147,8 @@ def _structure(candles):
             "regime": "RANGING",
             "swings": swings,
             "swept": None,
+            "break_event": None,
+            "trend_bias": None,
         }
 
     trend_bias = struct.bias(swings)
@@ -173,7 +183,15 @@ def _structure(candles):
             f"Equal {swept['kind']}s pooled near {swept['price']:.2f} ({swept['touches']} touches) — a liquidity level worth watching"
         )
 
-    return {"vote": vote, "reasons": reasons, "regime": regime, "swings": swings, "swept": swept}
+    return {
+        "vote": vote,
+        "reasons": reasons,
+        "regime": regime,
+        "swings": swings,
+        "swept": swept,
+        "break_event": break_event,
+        "trend_bias": trend_bias,
+    }
 
 
 def _pattern(candles, trend_label, swings, atr_val):
@@ -231,14 +249,29 @@ def _volatility(candles, closes, atr_val):
     return {"ok": True, "reasons": []}
 
 
-def _levels(verdict, price, atr, stop_atrs=STOP_ATRS, reward_to_risk=REWARD_TO_RISK):
+def _levels(
+    verdict,
+    price,
+    atr,
+    stop_atrs=STOP_ATRS,
+    reward_to_risk=REWARD_TO_RISK,
+    structural_stop=None,
+    structural_target=None,
+):
     """Entry, invalidation and target — or, for a HOLD, the two prices that
     would turn it into a call. Without ATR there is no honest way to size
     these, so they are omitted rather than guessed.
 
     `stop_atrs`/`reward_to_risk` default to the module constants but can be
     overridden per-run from an admin's engine_settings row (see evaluate()),
-    so an admin adjusting these doesn't require a code change + redeploy."""
+    so an admin adjusting these doesn't require a code change + redeploy.
+
+    `structural_stop`/`structural_target` (src/signals/entry_zone.py), when
+    given, take priority over the fixed ATR multiple — real, independently-
+    derived market structure rather than a stop and target that are always
+    the same ratio apart by construction. Falling back to the ATR math when
+    either is None (no swings yet, e.g. early history) reproduces exactly
+    today's behavior with zero settings gate needed."""
     if atr is None or atr <= 0:
         return None
 
@@ -248,16 +281,16 @@ def _levels(verdict, price, atr, stop_atrs=STOP_ATRS, reward_to_risk=REWARD_TO_R
     if verdict == "BUY":
         return {
             "entry": price,
-            "stop": price - stop_distance,
-            "target": price + target_distance,
+            "stop": structural_stop if structural_stop is not None else price - stop_distance,
+            "target": structural_target if structural_target is not None else price + target_distance,
             "buy_above": None,
             "sell_below": None,
         }
     if verdict == "SELL":
         return {
             "entry": price,
-            "stop": price + stop_distance,
-            "target": price - target_distance,
+            "stop": structural_stop if structural_stop is not None else price + stop_distance,
+            "target": structural_target if structural_target is not None else price - target_distance,
             "buy_above": None,
             "sell_below": None,
         }
@@ -289,13 +322,18 @@ def apply_event_risk_override(result, candles, event, currency):
     result["reasoning"].append(
         f"Overridden to HOLD — {event['title']} ({currency}, high impact) scheduled within the event-risk window"
     )
-    # A directional call's confidence describes that call specifically —
-    # once it's overridden to HOLD there's no live call left for the number
-    # to be about, same "None means HOLD" contract engine.evaluate()'s own
-    # gates keep.
+    # A directional call's confidence and structural fields describe that
+    # call specifically — once it's overridden to HOLD there's no live call
+    # left for any of them to be about, same "None means HOLD" contract
+    # engine.evaluate()'s own gates keep. regime/market_phase are left
+    # untouched: they describe the market, not this call, and are
+    # unaffected by every other veto gate the same way.
     result["confidence"] = None
     result["verdict"] = "HOLD"
     result["levels"] = _levels("HOLD", candles[-1]["close"], atr_val)
+    result["invalidation_level"] = None
+    result["entry_zone_low"] = None
+    result["entry_zone_high"] = None
     return result
 
 
@@ -348,22 +386,17 @@ def _trend_alignment_score(verdict, higher_bias, points=20):
     return 0.0
 
 
-def _pullback_quality_score(verdict, price, swings, atr_val, points=15):
-    """PROXY for true impulse/pullback-phase classification (that needs a
-    dedicated entry-zone module, not built yet) — graduated by ATR-scaled
-    distance from the nearest same-direction swing level, reusing the same
-    struct.nearest_levels() math _pattern() already uses. A call struck far
-    from any known level reads the same way "chasing an extended move"
-    would with the tools available today."""
-    if atr_val is None or atr_val <= 0:
-        return points * 0.5
-    levels = struct.nearest_levels(swings, price)
-    level = levels["support"] if verdict == "BUY" else levels["resistance"]
-    if level is None:
+def _pullback_quality_score(zone_result, points=15):
+    """Real pullback/entry-zone classification (src/signals/entry_zone.py),
+    superseding Phase 1's ATR-distance proxy. Full marks sitting inside the
+    zone; graduated by how far outside it price has run; a reduced but
+    nonzero score when there's no structural level yet to measure against
+    (absence of evidence isn't evidence against)."""
+    if zone_result is None:
         return points * 0.3
-    distance_atr = abs(price - level) / atr_val
-    if distance_atr <= 0.5:
+    if zone_result["inside_zone"]:
         return points
+    distance_atr = zone_result["distance_atr"]
     if distance_atr <= 1.0:
         return points * 0.6
     if distance_atr <= 2.0:
@@ -372,17 +405,20 @@ def _pullback_quality_score(verdict, price, swings, atr_val, points=15):
 
 
 def _sr_proximity_score(price, swings, atr_val, tolerance, points=10):
-    """Is price near a *pooled* (multi-touch) level from struct.equal_levels
-    — deliberately a different data source than pullback quality (tested/
-    pooled levels vs. the single nearest swing), so the two categories
-    aren't just restating each other."""
+    """Scaled by how many times the nearest *pooled* (multi-touch) level
+    from struct.equal_levels has actually been tested — a level tested
+    four-plus times is a stronger read than one tested twice, rather than
+    Phase 1's binary near/not-near. Deliberately a different data source
+    than pullback quality (tested/pooled levels vs. the single nearest
+    swing), so the two categories aren't just restating each other."""
     if atr_val is None or atr_val <= 0:
         return 0.0
     pools = struct.equal_levels(swings, tolerance)
-    if not pools:
+    nearby = [p for p in pools if struct.near_level(price, p["price"], atr_val)]
+    if not nearby:
         return 0.0
-    near = any(struct.near_level(price, p["price"], atr_val) for p in pools)
-    return points if near else 0.0
+    touches = max(p["touches"] for p in nearby)
+    return points * min(touches / TOUCHES_FOR_FULL_SCORE, 1.0)
 
 
 def _volatility_score(volatility, points=10):
@@ -407,10 +443,15 @@ def _liquidity_score(verdict, swept, points=5):
     return 0.0 if matching else points * 0.4
 
 
-def _confidence(verdict, votes, structure, volatility, higher_bias, price, atr_val, tolerance):
+def _confidence(verdict, votes, structure, volatility, higher_bias, price, atr_val, tolerance, zone_result):
     """Returns (confidence, reasoning_lines). confidence is None with no
     reasoning for a HOLD — there's no live call left to be confident
-    about, whether HOLD was the original verdict or a gate overrode it."""
+    about, whether HOLD was the original verdict or a gate overrode it.
+
+    `zone_result` is the caller's already-computed entry_zone.entry_zone()
+    result for this call's side (src/signals/entry_zone.py) — reused here
+    rather than re-derived, since evaluate() needs it for the same call's
+    stop/target/invalidation fields anyway."""
     if verdict == "HOLD":
         return None, []
 
@@ -419,7 +460,7 @@ def _confidence(verdict, votes, structure, volatility, higher_bias, price, atr_v
 
     trend_points = _trend_alignment_score(verdict, higher_bias)
     structure_points = _vote_score(votes["structure"], direction, 20)
-    pullback_points = _pullback_quality_score(verdict, price, swings, atr_val)
+    pullback_points = _pullback_quality_score(zone_result)
     sr_points = _sr_proximity_score(price, swings, atr_val, tolerance)
     candle_points = _vote_score(votes["pattern"], direction, 10)
     atr_points = _volatility_score(volatility)
@@ -497,6 +538,27 @@ def evaluate(candles, higher_timeframe_bias=None, settings=None):
     pattern = _pattern(candles, trend_label, structure["swings"], atr_val)
     volatility = _volatility(candles, closes, atr_val)
 
+    # Phase 2a: nearest confirmed support/resistance to current price,
+    # computed once and reused for every structural computation below
+    # rather than re-derived per-helper (src/signals/entry_zone.py).
+    struct_levels = struct.nearest_levels(structure["swings"], closes[-1])
+    buffer_atr = settings.get("structure_buffer_atr", STRUCTURE_BUFFER_ATR)
+    zone_width_atr = settings.get("entry_zone_width_atr", ENTRY_ZONE_WIDTH_ATR)
+
+    # regime/market_phase describe what the market is doing, not what this
+    # particular call turns out to be — they populate the same way
+    # regardless of verdict, including HOLD, so phase direction here comes
+    # from the swing-derived trend bias rather than the (possibly
+    # overridden) verdict below.
+    phase_side = (
+        "support" if structure["trend_bias"] == "up"
+        else "resistance" if structure["trend_bias"] == "down"
+        else None
+    )
+    phase_zone = ez.entry_zone(phase_side, closes[-1], struct_levels, atr_val, zone_width_atr) if phase_side else None
+    regime = structure["regime"]
+    market_phase_label = ez.market_phase(regime, structure["break_event"], phase_zone)
+
     votes = {"trend": trend_vote, "momentum": momentum["vote"], "structure": structure["vote"], "pattern": pattern["vote"]}
     evidence = sum(1 for v in votes.values() if v is not None)
     score = sum(v for v in votes.values() if v is not None)
@@ -526,6 +588,7 @@ def evaluate(candles, higher_timeframe_bias=None, settings=None):
     # a gate only ever takes one away. Checked in a fixed order so the
     # reasoning always names the first disqualifying reason found.
     if verdict != "HOLD":
+        verdict_side = "support" if verdict == "BUY" else "resistance"
         if structure["regime"] == "RANGING":
             reasons.append("Overridden to HOLD — market structure is ranging, not trending")
             verdict = "HOLD"
@@ -554,22 +617,38 @@ def evaluate(candles, higher_timeframe_bias=None, settings=None):
                 f"Overridden to HOLD — the higher timeframe's structure is trending {higher_timeframe_bias}, opposing this call"
             )
             verdict = "HOLD"
+        elif "max_entry_zone_distance_atr" in settings and ez.distance_exceeds(
+            ez.entry_zone(verdict_side, closes[-1], struct_levels, atr_val, zone_width_atr),
+            settings["max_entry_zone_distance_atr"],
+        ):
+            reasons.append("Overridden to HOLD — price has run too far from its entry zone to chase")
+            verdict = "HOLD"
 
     stop_atrs = settings.get("atr_stop_multiplier", STOP_ATRS)
     reward_to_risk_value = settings.get("reward_to_risk", REWARD_TO_RISK)
-    levels = _levels(verdict, closes[-1], atr_val, stop_atrs, reward_to_risk_value)
+
+    def _resolve(v):
+        """Side, and the levels dict for verdict `v` — structural stop/
+        target when real structure is available (independently derived, so
+        risk/reward genuinely varies per signal), else the same fixed-ATR
+        math as before (src/signals/entry_zone.py, always-on, no settings
+        gate needed: it falls through to today's exact behavior whenever
+        there aren't enough swings)."""
+        side = "support" if v == "BUY" else "resistance" if v == "SELL" else None
+        s_stop = ez.structural_stop(side, closes[-1], struct_levels, atr_val, buffer_atr) if side else None
+        s_target = ez.structural_target(side, struct_levels) if side else None
+        return _levels(v, closes[-1], atr_val, stop_atrs, reward_to_risk_value, s_stop, s_target), side
+
+    levels, verdict_side = _resolve(verdict)
 
     # R:R gate — only runs when an admin has actually configured a minimum
     # (a fresh engine_settings row always has one; settings=None/{} never
     # does, so this stays inert for every existing caller). Real risk/
     # reward from the levels just computed above, never re-derived to force
-    # a pass. NOTE: because stop/target are still a fixed ATR multiple of
-    # each other today, every directional call computes to the exact same
-    # ratio — this gate is real and runs on every signal, but with the
-    # shipped defaults (min_reward_to_risk == reward_to_risk) it can't
-    # actually reject anything until stop/target become independently
-    # derived from structure (a later phase), or an admin deliberately
-    # widens the gap between the two settings.
+    # a pass. Now that stop/target are independently derived from structure
+    # when it's available (rather than always a fixed multiple of each
+    # other), this gate can genuinely discriminate between signals instead
+    # of passing or failing uniformly.
     if verdict != "HOLD" and "min_reward_to_risk" in settings:
         min_rr = settings["min_reward_to_risk"]
         if _rr_below_minimum(levels, min_rr):
@@ -577,15 +656,24 @@ def evaluate(candles, higher_timeframe_bias=None, settings=None):
                 f"Overridden to HOLD — risk/reward does not clear the configured minimum of 1:{min_rr:g}"
             )
             verdict = "HOLD"
-            levels = _levels(verdict, closes[-1], atr_val, stop_atrs, reward_to_risk_value)
+            levels, verdict_side = _resolve(verdict)
 
     # Confidence is computed for whatever verdict survived every gate above
     # — a call already overridden to HOLD reports no confidence, since
     # there's no live call left to be confident about. See the
     # "Confidence scoring" block above _vote_score for what this number is
     # and, just as importantly, what it is not.
+    confidence_zone = ez.entry_zone(verdict_side, closes[-1], struct_levels, atr_val, zone_width_atr) if verdict_side else None
     confidence, confidence_reasons = _confidence(
-        verdict, votes, structure, volatility, higher_timeframe_bias, closes[-1], atr_val, config.EQUAL_LEVEL_TOLERANCE
+        verdict,
+        votes,
+        structure,
+        volatility,
+        higher_timeframe_bias,
+        closes[-1],
+        atr_val,
+        config.EQUAL_LEVEL_TOLERANCE,
+        confidence_zone,
     )
     reasons += confidence_reasons
 
@@ -598,8 +686,18 @@ def evaluate(candles, higher_timeframe_bias=None, settings=None):
                 f"Overridden to HOLD — confidence {confidence * 100:.0f}/100 is below the configured minimum of {min_confidence:g}"
             )
             verdict = "HOLD"
-            levels = _levels(verdict, closes[-1], atr_val, stop_atrs, reward_to_risk_value)
+            levels, verdict_side = _resolve(verdict)
             confidence = None
+
+    # Call-specific structural fields — None on HOLD, matching the existing
+    # entry/stop/target null-for-HOLD contract (unlike regime/market_phase
+    # above, which describe the market rather than this specific call).
+    # Recomputed from the truly final verdict/side, which may have changed
+    # again since confidence_zone was computed.
+    invalidation_level_val = ez.invalidation_level(verdict_side, struct_levels) if verdict_side else None
+    entry_zone_result = ez.entry_zone(verdict_side, closes[-1], struct_levels, atr_val, zone_width_atr) if verdict_side else None
+    entry_zone_low = entry_zone_result["zone_low"] if entry_zone_result else None
+    entry_zone_high = entry_zone_result["zone_high"] if entry_zone_result else None
 
     return {
         "verdict": verdict,
@@ -609,4 +707,9 @@ def evaluate(candles, higher_timeframe_bias=None, settings=None):
         "confidence": confidence,
         "patterns": pattern["names"],
         "levels": levels,
+        "regime": regime,
+        "market_phase": market_phase_label,
+        "invalidation_level": invalidation_level_val,
+        "entry_zone_low": entry_zone_low,
+        "entry_zone_high": entry_zone_high,
     }

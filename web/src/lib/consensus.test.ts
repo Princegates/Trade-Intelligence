@@ -20,6 +20,10 @@ function signal(timeframe: string, verdict: SignalView["verdict"], minutesAgo = 
     levels: { entry: 86_000, stop: 84_000, target: 89_000, buyAbove: null, sellBelow: null },
     aiCommentary: null,
     confluenceBias: null,
+    regime: null,
+    marketPhase: null,
+    invalidationLevel: null,
+    entryZone: null,
   };
 }
 

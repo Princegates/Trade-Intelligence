@@ -47,7 +47,26 @@ BINANCE_BASE_URL = os.environ.get("BINANCE_BASE_URL") or "https://api.binance.us
 # same bar every prior bump here was held to. Major-versioned rather than
 # a patch bump because the gates are new decision surface, not a tuning
 # tweak to existing ones.
-STRATEGY_VERSION = "3.0.0"
+#
+# 3.1.0 (Phase 2a, src/signals/entry_zone.py): stop/target/invalidation are
+# now derived from real market structure when it's available, rather than
+# always a fixed ATR multiple of each other — this is what finally lets
+# the 3.0.0 risk/reward gate discriminate between signals instead of
+# passing or failing every one identically. Unlike 2.1.1's uniform ATR
+# retightening, this is data-dependent: two signals minutes apart can get a
+# structural stop vs. the ATR fallback depending on whether a swing
+# happens to sit nearby — an accepted tradeoff for genuinely variable R:R,
+# and it falls back to exactly 2.1.1's math whenever there aren't enough
+# swings yet, so no settings gate is needed for that guarantee. Also added:
+# a settings-gated veto (an admin-configured maximum ATR distance from a
+# call's own entry zone forces HOLD — new decision surface, inert without
+# that setting, same pattern as the 3.0.0 gates); `regime`/`market_phase`
+# now published on every signal, including HOLD (market-state facts, not
+# about any one call); and the confidence score's pullback-quality and
+# support/resistance categories now read real entry-zone/pooled-touches
+# data instead of 3.0.0's documented proxies — same eight categories and
+# point totals, more accurate inputs.
+STRATEGY_VERSION = "3.1.0"
 
 INSTRUMENTS = [
     {

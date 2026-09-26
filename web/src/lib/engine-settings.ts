@@ -16,6 +16,15 @@ const DEFAULT_MIN_CONFIDENCE_THRESHOLD = 65;
 const DEFAULT_CONFIDENCE_HIGH_THRESHOLD = 75;
 const DEFAULT_CONFIDENCE_VERY_HIGH_THRESHOLD = 85;
 const DEFAULT_REQUIRE_HIGHER_TIMEFRAME_CONFLUENCE = true;
+// Mirrors 0017_engine_settings_entry_zone.sql's own defaults —
+// structure_buffer_atr/entry_zone_width_atr apply even without this row at
+// all (src/signals/engine.py's own STRUCTURE_BUFFER_ATR/ENTRY_ZONE_WIDTH_ATR
+// module constants). max_entry_zone_distance_atr is the one genuinely new
+// gate; like min_confidence_threshold, it's live by default rather than
+// opt-in — see the migration's own comment for why 1.5 isn't arbitrary.
+const DEFAULT_STRUCTURE_BUFFER_ATR = 0.25;
+const DEFAULT_ENTRY_ZONE_WIDTH_ATR = 0.5;
+const DEFAULT_MAX_ENTRY_ZONE_DISTANCE_ATR = 1.5;
 
 export interface EngineSettings {
   /** How many ATRs from price the stop sits. Admin-controlled, see
@@ -40,6 +49,17 @@ export interface EngineSettings {
   /** Whether an opposing higher-timeframe structural bias overrides a call
    * to HOLD (src/signals/confluence.py). */
   requireHigherTimeframeConfluence: boolean;
+  /** ATR fraction buffering a structural stop beyond its swing level
+   * (src/signals/entry_zone.py::structural_stop()). Always-on — this only
+   * controls the buffer's size, not whether structural stops are used. */
+  structureBufferAtr: number;
+  /** Half-width, in ATRs, of the preferred-entry band around a structural
+   * level (src/signals/entry_zone.py::entry_zone()). */
+  entryZoneWidthAtr: number;
+  /** A directional call whose price has run more than this many ATRs from
+   * its own entry zone is overridden to HOLD — live by default, not
+   * opt-in (src/signals/entry_zone.py::distance_exceeds()). */
+  maxEntryZoneDistanceAtr: number;
 }
 
 const DEFAULTS: EngineSettings = {
@@ -50,6 +70,9 @@ const DEFAULTS: EngineSettings = {
   confidenceHighThreshold: DEFAULT_CONFIDENCE_HIGH_THRESHOLD,
   confidenceVeryHighThreshold: DEFAULT_CONFIDENCE_VERY_HIGH_THRESHOLD,
   requireHigherTimeframeConfluence: DEFAULT_REQUIRE_HIGHER_TIMEFRAME_CONFLUENCE,
+  structureBufferAtr: DEFAULT_STRUCTURE_BUFFER_ATR,
+  entryZoneWidthAtr: DEFAULT_ENTRY_ZONE_WIDTH_ATR,
+  maxEntryZoneDistanceAtr: DEFAULT_MAX_ENTRY_ZONE_DISTANCE_ATR,
 };
 
 export async function getEngineSettings(): Promise<EngineSettings> {
@@ -61,7 +84,7 @@ export async function getEngineSettings(): Promise<EngineSettings> {
   const { data } = await supabase
     .from("engine_settings")
     .select(
-      "atr_stop_multiplier, reward_to_risk, min_reward_to_risk, min_confidence_threshold, confidence_high_threshold, confidence_very_high_threshold, require_higher_timeframe_confluence"
+      "atr_stop_multiplier, reward_to_risk, min_reward_to_risk, min_confidence_threshold, confidence_high_threshold, confidence_very_high_threshold, require_higher_timeframe_confluence, structure_buffer_atr, entry_zone_width_atr, max_entry_zone_distance_atr"
     )
     .eq("id", true)
     .maybeSingle();
@@ -75,5 +98,8 @@ export async function getEngineSettings(): Promise<EngineSettings> {
     confidenceVeryHighThreshold: data?.confidence_very_high_threshold ?? DEFAULTS.confidenceVeryHighThreshold,
     requireHigherTimeframeConfluence:
       data?.require_higher_timeframe_confluence ?? DEFAULTS.requireHigherTimeframeConfluence,
+    structureBufferAtr: data?.structure_buffer_atr ?? DEFAULTS.structureBufferAtr,
+    entryZoneWidthAtr: data?.entry_zone_width_atr ?? DEFAULTS.entryZoneWidthAtr,
+    maxEntryZoneDistanceAtr: data?.max_entry_zone_distance_atr ?? DEFAULTS.maxEntryZoneDistanceAtr,
   };
 }

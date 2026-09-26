@@ -76,6 +76,36 @@ def test_published_signal_includes_confluence_bias(monkeypatch):
     assert captured["json"][0]["confluence_bias"] == "up"
 
 
+def test_published_signal_includes_entry_zone_and_regime_fields(monkeypatch):
+    _configured(monkeypatch)
+    captured = _capture(monkeypatch)
+
+    supabase.publish_signal(
+        "BTCUSDT",
+        "5m",
+        generated_at=1_700_000_000,
+        candle_time=1_699_996_400,
+        price=50000.0,
+        verdict="BUY",
+        score=2,
+        reasoning="trend and structure agree",
+        evidence_count=2,
+        strategy_version="3.1.0",
+        regime="TRENDING",
+        market_phase="PULLBACK",
+        invalidation_level=49000.0,
+        entry_zone_low=49500.0,
+        entry_zone_high=49800.0,
+    )
+
+    row = captured["json"][0]
+    assert row["regime"] == "TRENDING"
+    assert row["market_phase"] == "PULLBACK"
+    assert row["invalidation_level"] == 49000.0
+    assert row["entry_zone_low"] == 49500.0
+    assert row["entry_zone_high"] == 49800.0
+
+
 def test_epoch_timestamps_are_sent_as_utc(monkeypatch):
     _configured(monkeypatch)
     captured = _capture(monkeypatch)

@@ -72,7 +72,20 @@ def test_an_existing_database_gains_the_columns_added_since_it_was_written(tmp_p
 
     with db.connect() as conn:
         columns = {row[1] for row in conn.execute("PRAGMA table_info(signals)")}
-    assert {"patterns", "entry", "stop", "target", "buy_above", "sell_below", "confluence_bias"} <= columns
+    assert {
+        "patterns",
+        "entry",
+        "stop",
+        "target",
+        "buy_above",
+        "sell_below",
+        "confluence_bias",
+        "regime",
+        "market_phase",
+        "invalidation_level",
+        "entry_zone_low",
+        "entry_zone_high",
+    } <= columns
 
     # and the insert that used to crash now works
     assert db.record_signal(**_signal(), patterns="Hammer", levels={"entry": 1.0, "stop": 0.9, "target": 1.2}) is True
@@ -141,6 +154,36 @@ def test_confluence_bias_defaults_to_null_when_omitted(temp_db):
     with db.connect() as conn:
         stored = conn.execute("SELECT confluence_bias FROM signals").fetchone()[0]
     assert stored is None
+
+
+def test_entry_zone_and_regime_columns_round_trip_through_the_signals_table(temp_db):
+    assert (
+        db.record_signal(
+            **_signal(),
+            regime="TRENDING",
+            market_phase="PULLBACK",
+            invalidation_level=49000.0,
+            entry_zone_low=49500.0,
+            entry_zone_high=49800.0,
+        )
+        is True
+    )
+
+    with db.connect() as conn:
+        stored = conn.execute(
+            "SELECT regime, market_phase, invalidation_level, entry_zone_low, entry_zone_high FROM signals"
+        ).fetchone()
+    assert stored == ("TRENDING", "PULLBACK", 49000.0, 49500.0, 49800.0)
+
+
+def test_entry_zone_and_regime_columns_default_to_null_when_omitted(temp_db):
+    assert db.record_signal(**_signal()) is True
+
+    with db.connect() as conn:
+        stored = conn.execute(
+            "SELECT regime, market_phase, invalidation_level, entry_zone_low, entry_zone_high FROM signals"
+        ).fetchone()
+    assert stored == (None, None, None, None, None)
 
 
 def test_forming_candle_is_hidden_from_indicator_input(temp_db):

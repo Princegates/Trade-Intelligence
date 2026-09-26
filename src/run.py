@@ -199,6 +199,11 @@ def process(instrument, timeframe, now, events=(), engine_settings=None):
         "patterns": ", ".join(result["patterns"]),
         "levels": result["levels"],
         "confluence_bias": higher_bias,
+        "regime": result["regime"],
+        "market_phase": result["market_phase"],
+        "invalidation_level": result["invalidation_level"],
+        "entry_zone_low": result["entry_zone_low"],
+        "entry_zone_high": result["entry_zone_high"],
     }
 
     stored = db.record_signal(symbol, timeframe, **signal)

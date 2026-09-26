@@ -100,6 +100,11 @@ export interface Database {
           buy_above: number | null;
           sell_below: number | null;
           confluence_bias: string | null;
+          regime: string | null;
+          market_phase: string | null;
+          invalidation_level: number | null;
+          entry_zone_low: number | null;
+          entry_zone_high: number | null;
         };
         Insert: {
           id?: number;
@@ -121,6 +126,11 @@ export interface Database {
           buy_above?: number | null;
           sell_below?: number | null;
           confluence_bias?: string | null;
+          regime?: string | null;
+          market_phase?: string | null;
+          invalidation_level?: number | null;
+          entry_zone_low?: number | null;
+          entry_zone_high?: number | null;
         };
         // Published signals are immutable; 0002 drops the update policy.
         Update: never;
@@ -136,6 +146,9 @@ export interface Database {
           confidence_high_threshold: number;
           confidence_very_high_threshold: number;
           require_higher_timeframe_confluence: boolean;
+          structure_buffer_atr: number;
+          entry_zone_width_atr: number;
+          max_entry_zone_distance_atr: number;
           updated_at: string;
           updated_by: string | null;
         };
@@ -148,6 +161,9 @@ export interface Database {
           confidence_high_threshold?: number;
           confidence_very_high_threshold?: number;
           require_higher_timeframe_confluence?: boolean;
+          structure_buffer_atr?: number;
+          entry_zone_width_atr?: number;
+          max_entry_zone_distance_atr?: number;
           updated_at?: string;
           updated_by?: string | null;
         };
@@ -160,6 +176,9 @@ export interface Database {
           confidence_high_threshold?: number;
           confidence_very_high_threshold?: number;
           require_higher_timeframe_confluence?: boolean;
+          structure_buffer_atr?: number;
+          entry_zone_width_atr?: number;
+          max_entry_zone_distance_atr?: number;
           updated_at?: string;
           updated_by?: string | null;
         };

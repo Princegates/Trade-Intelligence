@@ -39,6 +39,23 @@ export interface SignalView {
    * out in `reasoning` — stored for queryability. See
    * src/signals/confluence.py. */
   confluenceBias: string | null;
+  /** TRENDING/RANGING/REVERSING — what the market is doing, independent of
+   * whether this call survived to publish. Populated even on a HOLD (see
+   * src/signals/structure.py::regime()). */
+  regime: string | null;
+  /** IMPULSE/PULLBACK/CONSOLIDATION/BREAKOUT/REVERSAL — same "populated
+   * even on HOLD" contract as regime. See
+   * src/signals/entry_zone.py::market_phase(). */
+  marketPhase: string | null;
+  /** The raw structural level whose breach means this call's thesis was
+   * wrong — distinct from `levels.stop`, which adds a noise buffer. Null on
+   * HOLD or when no structural level was available yet (src/signals/
+   * entry_zone.py::invalidation_level()). */
+  invalidationLevel: number | null;
+  /** The preferred-entry band around the nearest structural level. Null on
+   * HOLD or when unavailable, same contract as invalidationLevel (see
+   * src/signals/entry_zone.py::entry_zone()). */
+  entryZone: { low: number; high: number } | null;
 }
 
 export interface SuppressionView {

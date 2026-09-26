@@ -23,6 +23,9 @@ const schema = z
     minConfidenceThreshold: percentage("Minimum confidence"),
     confidenceHighThreshold: percentage("High-confidence threshold"),
     confidenceVeryHighThreshold: percentage("Very-high-confidence threshold"),
+    structureBufferAtr: positiveNumber("Structure buffer"),
+    entryZoneWidthAtr: positiveNumber("Entry zone width"),
+    maxEntryZoneDistanceAtr: positiveNumber("Maximum entry-zone distance"),
   })
   .refine((v) => v.minConfidenceThreshold < v.confidenceHighThreshold, {
     message: "Minimum confidence must be below the high-confidence threshold.",
@@ -51,6 +54,9 @@ export async function setEngineSettings(
     minConfidenceThreshold: formData.get("minConfidenceThreshold"),
     confidenceHighThreshold: formData.get("confidenceHighThreshold"),
     confidenceVeryHighThreshold: formData.get("confidenceVeryHighThreshold"),
+    structureBufferAtr: formData.get("structureBufferAtr"),
+    entryZoneWidthAtr: formData.get("entryZoneWidthAtr"),
+    maxEntryZoneDistanceAtr: formData.get("maxEntryZoneDistanceAtr"),
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input." };
 
@@ -71,6 +77,9 @@ export async function setEngineSettings(
       confidence_high_threshold: parsed.data.confidenceHighThreshold,
       confidence_very_high_threshold: parsed.data.confidenceVeryHighThreshold,
       require_higher_timeframe_confluence: requireConfluence,
+      structure_buffer_atr: parsed.data.structureBufferAtr,
+      entry_zone_width_atr: parsed.data.entryZoneWidthAtr,
+      max_entry_zone_distance_atr: parsed.data.maxEntryZoneDistanceAtr,
       updated_by: admin.id,
       updated_at: new Date().toISOString(),
     })

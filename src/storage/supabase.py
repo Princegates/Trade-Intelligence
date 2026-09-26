@@ -91,6 +91,11 @@ def publish_signal(
     patterns="",
     levels=None,
     confluence_bias=None,
+    regime=None,
+    market_phase=None,
+    invalidation_level=None,
+    entry_zone_low=None,
+    entry_zone_high=None,
 ):
     levels = levels or {}
     return _insert(
@@ -114,6 +119,11 @@ def publish_signal(
             "buy_above": levels.get("buy_above"),
             "sell_below": levels.get("sell_below"),
             "confluence_bias": confluence_bias,
+            "regime": regime,
+            "market_phase": market_phase,
+            "invalidation_level": invalidation_level,
+            "entry_zone_low": entry_zone_low,
+            "entry_zone_high": entry_zone_high,
         },
         on_conflict=SIGNAL_IDENTITY,
     )
