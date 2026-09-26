@@ -4,7 +4,7 @@ import { ArrowRight } from "lucide-react";
 import { ConsensusTile } from "@/components/dashboard/consensus-tile";
 import { SignalCard } from "@/components/dashboard/signal-card";
 import { GudaSpecialSignalCard } from "@/components/dashboard/guda-special-signal-card";
-import { ASSET_NAMES } from "@/lib/signals";
+import { ASSET_NAMES, TIMEFRAME_SECONDS } from "@/lib/signals";
 import type { AssetPanelData } from "@/lib/asset-panel";
 
 // Where each asset's own full-detail page lives — used only for the "see
@@ -54,6 +54,16 @@ export function AssetSection({
   const { symbol, group, consensus, candlesByTimeframe, gudaSpecial } = data;
   const route = ASSET_ROUTES[symbol];
 
+  // Shortest timeframe first (5m, 15m, 1h, 4h, 1d, ...) rather than
+  // whichever order rows happened to come back in (recency of last
+  // regeneration) — reuses TIMEFRAME_SECONDS rather than a second,
+  // separately-maintained order list. An unrecognized timeframe (not in
+  // the map) sorts after every known one instead of crashing on
+  // `undefined - undefined`.
+  const orderedGroup = [...group].sort(
+    (a, b) => (TIMEFRAME_SECONDS[a.timeframe] ?? Infinity) - (TIMEFRAME_SECONDS[b.timeframe] ?? Infinity)
+  );
+
   return (
     <section className={bordered ? "rounded-lg border p-4 sm:p-6" : undefined}>
       <div className="mb-4 flex items-baseline justify-between gap-2">
@@ -77,7 +87,7 @@ export function AssetSection({
 
       {detailed && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {group.map((s) => (
+          {orderedGroup.map((s) => (
             <Fragment key={`${s.symbol}-${s.timeframe}`}>
               <SignalCard signal={s} locked={locked} />
               {gudaSpecialEnabled && s.timeframe === "15m" && (
