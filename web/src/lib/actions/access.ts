@@ -43,7 +43,7 @@ export interface AccessPolicyFormState {
   success?: boolean;
 }
 
-const trialDaysSchema = z.coerce.number().int().min(1, "Must be at least 1 day.").max(365, "Must be 365 days or fewer.");
+const dayCountSchema = z.coerce.number().int().min(1, "Must be at least 1 day.").max(365, "Must be 365 days or fewer.");
 
 export async function setAccessPolicy(
   _prevState: AccessPolicyFormState,
@@ -51,8 +51,11 @@ export async function setAccessPolicy(
 ): Promise<AccessPolicyFormState> {
   const admin = await requireAdmin();
 
-  const parsed = trialDaysSchema.safeParse(formData.get("trialDays"));
-  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input." };
+  const trialDays = dayCountSchema.safeParse(formData.get("trialDays"));
+  if (!trialDays.success) return { error: trialDays.error.issues[0]?.message ?? "Invalid input." };
+
+  const codeExpiryDays = dayCountSchema.safeParse(formData.get("codeExpiryDays"));
+  if (!codeExpiryDays.success) return { error: codeExpiryDays.error.issues[0]?.message ?? "Invalid input." };
 
   if (!isSupabaseConfigured()) return { error: "Demo mode: policy changes aren't saved." };
 
@@ -61,7 +64,12 @@ export async function setAccessPolicy(
 
   const { error } = await supabase
     .from("access_policy")
-    .update({ trial_days: parsed.data, updated_by: admin.id, updated_at: new Date().toISOString() })
+    .update({
+      trial_days: trialDays.data,
+      code_expiry_days: codeExpiryDays.data,
+      updated_by: admin.id,
+      updated_at: new Date().toISOString(),
+    })
     .eq("id", true);
 
   if (error) return { error: error.message };

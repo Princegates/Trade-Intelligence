@@ -56,12 +56,15 @@ function generateCode(): string {
 export interface AccessCodeResult {
   error?: string;
   code?: string;
+  expiresAt?: string;
 }
 
 /** Generates a one-time, per-person unlock code the admin sends the user
  * out of band (there is no in-app way to view someone else's code — see
  * 0011_trial_access.sql). Any earlier unredeemed code for the same person
- * is invalidated first, so only the most recently issued code ever works. */
+ * is invalidated first, so only the most recently issued code ever works.
+ * The code itself expires after the site's codeExpiryDays setting
+ * (0013_access_code_expiry.sql) if it's never redeemed. */
 export async function generateAccessCode(userId: string): Promise<AccessCodeResult> {
   const admin = await requireAdmin();
 
@@ -72,10 +75,15 @@ export async function generateAccessCode(userId: string): Promise<AccessCodeResu
 
   await supabase.from("access_codes").delete().eq("user_id", userId).is("redeemed_at", null);
 
+  const { codeExpiryDays } = await getAccessPolicy();
   const code = generateCode();
-  const { error } = await supabase.from("access_codes").insert({ user_id: userId, code, created_by: admin.id });
+  const expiresAt = new Date(Date.now() + codeExpiryDays * 24 * 3600 * 1000).toISOString();
+
+  const { error } = await supabase
+    .from("access_codes")
+    .insert({ user_id: userId, code, created_by: admin.id, expires_at: expiresAt });
   if (error) return { error: error.message };
 
   revalidatePath("/admin/users");
-  return { code };
+  return { code, expiresAt };
 }

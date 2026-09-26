@@ -3,7 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ProviderSettingsForm } from "@/components/admin/provider-settings-form";
 import { PasswordForm } from "@/components/account/password-form";
-import { TrialLengthForm } from "@/components/admin/trial-length-form";
+import { AccessPolicyForm } from "@/components/admin/access-policy-form";
 import { Badge } from "@/components/ui/badge";
 import { SETTINGS_PROVIDERS } from "@/lib/demo-data";
 import { getAllProviderStates } from "@/lib/settings";
@@ -20,7 +20,7 @@ const CATEGORIES: { key: SettingsCategory; label: string; icon: React.ReactNode 
 ];
 
 export default async function AdminSettingsPage() {
-  const [providersByCategory, { trialDays }] = await Promise.all([
+  const [providersByCategory, { trialDays, codeExpiryDays }] = await Promise.all([
     Promise.all(CATEGORIES.map((c) => getAllProviderStates(c.key))),
     getAccessPolicy(),
   ]);
@@ -45,14 +45,14 @@ export default async function AdminSettingsPage() {
 
       <Card className="max-w-2xl">
         <CardHeader>
-          <CardTitle>Trial access</CardTitle>
+          <CardTitle>Trial & access codes</CardTitle>
           <CardDescription>
             New accounts get full access for a limited trial, then drop to a basic view (latest signal only) until
-            you send them a code from Access Control.
+            you send them a code from Access Control. Codes themselves expire if not redeemed in time.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <TrialLengthForm trialDays={trialDays} />
+          <AccessPolicyForm trialDays={trialDays} codeExpiryDays={codeExpiryDays} />
         </CardContent>
       </Card>
 

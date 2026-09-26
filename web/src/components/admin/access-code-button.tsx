@@ -13,6 +13,7 @@ import { generateAccessCode } from "@/lib/actions/users";
 export function AccessCodeButton({ userId, name }: { userId: string; name: string }) {
   const [pending, startTransition] = useTransition();
   const [code, setCode] = useState<string | null>(null);
+  const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [open, setOpen] = useState(false);
@@ -25,6 +26,7 @@ export function AccessCodeButton({ userId, name }: { userId: string; name: strin
         setError(result.error);
       } else if (result.code) {
         setCode(result.code);
+        setExpiresAt(result.expiresAt ?? null);
       }
       setOpen(true);
     });
@@ -51,6 +53,7 @@ export function AccessCodeButton({ userId, name }: { userId: string; name: strin
           setOpen(next);
           if (!next) {
             setCode(null);
+            setExpiresAt(null);
             setCopied(false);
           }
         }}
@@ -65,14 +68,21 @@ export function AccessCodeButton({ userId, name }: { userId: string; name: strin
             </DialogDescription>
           </DialogHeader>
           {code && (
-            <div className="flex items-center gap-2">
-              <code className="flex-1 rounded-md border border-border bg-muted px-3 py-2 text-center text-lg font-semibold tracking-widest">
-                {code}
-              </code>
-              <Button type="button" variant="outline" size="sm" onClick={handleCopy}>
-                {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-                {copied ? "Copied" : "Copy"}
-              </Button>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <code className="flex-1 rounded-md border border-border bg-muted px-3 py-2 text-center text-lg font-semibold tracking-widest">
+                  {code}
+                </code>
+                <Button type="button" variant="outline" size="sm" onClick={handleCopy}>
+                  {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                  {copied ? "Copied" : "Copy"}
+                </Button>
+              </div>
+              {expiresAt && (
+                <p className="text-xs text-muted-foreground">
+                  Expires {new Date(expiresAt).toLocaleString()} if not redeemed before then.
+                </p>
+              )}
             </div>
           )}
         </DialogContent>

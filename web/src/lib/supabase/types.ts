@@ -222,18 +222,21 @@ export interface Database {
         Row: {
           id: boolean;
           trial_days: number;
+          code_expiry_days: number;
           updated_at: string;
           updated_by: string | null;
         };
         Insert: {
           id?: boolean;
           trial_days?: number;
+          code_expiry_days?: number;
           updated_at?: string;
           updated_by?: string | null;
         };
         Update: {
           id?: boolean;
           trial_days?: number;
+          code_expiry_days?: number;
           updated_at?: string;
           updated_by?: string | null;
         };
@@ -247,6 +250,7 @@ export interface Database {
           created_by: string;
           created_at: string;
           redeemed_at: string | null;
+          expires_at: string | null;
         };
         Insert: {
           id?: string;
@@ -255,6 +259,7 @@ export interface Database {
           created_by: string;
           created_at?: string;
           redeemed_at?: string | null;
+          expires_at?: string | null;
         };
         Update: {
           id?: string;
@@ -263,6 +268,7 @@ export interface Database {
           created_by?: string;
           created_at?: string;
           redeemed_at?: string | null;
+          expires_at?: string | null;
         };
         Relationships: [];
       };
