@@ -58,10 +58,18 @@ export function GudaSpecialSignalCard({
             <Badge variant="outline">15m</Badge>
           </div>
         </div>
+        {/* Always shown, signal or not — this is a second, separate strategy
+            from the confluence engine above it, so a first-time viewer needs
+            to know what it's doing before the verdict/reasoning make sense. */}
+        <CardDescription>
+          A separate strategy: watches the 15-minute chart for a break in market structure, waits for price to
+          pull back into a Fibonacci retracement zone, then confirms with a candlestick pattern before calling a
+          trade.
+        </CardDescription>
         {signal && (
-          <CardDescription>
+          <p className="text-sm text-muted-foreground">
             {money(signal.price)} &middot; {new Date(signal.generatedAt).toLocaleString()}
-          </CardDescription>
+          </p>
         )}
       </CardHeader>
       <CardContent className={locked ? "relative" : undefined}>
