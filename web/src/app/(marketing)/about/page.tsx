@@ -43,8 +43,8 @@ export default function AboutPage() {
         <h2 className="text-2xl font-semibold">Get in touch</h2>
         <p className="mt-3 text-muted-foreground">
           For full-access requests, feature requests, or anything else, reach out at{" "}
-          <a href="mailto:hello@signalsvaultai.com" className="text-primary underline underline-offset-4">
-            hello@signalsvaultai.com
+          <a href="mailto:info@anknovate.com" className="text-primary underline underline-offset-4">
+            info@anknovate.com
           </a>
           .
         </p>

@@ -51,7 +51,7 @@ export default async function PricingPage() {
         "Renewed manually — no card, no subscription",
       ],
       cta: "Request access",
-      href: "mailto:hello@signalsvaultai.com",
+      href: "mailto:info@anknovate.com",
       highlighted: true,
     },
   ];
