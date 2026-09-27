@@ -545,11 +545,28 @@ export interface Database {
         };
         Relationships: [];
       };
+      chat_rate_limit: {
+        Row: {
+          user_id: string;
+          window_start: string;
+          message_count: number;
+        };
+        // Never written directly by app code — only through
+        // chat_rate_limit_check() below (SECURITY DEFINER) or the
+        // service-role key. See supabase/migrations/0024_chat_rate_limit.sql.
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
       redeem_access_code: {
         Args: { p_code: string };
+        Returns: boolean;
+      };
+      chat_rate_limit_check: {
+        Args: { uid: string; max_per_window: number; window_seconds: number };
         Returns: boolean;
       };
     };
