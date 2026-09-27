@@ -1,22 +1,18 @@
 import "server-only";
+import { unstable_cache } from "next/cache";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { CHART_TIMEFRAMES, type Candle } from "@/lib/candle-view";
+import type { Database } from "@/lib/supabase/types";
 
 export { CHART_TIMEFRAMES } from "@/lib/candle-view";
 export type { Candle } from "@/lib/candle-view";
 
-/** Closed candles for one series, oldest first.
- *
- * Read from our own mirror rather than the exchange: the chart has to show
- * the same candles the signals were computed on, or the two will eventually
- * disagree and there will be no way to tell which is right. */
-export async function getCandles(symbol: string, timeframe: string, limit = 200): Promise<Candle[]> {
-  if (!isSupabaseConfigured()) return demoCandles(timeframe, limit);
+type Client = SupabaseClient<Database>;
 
-  const supabase = await createClient();
-  if (!supabase) return [];
-
+async function readCandles(supabase: Client, symbol: string, timeframe: string, limit: number): Promise<Candle[]> {
   const { data, error } = await supabase
     .from("candles")
     .select("open_time, open, high, low, close")
@@ -36,6 +32,37 @@ export async function getCandles(symbol: string, timeframe: string, limit = 200)
       close: row.close,
     }))
     .reverse();
+}
+
+// getCandlesByTimeframe below fires one of these per chart timeframe, per
+// symbol — 10 queries for a single dashboard load with the current 5
+// timeframes × 2 symbols. Same reasoning as signals.ts's CACHE_SECONDS for
+// why reading through the service-role client is safe to share across
+// every viewer: candles' `has_access()` RLS is redundant with the
+// dashboard's own page-level approved/admin gate.
+const getCachedCandles = unstable_cache(
+  async (symbol: string, timeframe: string, limit: number) => {
+    const supabase = createServiceClient();
+    if (!supabase) return [] as Candle[];
+    return readCandles(supabase, symbol, timeframe, limit);
+  },
+  ["candles"],
+  { revalidate: 30, tags: ["candles"] }
+);
+
+/** Closed candles for one series, oldest first.
+ *
+ * Read from our own mirror rather than the exchange: the chart has to show
+ * the same candles the signals were computed on, or the two will eventually
+ * disagree and there will be no way to tell which is right. */
+export async function getCandles(symbol: string, timeframe: string, limit = 200): Promise<Candle[]> {
+  if (!isSupabaseConfigured()) return demoCandles(timeframe, limit);
+
+  if (createServiceClient()) return getCachedCandles(symbol, timeframe, limit);
+
+  const supabase = await createClient();
+  if (!supabase) return [];
+  return readCandles(supabase, symbol, timeframe, limit);
 }
 
 /** Every timeframe's candles for one symbol, fetched together so switching
