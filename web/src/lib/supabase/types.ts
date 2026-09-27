@@ -20,6 +20,7 @@ export type SuppressionReason =
 // call with real structural entry-zone/invalidation data ever gets a row
 // (lifecycle.py::tracks()) — HOLD and ATR-fallback calls never do.
 export type LifecycleState = "WAIT" | "WATCH" | "READY" | "CONFIRMED" | "INVALIDATED" | "EXPIRED";
+export type LeadKind = "waitlist" | "access_request";
 
 export interface Database {
   public: {
@@ -556,6 +557,33 @@ export interface Database {
         // service-role key. See supabase/migrations/0024_chat_rate_limit.sql.
         Insert: never;
         Update: never;
+        Relationships: [];
+      };
+      leads: {
+        Row: {
+          id: string;
+          kind: LeadKind;
+          email: string;
+          name: string | null;
+          note: string | null;
+          created_at: string;
+          handled: boolean;
+        };
+        Insert: {
+          id?: string;
+          kind: LeadKind;
+          email: string;
+          name?: string | null;
+          note?: string | null;
+          created_at?: string;
+          handled?: boolean;
+        };
+        // Only `handled` is ever changed after insert (see
+        // components/admin/lead-handled-toggle.tsx) — a submitted lead's
+        // own details are never edited by app code.
+        Update: {
+          handled?: boolean;
+        };
         Relationships: [];
       };
     };

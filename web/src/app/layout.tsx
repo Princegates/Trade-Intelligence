@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import { getSiteAppearance } from "@/lib/site-appearance";
+import { SITE_NAME, SITE_DESCRIPTION, SITE_URL } from "@/lib/site";
 import { ModeProvider } from "@/components/mode/mode-provider";
 import { ModeScript } from "@/components/mode/mode-script";
 import "./globals.css";
@@ -16,14 +18,26 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: {
-    default: "SignalsVault AI",
-    template: "%s | SignalsVault AI",
+    default: SITE_NAME,
+    template: `%s | ${SITE_NAME}`,
   },
-  description:
-    "Trade intelligence for BTC and gold: rule-based signals with the reasoning behind every call, and a track record you can audit.",
+  description: SITE_DESCRIPTION,
   verification: {
     google: "rk3vvdEg2_gJzM9CEiC7OGov3nf4la3f63LnxOx4dfQ",
+  },
+  openGraph: {
+    type: "website",
+    siteName: SITE_NAME,
+    title: SITE_NAME,
+    description: SITE_DESCRIPTION,
+    url: SITE_URL,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_NAME,
+    description: SITE_DESCRIPTION,
   },
 };
 
@@ -55,6 +69,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       </head>
       <body className="min-h-full flex flex-col">
         <ModeProvider defaultMode={defaultMode}>{children}</ModeProvider>
+        <Analytics />
       </body>
     </html>
   );

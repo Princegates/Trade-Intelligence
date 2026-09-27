@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, BarChart3, ShieldCheck, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,6 +7,15 @@ import { Badge } from "@/components/ui/badge";
 import { DEMO_SIGNALS } from "@/lib/demo-data";
 import { plainLanguageSummary } from "@/lib/plain-language";
 import { getLatestSignals } from "@/lib/signals";
+import { getTrackRecordStat } from "@/lib/track-record";
+import { SITE_NAME, SITE_URL } from "@/lib/site";
+import { WaitlistForm } from "@/components/marketing/waitlist-form";
+
+export const metadata: Metadata = {
+  description:
+    "Rule-based BTC and gold trading signals with the full reasoning behind every call, and a track record you can audit — free trial, no card required.",
+  alternates: { canonical: SITE_URL },
+};
 
 // The same asset and horizons the sample data always curated (one
 // instrument across three timeframes tells a clearer "how it reasons over
@@ -44,7 +54,7 @@ function verdictVariant(v: string) {
 }
 
 export default async function HomePage() {
-  const { source, signals } = await getLatestSignals();
+  const [{ source, signals }, trackRecord] = await Promise.all([getLatestSignals(), getTrackRecordStat()]);
 
   const live =
     source === "live"
@@ -62,6 +72,21 @@ export default async function HomePage() {
 
   return (
     <div>
+      <script
+        type="application/ld+json"
+        // Plain Organization/WebSite facts only — no aggregateRating or
+        // review markup, since none of that data actually exists.
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@graph": [
+              { "@type": "Organization", name: SITE_NAME, url: SITE_URL },
+              { "@type": "WebSite", name: SITE_NAME, url: SITE_URL },
+            ],
+          }),
+        }}
+      />
+
       <section className="mx-auto max-w-6xl px-4 pb-16 pt-20 sm:px-6 sm:pt-28">
         <div className="mx-auto max-w-3xl text-center">
           <p className="mb-3 text-2xl font-extrabold uppercase tracking-[0.2em] text-primary sm:text-3xl">
@@ -109,6 +134,18 @@ export default async function HomePage() {
         <p className="mt-3 text-center text-xs text-muted-foreground">
           {isLive ? "Live signals, straight from the engine — sign up for the full dashboard." : "Sample data shown — sign up to see live signals."}
         </p>
+
+        {trackRecord && (
+          <p className="mt-2 text-center text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">{trackRecord.rate}%</span> of resolved calls confirmed in
+            the predicted direction, across {trackRecord.confirmedCount + trackRecord.invalidatedCount} tracked
+            signals{trackRecord.isDemo ? " (sample data)" : ""} —{" "}
+            <Link href="/about" className="underline underline-offset-4 hover:text-foreground">
+              how we measure it
+            </Link>
+            .
+          </p>
+        )}
       </section>
 
       <section id="features" className="border-t border-border bg-muted/30 py-20">
@@ -144,6 +181,11 @@ export default async function HomePage() {
                 Create your account <ArrowRight className="size-4" />
               </Link>
             </Button>
+          </div>
+
+          <div className="mt-12 border-t border-border pt-8">
+            <p className="mb-4 text-sm text-muted-foreground">Not ready for an account yet? Get notified about new features.</p>
+            <WaitlistForm />
           </div>
         </div>
       </section>

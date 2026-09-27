@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { notifyAdminsOfNewSignup } from "@/lib/notifications";
 
 export interface AuthFormState {
   error?: string;
@@ -69,6 +70,13 @@ export async function signup(_prevState: AuthFormState, formData: FormData): Pro
     },
   });
   if (error) return { error: error.message };
+
+  // The 0001_init.sql trigger has already created the (unapproved) profile
+  // row by this point. Without this, a sign-up sits on /pending until an
+  // admin happens to check /admin/users — nothing else prompts them to
+  // look. Never throws; a down/unconfigured email provider just means no
+  // notification goes out, not a failed signup.
+  await notifyAdminsOfNewSignup(parsed.data.email, parsed.data.fullName);
 
   // If email confirmation is off in the Supabase project, signUp already
   // returns a session and the user is signed in immediately.

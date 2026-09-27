@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,6 +7,12 @@ import { Badge } from "@/components/ui/badge";
 import { ASSET_NAMES, ASSET_ORDER } from "@/lib/signal-view";
 import { CHART_TIMEFRAMES } from "@/lib/candle-view";
 import { getAccessPolicy } from "@/lib/access-policy";
+import { AccessRequestForm } from "@/components/marketing/access-request-form";
+
+export const metadata: Metadata = {
+  title: "Pricing",
+  description: "Free trial for every account, then renewed access — no card required, no automated billing.",
+};
 
 // Pulled from the same constants the dashboard itself renders from, not
 // retyped here — an asset or timeframe added to the real system (both have
@@ -50,8 +57,8 @@ export default async function PricingPage() {
         "Full signal history & reasoning, renewed via an access code",
         "Renewed manually — no card, no subscription",
       ],
-      cta: "Request access",
-      href: "mailto:info@anknovate.com",
+      cta: null,
+      href: null,
       highlighted: true,
     },
   ];
@@ -98,9 +105,13 @@ export default async function PricingPage() {
               </ul>
             </CardContent>
             <CardFooter>
-              <Button asChild className="w-full" variant={tier.highlighted ? "default" : "outline"}>
-                <Link href={tier.href}>{tier.cta}</Link>
-              </Button>
+              {tier.href ? (
+                <Button asChild className="w-full" variant={tier.highlighted ? "default" : "outline"}>
+                  <Link href={tier.href}>{tier.cta}</Link>
+                </Button>
+              ) : (
+                <AccessRequestForm />
+              )}
             </CardFooter>
           </Card>
         ))}

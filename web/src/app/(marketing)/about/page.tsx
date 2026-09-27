@@ -1,5 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+
+export const metadata: Metadata = {
+  title: "About",
+  description:
+    "How SignalsVault AI's rule-based BTC and gold signal engine works, what it doesn't claim to do, and how to get in touch.",
+};
 
 export default function AboutPage() {
   return (
@@ -37,6 +44,20 @@ export default function AboutPage() {
             </CardDescription>
           </CardHeader>
         </Card>
+      </div>
+
+      <div className="mt-12">
+        <h2 className="text-2xl font-semibold">How we measure the track record</h2>
+        <p className="mt-3 text-muted-foreground">
+          Every BUY/SELL call with a real entry zone and invalidation level is tracked forward, candle by candle,
+          until it resolves one way or the other. <span className="text-foreground">Confirmed</span> means price
+          moved at least 1R (one risk-unit) in the predicted direction before hitting the invalidation
+          level — a real, favorable move, not necessarily the full target. <span className="text-foreground">
+          Invalidated</span> means the invalidation level was hit first. The percentage on the homepage is
+          confirmed &divide; (confirmed + invalidated) — calls that timed out without resolving either way, and
+          calls still in progress, aren&apos;t counted in that rate at all, so it never gets inflated by
+          excluding the undecided ones as if they went well.
+        </p>
       </div>
 
       <div className="mt-12">
