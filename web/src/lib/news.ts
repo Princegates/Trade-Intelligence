@@ -5,7 +5,12 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { DEMO_NEWS } from "@/lib/demo-data";
 import { sortByPublishedAt, type NewsItem } from "@/lib/news-view";
 
-const MAX_HEADLINES = 6;
+// Confirmed against a live response: this account's Marketaux plan caps
+// requests at 3 articles regardless of what `limit` asks for (the API
+// still returns 200 with the smaller batch, just with a
+// "limit is higher than your plan allows" warning) — matching it here
+// avoids that warning showing up on every fetch.
+const MAX_HEADLINES = 3;
 
 // A trust signal ("this dashboard has current information"), not a feed
 // traders act on — a 20-minute window is plenty fresh for that, and stays
