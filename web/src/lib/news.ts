@@ -57,29 +57,23 @@ async function getActiveNewsProvider(): Promise<NewsProvider | null> {
  * match, this returns zero articles (card hides) rather than irrelevant
  * ones with a BTC/gold dashboard's name on them.
  *
- * Deliberately no `published_after` bound: a first attempt at one (a
- * guessed ISO timestamp format) made the whole request start returning
- * zero articles — Marketaux either rejected the format or interpreted it
- * in a way that excluded everything. A live test confirmed symbols +
- * must_have_entities alone already return recent, relevant articles once
- * they're actually matching real entities (the earlier bug), so the date
- * bound wasn't solving a real problem — the "634 days old" symptom before
- * was caused entirely by the wrong symbols, not by a missing recency
- * filter.
- *
- * Response field names (data[].title/url/source/published_at) rendered
- * real titles, sources, and correctly-computed relative timestamps on the
- * dashboard once a token was configured, which is good evidence they're
- * right — unlike the entity-matching bug above, which slipped through
- * exactly because the request still returned real (just irrelevant)
- * articles instead of an empty list or a parse failure that would have
- * been obvious. */
+ * The params below are deliberately the exact set confirmed against a
+ * live response for this account — symbols, must_have_entities, language,
+ * limit, nothing else. Two earlier attempts each added one more
+ * unverified param on top of a proven-working request and each one broke
+ * it: `published_after` (a guessed date format) took the card from
+ * "wrong articles" to "no articles," and `filter_entities` (which only
+ * trims each article's own `entities` array per Marketaux's docs, and
+ * isn't used anywhere in the parsing below) is dropped for the same
+ * reason — it was never verified and was buying nothing. Do not add a
+ * param here without confirming it against a real response first; this
+ * account's plan has already shown it doesn't fail loudly on a param it
+ * doesn't like, it just quietly returns fewer or zero articles. */
 async function fetchFromMarketaux(apiToken: string): Promise<NewsItem[]> {
   const url = new URL("https://api.marketaux.com/v1/news/all");
   url.searchParams.set("api_token", apiToken);
   url.searchParams.set("symbols", "BTCUSD,XAUUSD");
   url.searchParams.set("must_have_entities", "true");
-  url.searchParams.set("filter_entities", "true");
   url.searchParams.set("language", "en");
   url.searchParams.set("limit", String(MAX_HEADLINES));
 

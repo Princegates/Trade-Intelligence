@@ -2,6 +2,7 @@ import { Mail, MessageSquare, CreditCard, Bell, Sparkles, Newspaper } from "luci
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ProviderSettingsForm } from "@/components/admin/provider-settings-form";
+import { RefreshMarketNewsButton } from "@/components/admin/refresh-market-news-button";
 import { PasswordForm } from "@/components/account/password-form";
 import { AccessPolicyForm } from "@/components/admin/access-policy-form";
 import { EngineSettingsForm } from "@/components/admin/engine-settings-form";
@@ -122,6 +123,11 @@ export default async function AdminSettingsPage() {
                 />
               ))}
             </div>
+            {c.key === "news" && (
+              <div className="mt-4">
+                <RefreshMarketNewsButton />
+              </div>
+            )}
           </TabsContent>
         ))}
       </Tabs>
