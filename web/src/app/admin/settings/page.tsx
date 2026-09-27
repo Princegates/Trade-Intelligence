@@ -1,4 +1,4 @@
-import { Mail, MessageSquare, CreditCard, Bell, Sparkles } from "lucide-react";
+import { Mail, MessageSquare, CreditCard, Bell, Sparkles, Newspaper } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ProviderSettingsForm } from "@/components/admin/provider-settings-form";
@@ -21,6 +21,7 @@ const CATEGORIES: { key: SettingsCategory; label: string; icon: React.ReactNode 
   { key: "payments", label: "Payments", icon: <CreditCard className="size-4" /> },
   { key: "push", label: "Push", icon: <Bell className="size-4" /> },
   { key: "ai", label: "AI / LLM", icon: <Sparkles className="size-4" /> },
+  { key: "news", label: "News", icon: <Newspaper className="size-4" /> },
 ];
 
 export default async function AdminSettingsPage() {

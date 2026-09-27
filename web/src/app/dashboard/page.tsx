@@ -1,8 +1,10 @@
 import { AssetSection } from "@/components/dashboard/asset-section";
 import { EventCalendar } from "@/components/dashboard/event-calendar";
+import { MarketNewsCard } from "@/components/dashboard/market-news-card";
 import { SuppressionList } from "@/components/dashboard/suppression-list";
 import { buildAssetPanel } from "@/lib/asset-panel";
 import { getUpcomingEvents } from "@/lib/calendar";
+import { getMarketNews } from "@/lib/news";
 import { ASSET_ORDER, getLatestSignals, getRecentSuppressions, unresolvedSuppressions } from "@/lib/signals";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -22,10 +24,11 @@ function currentTime() {
 export default async function DashboardOverviewPage() {
   const now = currentTime();
 
-  const [{ source, signals }, allSuppressions, events] = await Promise.all([
+  const [{ source, signals }, allSuppressions, events, news] = await Promise.all([
     getLatestSignals(),
     getRecentSuppressions(),
     getUpcomingEvents(),
+    getMarketNews(),
   ]);
 
   // A suppression is only worth showing while it is still the latest word on
@@ -75,6 +78,8 @@ export default async function DashboardOverviewPage() {
       )}
 
       <EventCalendar events={events} now={now} />
+
+      <MarketNewsCard items={news} now={now} />
 
       {panels.length > 0 && (
         <div>

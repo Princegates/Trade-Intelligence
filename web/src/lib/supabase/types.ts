@@ -3,7 +3,7 @@
 //   supabase gen types typescript --linked > src/lib/supabase/types.ts
 
 export type Role = "user" | "admin";
-export type SettingsCategory = "email" | "sms" | "payments" | "push" | "ai";
+export type SettingsCategory = "email" | "sms" | "payments" | "push" | "ai" | "news";
 export type Verdict = "BUY" | "SELL" | "HOLD";
 
 // Why the engine declined to publish. Mirrors the reason codes in

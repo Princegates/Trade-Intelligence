@@ -6,6 +6,7 @@
 import type { SessionUser } from "@/lib/auth";
 import type { LifecycleState, SettingsCategory } from "@/lib/supabase/types";
 import type { CalendarEvent } from "@/lib/calendar-view";
+import type { NewsItem } from "@/lib/news-view";
 
 export const DEMO_USER: SessionUser = {
   id: "demo-user",
@@ -334,6 +335,27 @@ export const DEMO_EVENTS: CalendarEvent[] = [
   },
 ];
 
+export const DEMO_NEWS: NewsItem[] = [
+  {
+    title: "Bitcoin holds above key support as ETF inflows resume",
+    url: "https://example.com/news/bitcoin-etf-inflows",
+    source: "example-news.com",
+    publishedAt: hoursFromNow(-1),
+  },
+  {
+    title: "Gold steadies near record highs ahead of Fed minutes",
+    url: "https://example.com/news/gold-fed-minutes",
+    source: "example-markets.com",
+    publishedAt: hoursFromNow(-4),
+  },
+  {
+    title: "Dollar index slips as rate-cut bets firm up",
+    url: "https://example.com/news/dollar-index-rate-cuts",
+    source: "example-finance.com",
+    publishedAt: hoursFromNow(-9),
+  },
+];
+
 export interface DemoUser {
   id: string;
   email: string;
@@ -391,6 +413,9 @@ export const SETTINGS_PROVIDERS: Record<SettingsCategory, ProviderDef[]> = {
     { provider: "gemini", label: "Google Gemini (free tier)", fields: [{ key: "api_key", label: "API Key", secret: true }, { key: "model", label: "Model", placeholder: "gemini-3.5-flash-lite" }] },
     { provider: "anthropic", label: "Anthropic (Claude)", fields: [{ key: "api_key", label: "API Key", secret: true }, { key: "model", label: "Model", placeholder: "claude-sonnet-5" }] },
     { provider: "openai", label: "OpenAI", fields: [{ key: "api_key", label: "API Key", secret: true }, { key: "model", label: "Model", placeholder: "gpt-5" }] },
+  ],
+  news: [
+    { provider: "marketaux", label: "Marketaux", fields: [{ key: "api_token", label: "API Token", secret: true }] },
   ],
 };
 
