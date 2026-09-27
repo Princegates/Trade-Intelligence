@@ -1,9 +1,30 @@
 import "server-only";
+import { unstable_cache } from "next/cache";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { DEMO_SIGNALS } from "@/lib/demo-data";
 import type { Database } from "@/lib/supabase/types";
 import type { SignalView, SuppressionView } from "@/lib/signal-view";
+
+type Client = SupabaseClient<Database>;
+
+// The dashboard's own auth gate (src/lib/auth.ts#requireUser, enforced by
+// every route that ends up calling the functions below) already restricts
+// this whole feed to approved users and admins — exactly what `has_access()`
+// re-checks at the row level for signal_suppressions, candles and
+// economic_events (see migration 0009). So for the read-only queries in this
+// file and in calendar.ts/candles.ts, that RLS check is redundant with the
+// page-level gate, not a second independent boundary — which is what makes
+// it safe to read through the service-role client below instead of the
+// per-request cookie client: unstable_cache can't see cookies() at all
+// ("Accessing uncached data sources such as headers or cookies inside a
+// cache scope is not supported"), so a shared, cross-user cache needs a
+// client that doesn't need the request's session to read this data.
+// Everyone who reaches this data already cleared the same gate the RLS
+// policy is enforcing, so nothing new becomes readable.
+const CACHE_SECONDS = 30;
 
 export { isStale, TIMEFRAME_SECONDS, ASSET_NAMES, ASSET_ORDER, unresolvedSuppressions } from "@/lib/signal-view";
 export type { SignalView, SuppressionView } from "@/lib/signal-view";
@@ -124,10 +145,7 @@ function latestPerPair(
  * no commentary yet), and several of the confluence engine's own past
  * STRATEGY_VERSION values can legitimately coexist within the fetch
  * window, where only the single most recent should win. */
-async function getLatestCommentary(): Promise<Map<string, string>> {
-  const supabase = await createClient();
-  if (!supabase) return new Map();
-
+async function getLatestCommentary(supabase: Client): Promise<Map<string, string>> {
   const { data } = await supabase
     .from("signal_commentary")
     .select("symbol, timeframe, commentary, generated_at")
@@ -148,10 +166,7 @@ async function getLatestCommentary(): Promise<Map<string, string>> {
  * recency match, this has to join to one specific signal exactly: a
  * signal's own lifecycle status is not something "whichever is most
  * recent" can stand in for. */
-async function getLatestLifecycle(): Promise<Map<string, SignalView["lifecycle"]>> {
-  const supabase = await createClient();
-  if (!supabase) return new Map();
-
+async function getLatestLifecycle(supabase: Client): Promise<Map<string, SignalView["lifecycle"]>> {
   const { data } = await supabase
     .from("signal_lifecycle")
     .select("symbol, timeframe, candle_time, strategy_version, state, entered_at");
@@ -167,17 +182,11 @@ async function getLatestLifecycle(): Promise<Map<string, SignalView["lifecycle"]
   return map;
 }
 
-/** Latest signal per (symbol, timeframe). */
-export async function getLatestSignals(): Promise<SignalFeed> {
-  if (!isSupabaseConfigured()) return { source: "demo", signals: DEMO_SIGNALS };
-
-  const supabase = await createClient();
-  if (!supabase) return { source: "unavailable", signals: [] };
-
+async function readLatestSignals(supabase: Client): Promise<SignalFeed> {
   const [{ data, error }, commentary, lifecycle] = await Promise.all([
     supabase.from("signals").select("*").order("generated_at", { ascending: false }).limit(500),
-    getLatestCommentary(),
-    getLatestLifecycle(),
+    getLatestCommentary(supabase),
+    getLatestLifecycle(supabase),
   ]);
 
   if (error || !data) return { source: "unavailable", signals: [] };
@@ -185,6 +194,34 @@ export async function getLatestSignals(): Promise<SignalFeed> {
   // An empty table is a live feed that has not published yet, not a reason to
   // fall back to sample prices.
   return { source: "live", signals: latestPerPair(data, commentary, lifecycle) };
+}
+
+// 500 signal rows plus the commentary and lifecycle joins, on every one of
+// however many concurrent page loads hit the dashboard at once — cached so
+// one read serves all of them until the next window, since the result is
+// the same for every viewer (see the comment above CACHE_SECONDS).
+const getCachedLatestSignals = unstable_cache(
+  async () => {
+    const supabase = createServiceClient();
+    if (!supabase) return { source: "unavailable", signals: [] } satisfies SignalFeed;
+    return readLatestSignals(supabase);
+  },
+  ["latest-signals"],
+  { revalidate: CACHE_SECONDS, tags: ["signals"] }
+);
+
+/** Latest signal per (symbol, timeframe). */
+export async function getLatestSignals(): Promise<SignalFeed> {
+  if (!isSupabaseConfigured()) return { source: "demo", signals: DEMO_SIGNALS };
+
+  // Falls back to an uncached, per-request read when no service-role key is
+  // configured (e.g. a local checkout without one) — correctness first, the
+  // cache is a bonus once that key exists.
+  if (createServiceClient()) return getCachedLatestSignals();
+
+  const supabase = await createClient();
+  if (!supabase) return { source: "unavailable", signals: [] };
+  return readLatestSignals(supabase);
 }
 
 export async function getSignalHistory(symbol: string, timeframe: string, limit = 25): Promise<SignalView[]> {
@@ -207,14 +244,7 @@ export async function getSignalHistory(symbol: string, timeframe: string, limit 
   return data.map((row) => toView(row));
 }
 
-/** Most recent reason per (symbol, timeframe) the engine withheld a signal,
- * so an absent signal can be explained rather than just missing. */
-export async function getRecentSuppressions(withinHours = 24): Promise<SuppressionView[]> {
-  if (!isSupabaseConfigured()) return [];
-
-  const supabase = await createClient();
-  if (!supabase) return [];
-
+async function readRecentSuppressions(supabase: Client, withinHours: number): Promise<SuppressionView[]> {
   const since = new Date(Date.now() - withinHours * 3600 * 1000).toISOString();
   const { data, error } = await supabase
     .from("signal_suppressions")
@@ -240,6 +270,28 @@ export async function getRecentSuppressions(withinHours = 24): Promise<Suppressi
     });
   }
   return latest;
+}
+
+const getCachedRecentSuppressions = unstable_cache(
+  async (withinHours: number) => {
+    const supabase = createServiceClient();
+    if (!supabase) return [];
+    return readRecentSuppressions(supabase, withinHours);
+  },
+  ["recent-suppressions"],
+  { revalidate: CACHE_SECONDS, tags: ["suppressions"] }
+);
+
+/** Most recent reason per (symbol, timeframe) the engine withheld a signal,
+ * so an absent signal can be explained rather than just missing. */
+export async function getRecentSuppressions(withinHours = 24): Promise<SuppressionView[]> {
+  if (!isSupabaseConfigured()) return [];
+
+  if (createServiceClient()) return getCachedRecentSuppressions(withinHours);
+
+  const supabase = await createClient();
+  if (!supabase) return [];
+  return readRecentSuppressions(supabase, withinHours);
 }
 
 export function symbolTimeframePairs(signals: SignalView[]) {
