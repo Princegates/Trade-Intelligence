@@ -42,16 +42,35 @@ async function getActiveNewsProvider(): Promise<NewsProvider | null> {
  * provider outage should silently hide the card, never break the
  * dashboard.
  *
- * NOTE: written from Marketaux's published API shape, not verified against
- * a live response (this environment's network policy blocks
- * marketaux.com). Re-check the field names below — `data[].title/url/
- * source/published_at` — against a real response once a token is
- * configured, before relying on this beyond "card shows or doesn't". */
+ * Marketaux's own entity symbols are `BTCUSD` (exchange "CC",
+ * cryptocurrency) and `XAUUSD` (gold), not bare `BTC`/`XAU` — the first
+ * version of this used the bare tickers, which Marketaux's entity search
+ * doesn't recognize, so `symbols` silently matched nothing and the API
+ * fell back to generic top financial news (unrelated ETF articles, some
+ * over a year old) instead of erroring. `must_have_entities=true` makes
+ * that failure mode loud instead of quiet: if the symbols still don't
+ * match, this returns zero articles (card hides) rather than irrelevant
+ * ones with a BTC/gold dashboard's name on them. `published_after` keeps
+ * results to the last few days — /news/all isn't sorted purely by
+ * recency, so without a bound a relevant-but-old article can outrank a
+ * fresher one.
+ *
+ * Response field names (data[].title/url/source/published_at) rendered
+ * real titles, sources, and correctly-computed relative timestamps on the
+ * dashboard once a token was configured, which is good evidence they're
+ * right — unlike the entity-matching bug above, which slipped through
+ * exactly because the request still returned real (just irrelevant)
+ * articles instead of an empty list or a parse failure that would have
+ * been obvious. */
 async function fetchFromMarketaux(apiToken: string): Promise<NewsItem[]> {
+  const publishedAfter = new Date(Date.now() - 3 * 24 * 3600_000).toISOString();
+
   const url = new URL("https://api.marketaux.com/v1/news/all");
   url.searchParams.set("api_token", apiToken);
-  url.searchParams.set("symbols", "BTC,XAU");
+  url.searchParams.set("symbols", "BTCUSD,XAUUSD");
+  url.searchParams.set("must_have_entities", "true");
   url.searchParams.set("filter_entities", "true");
+  url.searchParams.set("published_after", publishedAfter);
   url.searchParams.set("language", "en");
   url.searchParams.set("limit", String(MAX_HEADLINES));
 
