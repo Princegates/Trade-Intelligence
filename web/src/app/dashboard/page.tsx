@@ -77,9 +77,14 @@ export default async function DashboardOverviewPage() {
         </Card>
       )}
 
-      <EventCalendar events={events} now={now} />
-
-      <MarketNewsCard items={news} now={now} />
+      {/* Side by side once there's news to show — MarketNewsCard renders
+          nothing at all when `news` is empty, so forcing the grid in that
+          case would leave the calendar stranded in a half-width column
+          next to empty space. */}
+      <div className={news.length > 0 ? "grid items-start gap-6 sm:grid-cols-2" : undefined}>
+        <EventCalendar events={events} now={now} />
+        <MarketNewsCard items={news} now={now} />
+      </div>
 
       {panels.length > 0 && (
         <div>
