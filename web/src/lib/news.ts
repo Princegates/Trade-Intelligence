@@ -55,10 +55,17 @@ async function getActiveNewsProvider(): Promise<NewsProvider | null> {
  * over a year old) instead of erroring. `must_have_entities=true` makes
  * that failure mode loud instead of quiet: if the symbols still don't
  * match, this returns zero articles (card hides) rather than irrelevant
- * ones with a BTC/gold dashboard's name on them. `published_after` keeps
- * results to the last few days — /news/all isn't sorted purely by
- * recency, so without a bound a relevant-but-old article can outrank a
- * fresher one.
+ * ones with a BTC/gold dashboard's name on them.
+ *
+ * Deliberately no `published_after` bound: a first attempt at one (a
+ * guessed ISO timestamp format) made the whole request start returning
+ * zero articles — Marketaux either rejected the format or interpreted it
+ * in a way that excluded everything. A live test confirmed symbols +
+ * must_have_entities alone already return recent, relevant articles once
+ * they're actually matching real entities (the earlier bug), so the date
+ * bound wasn't solving a real problem — the "634 days old" symptom before
+ * was caused entirely by the wrong symbols, not by a missing recency
+ * filter.
  *
  * Response field names (data[].title/url/source/published_at) rendered
  * real titles, sources, and correctly-computed relative timestamps on the
@@ -68,21 +75,24 @@ async function getActiveNewsProvider(): Promise<NewsProvider | null> {
  * articles instead of an empty list or a parse failure that would have
  * been obvious. */
 async function fetchFromMarketaux(apiToken: string): Promise<NewsItem[]> {
-  const publishedAfter = new Date(Date.now() - 3 * 24 * 3600_000).toISOString();
-
   const url = new URL("https://api.marketaux.com/v1/news/all");
   url.searchParams.set("api_token", apiToken);
   url.searchParams.set("symbols", "BTCUSD,XAUUSD");
   url.searchParams.set("must_have_entities", "true");
   url.searchParams.set("filter_entities", "true");
-  url.searchParams.set("published_after", publishedAfter);
   url.searchParams.set("language", "en");
   url.searchParams.set("limit", String(MAX_HEADLINES));
 
   try {
     const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
     if (!response.ok) {
-      console.error(`[news] Marketaux ${response.status} ${response.statusText}`);
+      // Logged with the response body, not just the status — Marketaux's
+      // error responses tend to name which param it rejected, which is
+      // exactly what would have made the published_after bug above
+      // (guessed date format, silently zero results) diagnosable from
+      // logs alone instead of a live round-trip to a real response.
+      const body = await response.text().catch(() => "");
+      console.error(`[news] Marketaux ${response.status} ${response.statusText}: ${body.slice(0, 500)}`);
       return [];
     }
 
