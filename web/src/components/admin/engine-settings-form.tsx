@@ -27,6 +27,9 @@ function NumberField({
   onChange: (v: string) => void;
   min?: number;
   max?: number;
+  /** Leave decimal fields at "any": a numeric step counts from `min`, so
+   * min 0.01 with step 0.05 would reject 0.75, 1.5 and 3 — the values
+   * people actually use. The server action validates ranges anyway. */
   step?: string;
 }) {
   return (
@@ -101,7 +104,7 @@ export function EngineSettingsForm({ settings }: { settings: EngineSettings }) {
           value={atrStopMultiplier}
           onChange={setAtrStopMultiplier}
           min={0.01}
-          step="0.05"
+          step="any"
         />
         <NumberField
           id="rewardToRisk"
@@ -110,7 +113,7 @@ export function EngineSettingsForm({ settings }: { settings: EngineSettings }) {
           value={rewardToRisk}
           onChange={setRewardToRisk}
           min={0.01}
-          step="0.1"
+          step="any"
         />
         <NumberField
           id="minRewardToRisk"
@@ -119,7 +122,7 @@ export function EngineSettingsForm({ settings }: { settings: EngineSettings }) {
           value={minRewardToRisk}
           onChange={setMinRewardToRisk}
           min={0.01}
-          step="0.1"
+          step="any"
         />
         <NumberField
           id="minConfidenceThreshold"
@@ -170,7 +173,7 @@ export function EngineSettingsForm({ settings }: { settings: EngineSettings }) {
           value={structureBufferAtr}
           onChange={setStructureBufferAtr}
           min={0.01}
-          step="0.05"
+          step="any"
         />
         <NumberField
           id="entryZoneWidthAtr"
@@ -179,7 +182,7 @@ export function EngineSettingsForm({ settings }: { settings: EngineSettings }) {
           value={entryZoneWidthAtr}
           onChange={setEntryZoneWidthAtr}
           min={0.01}
-          step="0.05"
+          step="any"
         />
         <NumberField
           id="maxEntryZoneDistanceAtr"
@@ -188,7 +191,7 @@ export function EngineSettingsForm({ settings }: { settings: EngineSettings }) {
           value={maxEntryZoneDistanceAtr}
           onChange={setMaxEntryZoneDistanceAtr}
           min={0.01}
-          step="0.1"
+          step="any"
         />
       </div>
 
@@ -208,7 +211,7 @@ export function EngineSettingsForm({ settings }: { settings: EngineSettings }) {
           value={lifecycleWatchZoneHalfWidths}
           onChange={setLifecycleWatchZoneHalfWidths}
           min={0.01}
-          step="0.1"
+          step="any"
         />
         <NumberField
           id="lifecycleConfirmMoveR"
@@ -217,7 +220,7 @@ export function EngineSettingsForm({ settings }: { settings: EngineSettings }) {
           value={lifecycleConfirmMoveR}
           onChange={setLifecycleConfirmMoveR}
           min={0.01}
-          step="0.1"
+          step="any"
         />
         <NumberField
           id="lifecycleExpiryCandles"
