@@ -32,10 +32,8 @@ function RevealingCommentary({ text }: { text: string }) {
           real height immediately on mount, so the box doesn't visibly grow
           taller over the ~2s the words take to reveal (it has no fixed
           height otherwise, and being vertically centered, a growing box
-          expands outward in both directions — slow, obvious motion that
-          drowned out the balloon-pop entrance below, which finishes in a
-          fraction of that time). Same text, same classes, so it wraps to
-          the same line count the revealed copy will. */}
+          expands outward in both directions). Same text, same classes, so
+          it wraps to the same line count the revealed copy will. */}
       <p className="invisible text-sm leading-relaxed" aria-hidden="true">
         {text}
       </p>
@@ -60,13 +58,19 @@ export function AiTakeDialog({ commentary, symbol, timeframe }: { commentary: st
       <DialogTrigger asChild>
         <button
           type="button"
-          className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-dashed border-border px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
+          className="relative mb-3 inline-flex items-center gap-1.5 rounded-full border border-dashed border-border px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
         >
-          <Sparkles className="size-3" />
+          {/* The swoosh: a streak that draws in toward the sparkle, which
+              pops as it lands — see .ai-take-trail/.ai-take-sparkle in
+              globals.css. */}
+          <svg className="ai-take-trail" viewBox="0 0 30 26" aria-hidden="true">
+            <path d="M2 22 Q 14 26, 26 17" />
+          </svg>
+          <Sparkles className="ai-take-sparkle size-3" />
           AI take
         </button>
       </DialogTrigger>
-      <DialogContent className="ai-take-content">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-1.5">
             <Sparkles className="size-4 text-primary" />

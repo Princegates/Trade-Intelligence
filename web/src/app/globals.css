@@ -184,38 +184,74 @@ body {
   animation: dialog-content-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* AI Take dialog only (src/components/dashboard/ai-take-dialog.tsx) —
-   swells up from nearly nothing like a balloon inflating, overshoots past
-   full size, wobbles back down and up once more, then settles — an
-   explicit multi-stage keyframe rather than relying on a single easing
-   curve's overshoot, which (measured) was too quick and too subtle on a
-   large rectangular dialog to read as "balloon" next to the word-by-word
-   text reveal happening at the same time right after it. Applied via an
-   extra className alongside "dialog-content" (see DialogContent's cn()
-   merge), so this has to sit after the rule above to win on source order
-   — both selectors are equally specific (one class + one attribute). */
-@keyframes ai-take-balloon-in {
+/* AI Take pill on each signal card (src/components/dashboard/ai-take-dialog.tsx)
+   — a curved streak swooshes in toward the sparkle, the sparkle pops, then
+   the streak fades. Most of each cycle is idle so a page of cards isn't in
+   constant motion. Off entirely for anyone who asks their OS for reduced
+   motion. */
+@keyframes ai-take-swoosh-trail {
   0% {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(0.1);
-  }
-  50% {
+    stroke-dashoffset: 40;
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1.15);
   }
-  70% {
-    transform: translate(-50%, -50%) scale(0.94);
+  18% {
+    stroke-dashoffset: 0;
+    opacity: 1;
   }
-  88% {
-    transform: translate(-50%, -50%) scale(1.04);
-  }
+  32%,
   100% {
-    transform: translate(-50%, -50%) scale(1);
+    stroke-dashoffset: 0;
+    opacity: 0;
   }
 }
 
-.ai-take-content[data-state="open"] {
-  animation: ai-take-balloon-in 0.75s cubic-bezier(0.22, 1, 0.36, 1);
+@keyframes ai-take-swoosh-pop {
+  0%,
+  14% {
+    transform: scale(1) rotate(0deg);
+  }
+  22% {
+    transform: scale(1.55) rotate(25deg);
+  }
+  30%,
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+.ai-take-trail {
+  position: absolute;
+  left: -10px;
+  top: -6px;
+  width: 30px;
+  height: 26px;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.ai-take-trail path {
+  fill: none;
+  stroke: hsl(var(--primary));
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 40;
+  stroke-dashoffset: 40;
+  animation: ai-take-swoosh-trail 3.4s ease-out infinite;
+}
+
+.ai-take-sparkle {
+  color: hsl(var(--primary));
+  transform-origin: center;
+  animation: ai-take-swoosh-pop 3.4s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-take-trail {
+    display: none;
+  }
+  .ai-take-sparkle {
+    animation: none;
+  }
 }
 
 /* Chat mascot (src/components/chat/chat-mascot.tsx) — a little robot
