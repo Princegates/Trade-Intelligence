@@ -355,7 +355,35 @@ def detect_guda_special_setups(now, guda_special_settings=None):
         )
 
 
-def advance_guda_special_setups(now, guda_special_settings=None):
+def _retire_superseded_guda_special_setup(setup, now):
+    reason = f"superseded by {config.GUDA_SPECIAL_STRATEGY_VERSION}"
+    _mirror(
+        supabase.publish_guda_special_setup,
+        setup["id"],
+        setup["symbol"],
+        setup["timeframe"],
+        setup["strategy_version"],
+        setup["bos_candle_time"],
+        setup["bos_kind"],
+        setup["bos_direction"],
+        setup["bos_price"],
+        setup["break_strength"],
+        "EXPIRED",
+        now,
+        now,
+        impulse_start_price=setup.get("impulse_start_price"),
+        impulse_end_price=setup.get("impulse_end_price"),
+        impulse_atr_multiple=setup.get("impulse_atr_multiple"),
+        fib_50=setup.get("fib_50"),
+        fib_61_8=setup.get("fib_61_8"),
+        fib_72=setup.get("fib_72"),
+        fib_78_6=setup.get("fib_78_6"),
+        invalidation_reason=reason,
+    )
+    _mirror(supabase.publish_guda_special_setup_transition, setup["id"], setup["state"], "EXPIRED", None)
+
+
+def advance_guda_special_setups(now, guda_special_settings=None, events=()):
     """Re-evaluates every open GUDA SPECIAL setup against the latest
     mirrored candles for its pair — the GUDA SPECIAL analogue of
     recheck_lifecycles(), same "read the mirror back, never fetch fresh"
@@ -373,6 +401,15 @@ def advance_guda_special_setups(now, guda_special_settings=None):
     candle_cache = {}
     htf_candle_cache = {}
     for setup in open_setups:
+        # An open setup from an older strategy version was measured by
+        # rules this version replaced — advancing it with the new rules
+        # would publish a signal under a version label that never produced
+        # it. Retired quietly: a setup row closed, no NO_TRADE signal, since
+        # nothing about the market invalidated it.
+        if setup["strategy_version"] != config.GUDA_SPECIAL_STRATEGY_VERSION:
+            _retire_superseded_guda_special_setup(setup, now)
+            continue
+
         key = (setup["symbol"], setup["timeframe"])
         if key not in candle_cache:
             candle_cache[key] = supabase.get_recent_candles(*key, limit=config.CANDLE_FETCH_LIMIT)
@@ -386,8 +423,19 @@ def advance_guda_special_setups(now, guda_special_settings=None):
             )
         htf_candles = htf_candle_cache[setup["symbol"]]
 
+        currency = config.EVENT_RISK_CURRENCY.get(setup["symbol"])
+        blackout = (
+            event_risk.blackout(
+                events, currency, now, config.EVENT_RISK_BEFORE_MINUTES * 60, config.EVENT_RISK_AFTER_MINUTES * 60
+            )
+            if currency
+            else None
+        )
+
         timeframe_seconds = config.TIMEFRAME_SECONDS[setup["timeframe"]]
-        result = setups.advance_setup(setup, candles, htf_candles, timeframe_seconds, guda_special_settings)
+        result = setups.advance_setup(
+            setup, candles, htf_candles, timeframe_seconds, guda_special_settings, event_blackout=blackout
+        )
         updated = result["setup"]
         state_changed = updated["state"] != setup["state"]
 
@@ -479,7 +527,7 @@ def main():
         if guda_special_settings is None:
             print("[info] guda_special_settings not configured — GUDA SPECIAL gates run with defaults only")
         detect_guda_special_setups(now, guda_special_settings)
-        advance_guda_special_setups(now, guda_special_settings)
+        advance_guda_special_setups(now, guda_special_settings, events)
 
 
 if __name__ == "__main__":

@@ -10,18 +10,31 @@ setup-specific anchor, not "nearest level to price."
 """
 
 
-def stop_from_formation(formation_candles, direction, buffer_atr, atr_val):
+def stop_from_formation(formation_candles, direction, buffer_atr, atr_val, anchor_level=None):
     """`formation_candles` are the 1-3 candles that produced the
     confirmation pattern (the same slice patterns.detect() read). `
     direction` 1 for BUY (stop below the formation's lowest low), -1 for
     SELL (stop above the formation's highest high). None without ATR —
-    there's no honest way to size the buffer."""
+    there's no honest way to size the buffer.
+
+    `anchor_level`, when given, is a structural level the stop must also
+    sit beyond — GUDA SPECIAL passes the broken structure level, since a
+    break-and-retest trade's thesis only fails once price is back through
+    that level. A stop tucked under the formation but above the level
+    would get taken out by an ordinary retest wick that never broke the
+    thesis at all."""
     if atr_val is None or atr_val <= 0:
         return None
     buffer = atr_val * buffer_atr
     if direction == 1:
-        return min(c["low"] for c in formation_candles) - buffer
-    return max(c["high"] for c in formation_candles) + buffer
+        extreme = min(c["low"] for c in formation_candles)
+        if anchor_level is not None:
+            extreme = min(extreme, anchor_level)
+        return extreme - buffer
+    extreme = max(c["high"] for c in formation_candles)
+    if anchor_level is not None:
+        extreme = max(extreme, anchor_level)
+    return extreme + buffer
 
 
 def sanity_check(entry, stop, atr_val, max_risk_distance_atr, min_stop_distance_atr):

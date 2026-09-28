@@ -20,6 +20,24 @@ def test_stop_from_formation_above_the_highest_high_for_a_sell():
     assert stop == 104.0 + 0.5
 
 
+def test_stop_goes_beyond_an_anchor_level_below_the_formation():
+    formation = [_candle(98.0, 101.0), _candle(97.5, 100.0)]
+    stop = structural_stop.stop_from_formation(formation, direction=1, buffer_atr=0.25, atr_val=2.0, anchor_level=96.0)
+    assert stop == 96.0 - 0.5
+
+
+def test_an_anchor_level_inside_the_formation_changes_nothing():
+    formation = [_candle(98.0, 101.0), _candle(97.0, 100.0)]
+    stop = structural_stop.stop_from_formation(formation, direction=1, buffer_atr=0.25, atr_val=2.0, anchor_level=99.0)
+    assert stop == 97.0 - 0.5
+
+
+def test_stop_goes_beyond_an_anchor_level_above_the_formation_for_a_sell():
+    formation = [_candle(98.0, 101.0), _candle(99.0, 102.0)]
+    stop = structural_stop.stop_from_formation(formation, direction=-1, buffer_atr=0.25, atr_val=2.0, anchor_level=103.0)
+    assert stop == 103.0 + 0.5
+
+
 def test_stop_from_formation_is_none_without_atr():
     formation = [_candle(98.0, 101.0)]
     assert structural_stop.stop_from_formation(formation, direction=1, buffer_atr=0.25, atr_val=None) is None

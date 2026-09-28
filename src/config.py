@@ -74,7 +74,14 @@ STRATEGY_VERSION = "3.1.0"
 # tables (guda_special_setups/guda_special_signals), own version string, so
 # the two are never confusable in a query or a dashboard filter. See
 # src/signals/setups.py.
-GUDA_SPECIAL_STRATEGY_VERSION = "guda-special-1.0.0"
+#
+# 1.1.0: one setup per broken level (not one per candle still beyond it);
+# the Fibonacci zone measured on the full impulse instead of the break
+# candle; Engulfing confirmations read against the pullback so they can
+# actually fire; stop beyond the broken level; minimum reward-to-risk to
+# the nearest structure; WEAK confirmations and HTF-opposed CHoCH setups
+# rejected; no publishing inside a high-impact release window.
+GUDA_SPECIAL_STRATEGY_VERSION = "guda-special-1.1.0"
 
 INSTRUMENTS = [
     {

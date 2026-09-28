@@ -44,6 +44,15 @@ def detect_new_setups(candles, settings=None):
     if break_event is None:
         return None
 
+    # Only the FIRST close beyond the level is the break. Until a new swing
+    # confirms (swing_lookback candles later), every following candle that
+    # is still beyond the same level reads as a "break" too — and each has
+    # its own bos_candle_time, so the identity dedupe can't catch it. That
+    # used to open one setup per candle for a single broken level, each able
+    # to publish its own signal: one trade idea at several times the risk.
+    if len(candles) >= 2 and _beyond(candles[-2]["close"], break_event["level"], break_event["direction"]):
+        return None
+
     break_candle = candles[-1]
     atr_val = ind.atr(candles, 14)
     strength = imp.classify_break(break_candle, break_event["level"], atr_val)
@@ -57,14 +66,16 @@ def detect_new_setups(candles, settings=None):
     }
 
 
-def advance_setup(setup, candles, htf_candles, timeframe_seconds, settings=None):
+def advance_setup(setup, candles, htf_candles, timeframe_seconds, settings=None, event_blackout=None):
     """Walks one open setup forward given fresh candle history. Returns
     {"setup": <updated fields>, "signal": <guda_special_signals row or
     None>}. `setup` is the current signal_lifecycle-style row (state,
-    bos_direction, bos_price, bos_candle_time, and, once frozen, the
+    bos_direction, bos_price, bos_candle_time, and, once measured, the
     impulse/fib fields — see below). `candles`/`htf_candles` are this
     run's freshest mirrored history for the setup's own timeframe and the
-    1H context timeframe respectively."""
+    1H context timeframe respectively. `event_blackout` is the high-impact
+    economic release this run sits inside the risk window of for the
+    setup's instrument (event_risk.blackout()'s return), or None."""
     settings = settings or {}
     direction = setup["bos_direction"]
     bos_level = setup["bos_price"]
@@ -83,22 +94,34 @@ def advance_setup(setup, candles, htf_candles, timeframe_seconds, settings=None)
 
     swings = struct.swing_points(candles, settings.get("swing_lookback", 2))
 
-    # Freeze impulse + Fibonacci once, the first run it clears the minimum
-    # size filter — frozen so the confirmation zone stays a stable
-    # reference rather than drifting as new swings form later.
+    # The impulse ORIGIN is frozen once, the first run the leg clears the
+    # minimum size filter — pinned so later swings (the pullback's own low,
+    # most obviously) can never be mistaken for it. The impulse END is not:
+    # it trails the most extreme price reached since the break. Setups are
+    # first advanced on the break candle itself, so freezing the end there
+    # measured the Fibonacci zone off a move that was still running — the
+    # whole zone landed below the level that just broke, where price can't
+    # trade without closing back through it and invalidating the setup.
+    # Measured against the full leg, the zone and the broken level line up.
     if setup.get("impulse_start_price") is None:
         impulse_leg = imp.measure_impulse(candles, swings, direction)
         if not imp.impulse_clears_minimum(impulse_leg, atr_val, settings.get("min_impulse_atr_multiple", 1.5)):
             return _unchanged(setup, "BOS_DETECTED")
-        fib_levels = fibonacci.levels(impulse_leg["start_price"], impulse_leg["end_price"], direction)
+        start, end = impulse_leg["start_price"], impulse_leg["end_price"]
+    else:
+        start, end = setup["impulse_start_price"], setup["impulse_end_price"]
+
+    extreme = _extreme_since(candles, setup["bos_candle_time"], direction)
+    if extreme is not None and _beyond(extreme, end, direction):
+        end = extreme
+
+    if start != setup.get("impulse_start_price") or end != setup.get("impulse_end_price"):
         setup = {
             **setup,
-            "impulse_start_price": impulse_leg["start_price"],
-            "impulse_end_price": impulse_leg["end_price"],
-            "impulse_atr_multiple": (
-                abs(impulse_leg["end_price"] - impulse_leg["start_price"]) / atr_val if atr_val else None
-            ),
-            **fib_levels,
+            "impulse_start_price": start,
+            "impulse_end_price": end,
+            "impulse_atr_multiple": abs(end - start) / atr_val if atr_val else None,
+            **fibonacci.levels(start, end, direction),
         }
         # Fall through — a large enough impulse can already be retraced
         # into the zone by this same candle, no need to wait a run.
@@ -122,20 +145,32 @@ def advance_setup(setup, candles, htf_candles, timeframe_seconds, settings=None)
     if zone is None or not zone["inside_zone"]:
         return _unchanged(setup, "AWAITING_CONFIRMATION")
 
-    trend_label = "up" if direction == 1 else "down"
-    events = pat.detect(candles, trend_label)
+    # The confirmation reverses the PULLBACK, so the pattern is read against
+    # the pullback's direction — a Bullish Engulfing at the bottom of a
+    # down-move into support. patterns.detect() (correctly, for the
+    # confluence engine) only reports an engulfing that goes against the
+    # trend it's given; handing it the break direction instead meant an
+    # Engulfing could never confirm any setup, only a Morning/Evening Star.
+    pullback_trend = "down" if direction == 1 else "up"
+    events = pat.detect(candles, pullback_trend)
     wanted = CONFIRMATION_PATTERNS[direction]
     confirmation = next((e for e in events if e["name"] in wanted), None)
     if confirmation is None:
         return _unchanged(setup, "AWAITING_CONFIRMATION")
 
+    # A pattern whose confirming candle is mostly wick (body under 30% of
+    # its range) matched the shape but not the conviction — keep watching
+    # for a decisive one rather than trading an indecisive close.
+    quality_label = candle_quality.classify(latest)
+    if quality_label == "WEAK" and settings.get("reject_weak_confirmation", True):
+        return _unchanged(setup, "AWAITING_CONFIRMATION")
+
     formation_size = _FORMATION_SIZE[confirmation["name"]]
     formation_candles = candles[-formation_size:]
-    quality_label = candle_quality.classify(latest)
 
     entry = latest["close"]
     stop = structural_stop.stop_from_formation(
-        formation_candles, direction, settings.get("structural_stop_buffer_atr", 0.25), atr_val
+        formation_candles, direction, settings.get("structural_stop_buffer_atr", 0.25), atr_val, anchor_level=bos_level
     )
     if stop is None:
         return _invalidated(setup, latest, "no ATR available to size the stop")
@@ -146,6 +181,17 @@ def advance_setup(setup, candles, htf_candles, timeframe_seconds, settings=None)
     )
     if not ok:
         return _invalidated(setup, latest, reason)
+
+    # Room to pay: the nearest structure price has to get through (the
+    # impulse's own extreme, or any swing formed since the break) must sit
+    # at least min_reward_to_risk away. A 2R target beyond a wall at 1R is a
+    # 1R trade in practice. Waits rather than invalidates — a deeper
+    # confirmation later shrinks the risk and can clear this.
+    risk = abs(entry - stop)
+    obstacle = _nearest_obstacle(swings, setup, entry, direction)
+    min_rr = settings.get("min_reward_to_risk", 1.8)
+    if obstacle is not None and risk > 0 and abs(obstacle - entry) / risk < min_rr:
+        return _unchanged(setup, "AWAITING_CONFIRMATION")
 
     rr = settings.get("reward_to_risk", 2.0)
     target = structural_stop.target_from_rr(entry, stop, rr, direction)
@@ -166,6 +212,20 @@ def advance_setup(setup, candles, htf_candles, timeframe_seconds, settings=None)
     htf_result = htf_filter.evaluate(direction, htf_bias, settings.get("htf_filter_mode", "downgrade"))
     if htf_result["outcome"] == "REJECTED":
         return _invalidated(setup, latest, htf_result["reason"])
+
+    # A CHoCH setup already trades against this timeframe's own structure;
+    # with the 1H against it too, it's counter-trend on both — vetoed
+    # whatever htf_filter_mode says. A BOS (with-trend) setup keeps the
+    # admin's configured mode.
+    if setup["bos_kind"] == "CHoCH" and htf_result["outcome"] == "DOWNGRADED":
+        return _invalidated(setup, latest, f"counter-trend change of character with the 1H bias ({htf_bias}) against it")
+
+    # Inside a high-impact release's risk window (gold only — see
+    # config.EVENT_RISK_CURRENCY), hold rather than publish: the same rule
+    # the confluence engine applies. Not an invalidation — the setup keeps
+    # watching and can still confirm once the window has passed.
+    if event_blackout is not None:
+        return _unchanged(setup, "AWAITING_CONFIRMATION")
 
     regime = struct.regime(struct.bias(swings), struct.break_of_structure(candles, swings, struct.bias(swings)))
     verdict = "BUY" if direction == 1 else "SELL"
@@ -201,6 +261,35 @@ def advance_setup(setup, candles, htf_candles, timeframe_seconds, settings=None)
         "reasoning": reasoning,
     }
     return {"setup": {**setup, "state": "PUBLISHED"}, "signal": signal}
+
+
+def _beyond(price, level, direction):
+    """Whether `price` is past `level` in the break direction."""
+    return price > level if direction == 1 else price < level
+
+
+def _extreme_since(candles, since_time, direction):
+    """The highest high (bullish) or lowest low (bearish) from the break
+    candle onward, or None if no candle is that recent."""
+    window = [c for c in candles if c["open_time"] >= since_time]
+    if not window:
+        return None
+    return max(c["high"] for c in window) if direction == 1 else min(c["low"] for c in window)
+
+
+def _nearest_obstacle(swings, setup, entry, direction):
+    """The closest structure between entry and the trade's target side: the
+    impulse's own extreme (price has to get back through it), plus any swing
+    on that side confirmed since the break. Older swings are left out —
+    most were already traded through on the way to this break."""
+    kind = "high" if direction == 1 else "low"
+    levels = [setup["impulse_end_price"]] + [
+        s["price"] for s in swings if s["kind"] == kind and s["open_time"] >= setup["bos_candle_time"]
+    ]
+    ahead = [lvl for lvl in levels if lvl is not None and _beyond(lvl, entry, direction)]
+    if not ahead:
+        return None
+    return min(ahead) if direction == 1 else max(ahead)
 
 
 def _unchanged(setup, state):

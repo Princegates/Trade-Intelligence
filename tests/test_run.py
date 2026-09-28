@@ -697,7 +697,7 @@ def test_detect_guda_special_setups_is_a_no_op_without_a_break(monkeypatch):
 def _open_setup(symbol="BTCUSDT", timeframe="15m", state="RETEST_PENDING"):
     return {
         "id": "11111111-1111-1111-1111-111111111111",
-        "symbol": symbol, "timeframe": timeframe, "strategy_version": "guda-special-1.0.0",
+        "symbol": symbol, "timeframe": timeframe, "strategy_version": config.GUDA_SPECIAL_STRATEGY_VERSION,
         "bos_candle_time": 0, "bos_kind": "BOS", "bos_direction": 1, "bos_price": 100.0,
         "break_strength": "STRONG", "state": state,
         "impulse_start_price": 90.0, "impulse_end_price": 100.0, "impulse_atr_multiple": 5.0,
@@ -719,7 +719,7 @@ def test_advance_guda_special_setups_publishes_setup_and_signal_on_a_state_chang
 
     monkeypatch.setattr(
         run.setups, "advance_setup",
-        lambda setup, candles, htf_candles, timeframe_seconds, settings=None: (
+        lambda setup, candles, htf_candles, timeframe_seconds, settings=None, event_blackout=None: (
             {"setup": {**setup, "state": "PUBLISHED"}, "signal": signal}
         ),
     )
@@ -744,7 +744,7 @@ def test_advance_guda_special_setups_does_not_log_a_transition_when_unchanged(mo
     monkeypatch.setattr(run.supabase, "get_recent_candles", lambda symbol, timeframe, limit: [{"open_time": HOUR, "close": 96.0}])
     monkeypatch.setattr(
         run.setups, "advance_setup",
-        lambda setup, candles, htf_candles, timeframe_seconds, settings=None: (
+        lambda setup, candles, htf_candles, timeframe_seconds, settings=None, event_blackout=None: (
             {"setup": {**setup, "state": "AWAITING_CONFIRMATION"}, "signal": None}
         ),
     )
@@ -785,7 +785,7 @@ def test_advance_guda_special_setups_reuses_candle_reads_across_setups_sharing_a
     monkeypatch.setattr(run.supabase, "get_recent_candles", counting_get_recent_candles)
     monkeypatch.setattr(
         run.setups, "advance_setup",
-        lambda setup, candles, htf_candles, timeframe_seconds, settings=None: {"setup": setup, "signal": None},
+        lambda setup, candles, htf_candles, timeframe_seconds, settings=None, event_blackout=None: {"setup": setup, "signal": None},
     )
     monkeypatch.setattr(run.supabase, "publish_guda_special_setup", lambda *a, **k: None)
 
@@ -794,6 +794,50 @@ def test_advance_guda_special_setups_reuses_candle_reads_across_setups_sharing_a
     # One 15m read + one 1h (HTF) read, each shared across both setups.
     assert calls.count(("BTCUSDT", "15m")) == 1
     assert calls.count(("BTCUSDT", "1h")) == 1
+
+
+def test_advance_guda_special_setups_retires_an_older_version_setup_without_a_signal(monkeypatch):
+    old = {**_open_setup(state="AWAITING_CONFIRMATION"), "strategy_version": "guda-special-1.0.0"}
+    monkeypatch.setattr(run.supabase, "get_open_guda_special_setups", lambda: [old])
+    candle_reads, advance_calls = [], []
+    monkeypatch.setattr(run.supabase, "get_recent_candles", lambda *a, **k: candle_reads.append(a) or [])
+    monkeypatch.setattr(run.setups, "advance_setup", lambda *a, **k: advance_calls.append(1))
+
+    setup_calls, transition_calls, signal_calls = [], [], []
+    monkeypatch.setattr(run.supabase, "publish_guda_special_setup", lambda *a, **k: setup_calls.append((a, k)))
+    monkeypatch.setattr(run.supabase, "publish_guda_special_setup_transition", lambda *a, **k: transition_calls.append(a))
+    monkeypatch.setattr(run.supabase, "publish_guda_special_signal", lambda *a, **k: signal_calls.append(1))
+
+    run.advance_guda_special_setups(NOW, guda_special_settings=None)
+
+    assert advance_calls == [] and candle_reads == []
+    assert setup_calls[0][0][3] == "guda-special-1.0.0"  # keeps its own version label
+    assert setup_calls[0][0][9] == "EXPIRED"
+    assert setup_calls[0][1]["invalidation_reason"] == f"superseded by {config.GUDA_SPECIAL_STRATEGY_VERSION}"
+    assert transition_calls == [(old["id"], "AWAITING_CONFIRMATION", "EXPIRED", None)]
+    assert signal_calls == []
+
+
+def test_advance_guda_special_setups_passes_an_event_blackout_for_gold_only(monkeypatch):
+    monkeypatch.setattr(
+        run.supabase, "get_open_guda_special_setups",
+        lambda: [_open_setup(symbol="XAUUSD"), _open_setup(symbol="BTCUSDT")],
+    )
+    monkeypatch.setattr(run.supabase, "get_recent_candles", lambda *a, **k: [{"open_time": HOUR, "close": 96.0}])
+    monkeypatch.setattr(run.supabase, "publish_guda_special_setup", lambda *a, **k: None)
+    seen = {}
+    monkeypatch.setattr(
+        run.setups, "advance_setup",
+        lambda setup, candles, htf_candles, timeframe_seconds, settings=None, event_blackout=None: (
+            seen.__setitem__(setup["symbol"], event_blackout) or {"setup": setup, "signal": None}
+        ),
+    )
+    cpi = {"title": "CPI m/m", "country": "USD", "impact": "High", "event_time": NOW + 10 * 60}
+
+    run.advance_guda_special_setups(NOW, guda_special_settings=None, events=[cpi])
+
+    assert seen["XAUUSD"] == cpi
+    assert seen["BTCUSDT"] is None
 
 
 def test_advance_guda_special_setups_is_a_no_op_with_no_open_setups(monkeypatch):

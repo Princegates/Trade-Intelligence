@@ -40,6 +40,12 @@ HAPPY = dict(
     regime="TRENDING",
     bias="up",
     break_event={"kind": "BOS", "direction": 1, "level": 100.0},
+    # setups.py's own two helpers that do real arithmetic on candles —
+    # neutral by default (no trailing, no structure in the way) so every
+    # other test stays about the one gate it overrides; exercised directly
+    # further down, and unmocked in the end-to-end tests at the bottom.
+    extreme_since=None,
+    nearest_obstacle=None,
 )
 
 
@@ -83,14 +89,22 @@ def _patch_all(**over):
         patch("src.signals.setups.struct.regime", return_value=v["regime"]),
         patch("src.signals.setups.struct.bias", return_value=v["bias"]),
         patch("src.signals.setups.struct.break_of_structure", return_value=v["break_event"]),
+        patch("src.signals.setups._extreme_since", return_value=v["extreme_since"]),
+        patch("src.signals.setups._nearest_obstacle", return_value=v["nearest_obstacle"]),
     ]
 
 
-def _advance_with(setup, settings=None, **over):
+def _run(setup, settings=None, event_blackout=None, **over):
+    """advance_setup() under the happy-path mocks, plus the mocks
+    themselves keyed by patched attribute name, for call-argument checks."""
     with ExitStack() as stack:
-        for p in _patch_all(**over):
-            stack.enter_context(p)
-        return setups.advance_setup(setup, _candles(), _candles(), 900, settings=settings)
+        mocks = {p.attribute: stack.enter_context(p) for p in _patch_all(**over)}
+        result = setups.advance_setup(setup, _candles(), _candles(), 900, settings=settings, event_blackout=event_blackout)
+    return result, mocks
+
+
+def _advance_with(setup, settings=None, event_blackout=None, **over):
+    return _run(setup, settings, event_blackout, **over)[0]
 
 
 # --- detect_new_setups -----------------------------------------------------
@@ -103,18 +117,33 @@ def test_detect_new_setups_returns_none_without_a_break():
         assert setups.detect_new_setups(_candles()) is None
 
 
+# _candles() closes at 108 then 109 — a level at 108.5 is one the latest
+# candle is the first to close beyond.
+_FRESH_BREAK = {"kind": "BOS", "direction": 1, "level": 108.5}
+
+
 def test_detect_new_setups_builds_a_setup_dict_on_a_fresh_break():
     with patch("src.signals.setups.struct.swing_points", return_value=HAPPY["swings"]), \
          patch("src.signals.setups.struct.bias", return_value="up"), \
-         patch("src.signals.setups.struct.break_of_structure", return_value=HAPPY["break_event"]), \
+         patch("src.signals.setups.struct.break_of_structure", return_value=_FRESH_BREAK), \
          patch("src.signals.setups.ind.atr", return_value=2.0), \
          patch("src.signals.setups.imp.classify_break", return_value="STRONG"):
         result = setups.detect_new_setups(_candles())
     assert result["bos_kind"] == "BOS"
     assert result["bos_direction"] == 1
-    assert result["bos_price"] == 100.0
+    assert result["bos_price"] == 108.5
     assert result["break_strength"] == "STRONG"
     assert result["bos_candle_time"] == _candles()[-1]["open_time"]
+
+
+def test_detect_new_setups_ignores_a_candle_that_was_already_beyond_the_level():
+    # Level 100 was already closed beyond by the previous candle (108) —
+    # this candle is still above the same broken level, not a new break.
+    already_broken = {"kind": "BOS", "direction": 1, "level": 100.0}
+    with patch("src.signals.setups.struct.swing_points", return_value=HAPPY["swings"]), \
+         patch("src.signals.setups.struct.bias", return_value="up"), \
+         patch("src.signals.setups.struct.break_of_structure", return_value=already_broken):
+        assert setups.detect_new_setups(_candles()) is None
 
 
 # --- advance_setup: universal overrides -------------------------------------
@@ -145,6 +174,26 @@ def test_stays_at_bos_detected_when_impulse_is_too_small():
     result = _advance_with(_setup(), clears_minimum=False)
     assert result["setup"]["state"] == "BOS_DETECTED"
     assert result["signal"] is None
+
+
+def test_impulse_end_trails_a_more_extreme_price_since_the_break():
+    result, mocks = _run(_setup(), extreme_since=130.0)
+    assert result["setup"]["impulse_start_price"] == 90.0
+    assert result["setup"]["impulse_end_price"] == 130.0
+    mocks["levels"].assert_called_with(90.0, 130.0, 1)
+
+
+def test_impulse_end_does_not_trail_backwards():
+    result = _advance_with(_setup(), extreme_since=95.0)
+    assert result["setup"]["impulse_end_price"] == 100.0
+
+
+def test_a_stored_impulse_origin_is_never_remeasured():
+    stored = _setup(impulse_start_price=90.0, impulse_end_price=100.0, impulse_atr_multiple=5.0, **HAPPY["fib_levels"])
+    # measure_impulse would now pick a later swing (the pullback's own low)
+    # as the origin — the stored one has to win.
+    result = _advance_with(stored, impulse={"start_price": 97.0, "end_price": 100.0})
+    assert result["setup"]["impulse_start_price"] == 90.0
 
 
 def test_freezes_impulse_and_fib_once_it_clears_the_minimum():
@@ -261,3 +310,115 @@ def test_happy_path_publishes_a_sell():
     )
     assert result["setup"]["state"] == "PUBLISHED"
     assert result["signal"]["verdict"] == "SELL"
+
+
+# --- advance_setup: confirmation direction, quality, and risk gates ---------
+
+
+def test_confirmation_patterns_are_read_against_the_pullback():
+    _, bullish = _run(_setup(direction=1))
+    bullish["detect"].assert_called_with(_candles(), "down")
+    _, bearish = _run(
+        _setup(direction=-1),
+        break_event={"kind": "BOS", "direction": -1, "level": 100.0},
+        pattern_events=[{"name": "Bearish Engulfing", "direction": -1, "note": "n"}],
+    )
+    bearish["detect"].assert_called_with(_candles(), "up")
+
+
+def test_a_weak_confirmation_candle_keeps_the_setup_waiting():
+    result = _advance_with(_setup(), candle_quality="WEAK")
+    assert result["setup"]["state"] == "AWAITING_CONFIRMATION"
+    assert result["signal"] is None
+
+
+def test_the_weak_confirmation_gate_can_be_turned_off():
+    result = _advance_with(_setup(), settings={"reject_weak_confirmation": False}, candle_quality="WEAK")
+    assert result["setup"]["state"] == "PUBLISHED"
+
+
+def test_the_stop_is_anchored_beyond_the_broken_level():
+    _, mocks = _run(_setup(bos_price=100.0))
+    assert mocks["stop_from_formation"].call_args.kwargs["anchor_level"] == 100.0
+
+
+# Entry is _candles()[-1] close (109) and HAPPY's stop is 98 — 11 of risk,
+# so the default 1.8R minimum needs structure at least 19.8 away (128.8).
+
+
+def test_waits_when_structure_ahead_leaves_too_little_reward():
+    result = _advance_with(_setup(), nearest_obstacle=120.0)  # 11 away = 1.0R
+    assert result["setup"]["state"] == "AWAITING_CONFIRMATION"
+    assert result["signal"] is None
+
+
+def test_publishes_when_structure_ahead_leaves_enough_reward():
+    result = _advance_with(_setup(), nearest_obstacle=140.0)  # 31 away = 2.8R
+    assert result["setup"]["state"] == "PUBLISHED"
+
+
+def test_min_reward_to_risk_is_read_from_settings():
+    result = _advance_with(_setup(), settings={"min_reward_to_risk": 3.0}, nearest_obstacle=140.0)
+    assert result["setup"]["state"] == "AWAITING_CONFIRMATION"
+
+
+def test_a_choch_setup_is_vetoed_when_the_1h_opposes_it():
+    downgraded = {"outcome": "DOWNGRADED", "reason": "1H bias (down) opposes the call — downgraded, not blocked"}
+    result = _advance_with(_setup(bos_kind="CHoCH"), htf_bias="down", htf_result=downgraded)
+    assert result["setup"]["state"] == "INVALIDATED"
+    assert "counter-trend" in result["setup"]["invalidation_reason"]
+    assert result["signal"]["verdict"] == "NO_TRADE"
+
+
+def test_a_bos_setup_keeps_the_configured_downgrade_behaviour():
+    downgraded = {"outcome": "DOWNGRADED", "reason": "1H bias (down) opposes the call — downgraded, not blocked"}
+    result = _advance_with(_setup(bos_kind="BOS"), htf_bias="down", htf_result=downgraded)
+    assert result["setup"]["state"] == "PUBLISHED"
+
+
+def test_a_choch_setup_with_the_1h_behind_it_still_publishes():
+    result = _advance_with(_setup(bos_kind="CHoCH"))
+    assert result["setup"]["state"] == "PUBLISHED"
+
+
+_CPI = {"title": "CPI m/m", "country": "USD", "impact": "High", "event_time": 0}
+
+
+def test_holds_inside_a_high_impact_release_window():
+    result = _advance_with(_setup(), event_blackout=_CPI)
+    assert result["setup"]["state"] == "AWAITING_CONFIRMATION"
+    assert result["signal"] is None
+
+
+def test_a_release_window_never_shields_a_failed_break():
+    result = _advance_with(_setup(), event_blackout=_CPI, swept=True)
+    assert result["setup"]["state"] == "INVALIDATED"
+
+
+# --- setups.py's own helpers, unmocked --------------------------------------
+
+
+def test_extreme_since_only_looks_from_the_break_candle_on():
+    candles = _candles()  # highs 100.2 .. 109.2, open_time 0 .. 8100
+    assert setups._extreme_since(candles, 4 * 900, 1) == 109.2
+    assert setups._extreme_since(candles, 4 * 900, -1) == 103.4  # lowest low from candle 4 on
+    assert setups._extreme_since(candles, 99 * 900, 1) is None
+
+
+def test_nearest_obstacle_prefers_the_closest_structure_ahead():
+    setup = {"impulse_end_price": 130.0, "bos_candle_time": 1000}
+    swings = [
+        {"open_time": 500, "price": 115.0, "kind": "high"},   # before the break — ignored
+        {"open_time": 2000, "price": 124.0, "kind": "high"},  # since the break, ahead of entry
+        {"open_time": 2000, "price": 108.0, "kind": "high"},  # behind entry — ignored
+        {"open_time": 2000, "price": 121.0, "kind": "low"},   # wrong side — ignored
+    ]
+    assert setups._nearest_obstacle(swings, setup, 112.0, 1) == 124.0
+    assert setups._nearest_obstacle([], setup, 112.0, 1) == 130.0
+
+
+def test_nearest_obstacle_mirrors_for_a_sell():
+    setup = {"impulse_end_price": 80.0, "bos_candle_time": 1000}
+    swings = [{"open_time": 2000, "price": 86.0, "kind": "low"}]
+    assert setups._nearest_obstacle(swings, setup, 95.0, -1) == 86.0
+    assert setups._nearest_obstacle(swings, setup, 85.0, -1) == 80.0

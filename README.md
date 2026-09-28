@@ -136,7 +136,13 @@ python -m src.run              # fetch candles, compute + store signals
 python -m src.cli latest       # latest signal per symbol/timeframe
 python -m src.cli history --symbol BTCUSDT --timeframe 1h
 python -m src.accuracy --symbol BTCUSDT --timeframe 1h --horizon 5   # score past BUY/SELL calls
+python -m src.backtest_guda --symbol BTCUSDT --days 90    # replay GUDA SPECIAL over history: win rate, expectancy, drawdown
 ```
+
+`src.backtest_guda` fetches history itself (`--source binance`, or
+`--source twelvedata` for gold, or `--source local` for the SQLite mirror)
+and accepts `--setting key=value` to try a threshold before changing it in
+`guda_special_settings`, e.g. `--setting min_reward_to_risk=2.5`.
 
 For gold, set `TWELVEDATA_API_KEY` in your environment (a free Twelve Data
 account is enough). BTC works with no key.
