@@ -6,7 +6,7 @@
 export const SITE_NAME = "SignalsVault AI";
 
 export const SITE_DESCRIPTION =
-  "Trade intelligence for BTC and gold: rule-based signals with the reasoning behind every call, and a track record you can audit.";
+  "Trade intelligence for BTC and gold: rule-based signals with the reasoning behind every call, each one followed as a real trade.";
 
 export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 

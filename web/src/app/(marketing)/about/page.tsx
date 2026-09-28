@@ -24,18 +24,17 @@ import { Badge } from "@/components/ui/badge";
 import { ASSET_NAMES, ASSET_ORDER } from "@/lib/signal-view";
 import { CHART_TIMEFRAMES } from "@/lib/candle-view";
 import { getAccessPolicy } from "@/lib/access-policy";
-import { getTrackRecordStat } from "@/lib/track-record";
 import { getGudaSpecialSettings } from "@/lib/guda-special-settings";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "About",
   description:
-    "How SignalsVault AI turns Bitcoin and gold price data into BUY, SELL or HOLD calls: the four checks that vote, the safety checks that can stop a call, what every signal shows, how the track record is scored, and how access works.",
+    "How SignalsVault AI turns Bitcoin and gold price data into BUY, SELL or HOLD calls: the four checks that vote, the safety checks that can stop a call, what every signal shows, how results are measured, and how access works.",
   alternates: { canonical: `${SITE_URL}/about` },
 };
 
-// The trial length and track record change without a deploy, and the GUDA
+// The trial length changes without a deploy, and the GUDA
 // SPECIAL section follows the admin's on/off switch — same reason the
 // homepage and pricing page render per request.
 export const dynamic = "force-dynamic";
@@ -55,7 +54,7 @@ const principles = [
   {
     icon: Scale,
     title: "Keep score honestly",
-    body: "Every trade call is followed until it works or fails, and the result is published. Calls that never resolved aren't quietly counted as wins.",
+    body: "Every call is followed as a real trade until it hits its stop or target, with fees taken off. Nothing is quietly counted as a win.",
   },
   {
     icon: Hand,
@@ -180,7 +179,7 @@ const dashboardFeatures = [
 const fitsWell = [
   "You want a second opinion on Bitcoin or gold, with the reasons shown",
   "You're learning technical analysis and want to see it applied step by step",
-  "You'd rather see a system's real track record before trusting it",
+  "You'd rather judge a system by how its calls actually play out",
   "You trade manually and want clear entry, stop and target levels to plan around",
 ];
 
@@ -191,9 +190,8 @@ const notAFit = [
 ];
 
 export default async function AboutPage() {
-  const [{ trialDays }, trackRecord, { enabled: gudaSpecialEnabled }] = await Promise.all([
+  const [{ trialDays }, { enabled: gudaSpecialEnabled }] = await Promise.all([
     getAccessPolicy(),
-    getTrackRecordStat(),
     getGudaSpecialSettings(),
   ]);
 
@@ -218,7 +216,7 @@ export default async function AboutPage() {
     },
     {
       q: "How accurate is it?",
-      a: "See the track record section above: the published rate counts only calls that actually resolved, and it's updated from real outcomes, not backtests. Past results don't guarantee future ones.",
+      a: "Every call is scored as a real trade, as described above. Live results under this method are still building up, so no accuracy figure is published yet. Past results never guarantee future ones.",
     },
     {
       q: "Which markets do you cover?",
@@ -239,8 +237,8 @@ export default async function AboutPage() {
         <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">Trading signals you can check, not just trust</h1>
         <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground">
           {SITE_NAME} watches {assetList} and publishes BUY, SELL or HOLD calls across five
-          timeframes. Every call comes with the reasoning behind it, clear risk levels, and a public track record,
-          so you can decide for yourself whether it deserves your attention.
+          timeframes. Every call comes with the reasoning behind it and clear risk levels, and is followed as a real
+          trade, so you can decide for yourself whether it deserves your attention.
         </p>
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Button size="lg" asChild>
@@ -488,47 +486,31 @@ export default async function AboutPage() {
         </div>
       </section>
 
-      <section id="track-record" className="scroll-mt-20 border-t border-border bg-muted/30 py-16">
+      <section id="results" className="scroll-mt-20 border-t border-border bg-muted/30 py-16">
         <div className="mx-auto max-w-3xl px-4 sm:px-6">
-          <h2 className="text-3xl font-bold tracking-tight">How we measure the track record</h2>
-          {trackRecord && (
-            <Card className="mt-6">
-              <CardContent className="flex flex-col gap-1 p-5 sm:flex-row sm:items-baseline sm:gap-4">
-                <span className="text-4xl font-bold tracking-tight text-primary">{trackRecord.rate}%</span>
-                <span className="text-sm text-muted-foreground">
-                  of resolved calls confirmed in the predicted direction, across{" "}
-                  {trackRecord.confirmedCount + trackRecord.invalidatedCount} tracked signals
-                  {trackRecord.isDemo ? " (sample data)" : ""}.
-                </span>
-              </CardContent>
-            </Card>
-          )}
+          <h2 className="text-3xl font-bold tracking-tight">How results are measured</h2>
           <div className="mt-6 space-y-4 text-muted-foreground">
             <p>
-              Every BUY or SELL with a real entry zone and invalidation level is followed forward, candle by candle,
-              until it resolves.
+              Every BUY or SELL is followed as a trade, candle by candle, the way a trader would actually have
+              experienced it:
             </p>
             <ul className="space-y-2 text-sm">
-              <li className="flex gap-2">
-                <Check className="mt-0.5 size-4 shrink-0 text-primary" />
-                <span>
-                  <span className="font-medium text-foreground">Confirmed</span> means price moved at least 1R (one
-                  unit of the risk taken) in the predicted direction before touching the invalidation level. That&apos;s
-                  a real, favourable move, though not necessarily the full target.
-                </span>
-              </li>
-              <li className="flex gap-2">
-                <X className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                <span>
-                  <span className="font-medium text-foreground">Invalidated</span> means the invalidation level was
-                  hit first.
-                </span>
-              </li>
+              {[
+                "Entry at the close of the candle that made the call.",
+                "Every later candle is checked by its high and low, so a wick through the stop counts as a loss.",
+                "If a candle touches both the stop and the target, it counts as the stop.",
+                "Fees and slippage are taken off every trade.",
+                "One trade at a time per market and timeframe, so one move is never counted twice.",
+              ].map((rule) => (
+                <li key={rule} className="flex gap-2">
+                  <Check className="mt-0.5 size-4 shrink-0 text-primary" />
+                  <span>{rule}</span>
+                </li>
+              ))}
             </ul>
             <p>
-              The rate is confirmed ÷ (confirmed + invalidated). Calls that expired without resolving, and calls still
-              in progress, aren&apos;t counted either way, so the number can&apos;t be flattered by treating undecided
-              calls as wins. It&apos;s live results, not a backtest.
+              Results are recorded in R, multiples of the amount risked: +1R won as much as the stop would have lost.
+              No figure is shown here yet: there isn&apos;t enough live history under this method to be meaningful.
             </p>
           </div>
         </div>

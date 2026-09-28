@@ -7,13 +7,12 @@ import { Badge } from "@/components/ui/badge";
 import { DEMO_SIGNALS } from "@/lib/demo-data";
 import { plainLanguageSummary } from "@/lib/plain-language";
 import { getLatestSignals } from "@/lib/signals";
-import { getTrackRecordStat } from "@/lib/track-record";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 import { WaitlistForm } from "@/components/marketing/waitlist-form";
 
 export const metadata: Metadata = {
   description:
-    "Rule-based BTC and gold trading signals with the full reasoning behind every call, and a track record you can audit — free trial, no card required.",
+    "Rule-based BTC and gold trading signals with the full reasoning behind every call, each one followed as a real trade — free trial, no card required.",
   alternates: { canonical: SITE_URL },
 };
 
@@ -37,8 +36,8 @@ const features = [
   },
   {
     icon: ShieldCheck,
-    title: "An auditable track record",
-    description: "Every signal is timestamped and scored later against what price actually did, so you can check the system's own accuracy.",
+    title: "Every call kept and scored",
+    description: "Every signal is timestamped, kept, and followed as a real trade to its stop or target with fees included, so results are measured, not guessed.",
   },
   {
     icon: Sparkles,
@@ -54,7 +53,7 @@ function verdictVariant(v: string) {
 }
 
 export default async function HomePage() {
-  const [{ source, signals }, trackRecord] = await Promise.all([getLatestSignals(), getTrackRecordStat()]);
+  const { source, signals } = await getLatestSignals();
 
   const live =
     source === "live"
@@ -97,8 +96,8 @@ export default async function HomePage() {
             Trading signals that show their work
           </h1>
           <p className="mt-6 text-lg text-muted-foreground">
-            Rule-based BTC and gold signals with the reasoning behind every call, and a track record you can
-            audit — not a magic number, not a black box.
+            Rule-based BTC and gold signals with the reasoning behind every call, each one followed as a real
+            trade — not a magic number, not a black box.
           </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Button size="lg" asChild>
@@ -135,17 +134,6 @@ export default async function HomePage() {
           {isLive ? "Live signals, straight from the engine — sign up for the full dashboard." : "Sample data shown — sign up to see live signals."}
         </p>
 
-        {trackRecord && (
-          <p className="mt-2 text-center text-xs text-muted-foreground">
-            <span className="font-medium text-foreground">{trackRecord.rate}%</span> of resolved calls confirmed in
-            the predicted direction, across {trackRecord.confirmedCount + trackRecord.invalidatedCount} tracked
-            signals{trackRecord.isDemo ? " (sample data)" : ""} —{" "}
-            <Link href="/about" className="underline underline-offset-4 hover:text-foreground">
-              how we measure it
-            </Link>
-            .
-          </p>
-        )}
       </section>
 
       <section id="features" className="border-t border-border bg-muted/30 py-20">
