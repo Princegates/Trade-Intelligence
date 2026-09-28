@@ -2,6 +2,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { DEMO_GUDA_SPECIAL_SIGNALS } from "@/lib/demo-data";
+import { GUDA_SPECIAL_STRATEGY_VERSION } from "@/lib/guda-special-version";
 import type { Database } from "@/lib/supabase/types";
 
 /** GUDA SPECIAL's own signal shape — deliberately not SignalView. The
@@ -107,9 +108,13 @@ export async function getLatestGudaSpecialSignals(): Promise<{
   const supabase = await createClient();
   if (!supabase) return { source: "unavailable", signals: [] };
 
+  // Current version only — until it publishes its first signal for a pair,
+  // that pair's card says it's waiting rather than showing an older
+  // version's call (see guda-special-version.ts).
   const { data, error } = await supabase
     .from("guda_special_signals")
     .select("*")
+    .eq("strategy_version", GUDA_SPECIAL_STRATEGY_VERSION)
     .order("generated_at", { ascending: false })
     .limit(200);
 

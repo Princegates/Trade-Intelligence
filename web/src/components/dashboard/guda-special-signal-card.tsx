@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { SignalLevels } from "@/components/dashboard/signal-card";
 import type { GudaSpecialSignalView } from "@/lib/guda-special";
+import { GUDA_SPECIAL_VERSION_LABEL } from "@/lib/guda-special-version";
 
 function verdictVariant(v: GudaSpecialSignalView["verdict"]) {
   if (v === "BUY") return "success" as const;
@@ -37,10 +38,11 @@ const money = (n: number) => `$${n.toLocaleString(undefined, { maximumFractionDi
  * break strength, HTF filter) doesn't overlap with the confluence engine's
  * (confidence, lifecycle, market phase). Paired next to the confluence
  * engine's own 15m card by asset-section.tsx per the "two cards shown
- * together" UI decision. `signal` is null when no setup has resolved yet
- * for this pair — a setup can take up to several hours to walk through
- * BOS -> impulse -> retracement -> retest -> confirmation on 15m candles,
- * so a quiet card here is expected, not a bug. */
+ * together" UI decision. `signal` is null when the current version hasn't
+ * resolved a setup yet for this pair (older versions' signals are never
+ * passed in — see guda-special-version.ts) — a setup can take up to
+ * several hours to walk through BOS -> impulse -> retracement -> retest ->
+ * confirmation on 15m candles, so a quiet card here is expected, not a bug. */
 export function GudaSpecialSignalCard({
   signal,
   locked = false,
@@ -76,7 +78,8 @@ export function GudaSpecialSignalCard({
         <div className={locked ? "pointer-events-none select-none blur-sm" : undefined} aria-hidden={locked}>
           {!signal ? (
             <p className="text-sm text-foreground">
-              No GUDA SPECIAL signal yet — a setup can take up to several hours to resolve on the 15m timeframe.
+              Waiting for the first {GUDA_SPECIAL_VERSION_LABEL} signal — a setup can take up to several hours to
+              resolve on the 15m timeframe.
             </p>
           ) : (
             <>
