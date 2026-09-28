@@ -148,6 +148,22 @@ BUY_THRESHOLD = 2
 # touch the quota math above.
 CANDLE_FETCH_LIMIT = 260
 
+# Scoring a trade (src/trade_sim.py) — shared by the live outcome tracker and
+# the backtest so both measure the same thing.
+#
+# Round-trip trading cost as a percent of price, subtracted from every
+# trade's result: fees in and out plus slippage. BTC: 0.10% taker fee each
+# side (Binance spot, no BNB discount) plus ~0.02% slippage each side. Gold:
+# a typical retail XAU/USD spread plus slippage. Deliberately not the
+# cheapest tier — a result that only survives best-case costs isn't one.
+TRADE_COST_PCT = {"BTCUSDT": 0.24, "XAUUSD": 0.04}
+DEFAULT_TRADE_COST_PCT = 0.10
+
+# Candles of the trade's own timeframe before a trade that has hit neither
+# stop nor target is closed at that candle's close. GUDA SPECIAL's matches
+# src/backtest_guda.py (96 x 15m = one day).
+TRADE_MAX_BARS = {"confluence": 50, "guda_special": 96}
+
 # A feed counts as stale once its newest closed candle is this many intervals
 # overdue. Stale markets get a suppression record instead of a signal, so a
 # closed or broken feed can never masquerade as a live call.

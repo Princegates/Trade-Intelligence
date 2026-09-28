@@ -739,6 +739,29 @@ def test_advance_guda_special_setups_publishes_setup_and_signal_on_a_state_chang
     assert signal_calls[0][1]["verdict"] == "BUY"
 
 
+def test_a_published_guda_special_trade_starts_a_tracked_trade(monkeypatch):
+    monkeypatch.setattr(run.supabase, "get_open_guda_special_setups", lambda: [_open_setup()])
+    monkeypatch.setattr(run.supabase, "get_recent_candles", lambda symbol, timeframe, limit: [{"open_time": HOUR, "close": 101.0}])
+    signal = {"verdict": "BUY", "entry": 101.0, "stop": 98.0, "target": 107.0}
+    monkeypatch.setattr(
+        run.setups, "advance_setup",
+        lambda setup, candles, htf_candles, timeframe_seconds, settings=None, event_blackout=None: (
+            {"setup": {**setup, "state": "PUBLISHED"}, "signal": signal}
+        ),
+    )
+    for name in ("publish_guda_special_setup", "publish_guda_special_setup_transition", "publish_guda_special_signal"):
+        monkeypatch.setattr(run.supabase, name, lambda *a, **k: None)
+    opened = []
+    monkeypatch.setattr(run, "open_trade_outcome", lambda *a, **k: opened.append(a))
+
+    run.advance_guda_special_setups(NOW, guda_special_settings=None)
+
+    assert len(opened) == 1
+    source, symbol, timeframe, version, signal_time, verdict, levels = opened[0]
+    assert (source, verdict, signal_time) == ("guda_special", "BUY", HOUR)
+    assert (levels["entry"], levels["stop"], levels["target"]) == (101.0, 98.0, 107.0)
+
+
 def test_advance_guda_special_setups_does_not_log_a_transition_when_unchanged(monkeypatch):
     monkeypatch.setattr(run.supabase, "get_open_guda_special_setups", lambda: [_open_setup(state="AWAITING_CONFIRMATION")])
     monkeypatch.setattr(run.supabase, "get_recent_candles", lambda symbol, timeframe, limit: [{"open_time": HOUR, "close": 96.0}])
@@ -848,3 +871,121 @@ def test_advance_guda_special_setups_is_a_no_op_with_no_open_setups(monkeypatch)
     run.advance_guda_special_setups(NOW, guda_special_settings=None)
 
     assert calls == []
+
+
+# --- Trade outcome tracking (src/trade_sim.py via run.py) ---------------------
+
+
+class _FakeOutcomes:
+    """An in-memory stand-in for the trade_outcomes table and the mirrored candles."""
+
+    def __init__(self, monkeypatch, candles=()):
+        self.rows = {}
+        self.candles = list(candles)
+        monkeypatch.setattr(run.supabase, "publish_trade_outcome", self.publish)
+        monkeypatch.setattr(run.supabase, "get_open_trade_outcomes", self.open)
+        monkeypatch.setattr(
+            run.supabase,
+            "get_candles_after",
+            lambda symbol, timeframe, after: [c for c in self.candles if c["open_time"] > after],
+        )
+
+    def publish(self, source, symbol, timeframe, strategy_version, trade):
+        key = (source, symbol, timeframe, strategy_version, trade["signal_time"])
+        self.rows[key] = {**trade, "source": source, "symbol": symbol, "timeframe": timeframe,
+                          "strategy_version": strategy_version}
+
+    def open(self, source=None, symbol=None, timeframe=None):
+        return [
+            dict(r) for r in self.rows.values()
+            if r["status"] == "OPEN"
+            and (source is None or r["source"] == source)
+            and (symbol is None or r["symbol"] == symbol)
+            and (timeframe is None or r["timeframe"] == timeframe)
+        ]
+
+
+def _c(t, o, h, low, c):
+    return {"open_time": t, "open": o, "high": h, "low": low, "close": c, "volume": 1.0}
+
+
+LEVELS = {"entry": 100.0, "stop": 98.0, "target": 104.0}
+
+
+def test_a_new_call_starts_a_tracked_trade_with_costs(monkeypatch):
+    store = _FakeOutcomes(monkeypatch)
+    assert run.open_trade_outcome("confluence", "BTCUSDT", "1h", "3.1.0", NOW, "BUY", LEVELS, 0.7) is True
+    (trade,) = store.rows.values()
+    assert trade["status"] == "OPEN"
+    assert trade["confidence"] == 0.7
+    assert trade["cost_pct"] == config.TRADE_COST_PCT["BTCUSDT"]
+
+
+def test_a_second_call_while_a_trade_is_open_is_not_tracked(monkeypatch):
+    store = _FakeOutcomes(monkeypatch, candles=[_c(NOW + HOUR, 100, 101, 99, 100)])
+    run.open_trade_outcome("confluence", "BTCUSDT", "1h", "3.1.0", NOW, "BUY", LEVELS)
+    assert run.open_trade_outcome("confluence", "BTCUSDT", "1h", "3.1.0", NOW + HOUR, "BUY", LEVELS) is False
+    assert len(store.rows) == 1
+
+
+def test_a_call_on_the_candle_that_closed_the_open_trade_is_tracked(monkeypatch):
+    store = _FakeOutcomes(monkeypatch, candles=[_c(NOW + HOUR, 100, 100.5, 97.5, 99)])
+    run.open_trade_outcome("confluence", "BTCUSDT", "1h", "3.1.0", NOW, "BUY", LEVELS)
+    new_levels = {"entry": 99.0, "stop": 97.0, "target": 103.0}
+    assert run.open_trade_outcome("confluence", "BTCUSDT", "1h", "3.1.0", NOW + HOUR, "BUY", new_levels) is True
+    statuses = sorted(r["status"] for r in store.rows.values())
+    assert statuses == ["OPEN", "STOP"]
+
+
+def test_other_strategies_and_timeframes_do_not_block_each_other(monkeypatch):
+    store = _FakeOutcomes(monkeypatch)
+    run.open_trade_outcome("confluence", "BTCUSDT", "1h", "3.1.0", NOW, "BUY", LEVELS)
+    assert run.open_trade_outcome("confluence", "BTCUSDT", "4h", "3.1.0", NOW, "BUY", LEVELS) is True
+    assert run.open_trade_outcome("guda_special", "BTCUSDT", "1h", "g-1.1.0", NOW, "BUY", LEVELS) is True
+    assert len(store.rows) == 3
+
+
+def test_levels_that_cannot_be_scored_are_not_tracked(monkeypatch):
+    store = _FakeOutcomes(monkeypatch)
+    assert run.open_trade_outcome("confluence", "BTCUSDT", "1h", "3.1.0", NOW, "BUY", {"entry": 100.0}) is False
+    assert store.rows == {}
+
+
+def test_open_trades_are_walked_through_every_candle_since_the_last_check(monkeypatch):
+    # The middle candle's wick hits the stop even though the newest candle closes above the entry.
+    store = _FakeOutcomes(monkeypatch, candles=[
+        _c(NOW + HOUR, 100, 101, 99, 100.5),
+        _c(NOW + 2 * HOUR, 100.5, 101, 97.5, 100.8),
+        _c(NOW + 3 * HOUR, 100.8, 102, 100, 101.5),
+    ])
+    run.open_trade_outcome("confluence", "BTCUSDT", "1h", "3.1.0", NOW, "BUY", LEVELS)
+    run.advance_trade_outcomes()
+    (trade,) = store.rows.values()
+    assert trade["status"] == "STOP"
+    assert trade["exit_time"] == NOW + 2 * HOUR
+    assert trade["r_net"] < -1.0
+
+
+def test_a_run_with_no_new_candles_leaves_the_trade_untouched(monkeypatch):
+    store = _FakeOutcomes(monkeypatch)
+    run.open_trade_outcome("confluence", "BTCUSDT", "1h", "3.1.0", NOW, "BUY", LEVELS)
+    writes = []
+    monkeypatch.setattr(run.supabase, "publish_trade_outcome", lambda *a: writes.append(a))
+    run.advance_trade_outcomes()
+    assert writes == []
+    assert len(store.rows) == 1
+
+
+def test_a_published_buy_starts_a_tracked_trade(temp_db, monkeypatch):
+    _serve(monkeypatch, _feed(61, NOW))
+    monkeypatch.setattr(run.engine, "evaluate", lambda candles, **kwargs: _buy_result())
+    monkeypatch.setattr(run.supabase, "publish_signal", lambda *a, **k: True)
+    opened = []
+    monkeypatch.setattr(run, "open_trade_outcome", lambda *a, **k: opened.append(a))
+
+    run.process(INSTRUMENT, "1h", NOW)
+
+    assert len(opened) == 1
+    source, symbol, timeframe, version, signal_time, verdict, levels, confidence = opened[0]
+    assert (source, symbol, timeframe, verdict) == ("confluence", "BTCUSDT", "1h", "BUY")
+    assert levels == _buy_result()["levels"]

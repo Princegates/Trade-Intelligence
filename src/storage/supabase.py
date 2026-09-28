@@ -763,3 +763,121 @@ def publish_events(events):
     )
     response.raise_for_status()
     return len(events)
+
+
+# --- Trade outcomes (web/supabase/migrations/0028_trade_outcomes.sql) --------
+
+TRADE_OUTCOME_IDENTITY = "source,symbol,timeframe,strategy_version,signal_time"
+_TRADE_TIMES = ("signal_time", "last_candle_time", "exit_time")
+
+
+def _epoch(value):
+    return datetime.fromisoformat(value).timestamp() if value else None
+
+
+def publish_trade_outcome(source, symbol, timeframe, strategy_version, trade):
+    """Insert or update one tracked trade — `trade` is a src/trade_sim.py
+    dict. Upserted on its identity, since the same row is rewritten as the
+    trade moves on each run until it closes."""
+    row = {
+        "source": source,
+        "symbol": symbol,
+        "timeframe": timeframe,
+        "strategy_version": strategy_version,
+        "direction": trade["direction"],
+        "entry": trade["entry"],
+        "stop": trade["stop"],
+        "target": trade["target"],
+        "confidence": trade.get("confidence"),
+        "cost_pct": trade["cost_pct"],
+        "status": trade["status"],
+        "bars": trade["bars"],
+        "mfe_r": trade["mfe_r"],
+        "mae_r": trade["mae_r"],
+        "exit_price": trade["exit_price"],
+        "r_gross": trade["r_gross"],
+        "r_cost": trade["r_cost"],
+        "r_net": trade["r_net"],
+        "updated_at": _utc(datetime.now(timezone.utc).timestamp()),
+    }
+    for field in _TRADE_TIMES:
+        row[field] = _utc(trade[field]) if trade.get(field) is not None else None
+    return _insert("trade_outcomes", row, on_conflict=TRADE_OUTCOME_IDENTITY, resolution="merge-duplicates")
+
+
+def get_open_trade_outcomes(source=None, symbol=None, timeframe=None):
+    """Tracked trades still OPEN, optionally narrowed to one strategy/market/
+    timeframe, as src/trade_sim.py dicts plus their identity fields.
+    Returns [] on any failure or when unconfigured."""
+    credentials = _credentials()
+    if credentials is None:
+        return []
+
+    params = {"status": "eq.OPEN", "select": "*"}
+    for field, value in (("source", source), ("symbol", symbol), ("timeframe", timeframe)):
+        if value is not None:
+            params[field] = f"eq.{value}"
+
+    url, key = credentials
+    try:
+        response = requests.get(
+            f"{url}/rest/v1/trade_outcomes",
+            params=params,
+            headers={"apikey": key, "Authorization": f"Bearer {key}"},
+            timeout=TIMEOUT,
+        )
+        response.raise_for_status()
+        rows = response.json()
+    except Exception:
+        return []
+
+    trades = []
+    for r in rows:
+        trade = {k: r[k] for k in (
+            "source", "symbol", "timeframe", "strategy_version", "direction", "entry", "stop", "target",
+            "confidence", "cost_pct", "status", "bars", "mfe_r", "mae_r", "exit_price", "r_gross", "r_cost", "r_net",
+        )}
+        for field in _TRADE_TIMES:
+            trade[field] = _epoch(r[field])
+        trades.append(trade)
+    return trades
+
+
+def get_candles_after(symbol, timeframe, after, limit=1000):
+    """Mirrored (closed) candles opened after `after` (epoch seconds),
+    oldest first — everything a tracked trade hasn't been checked against
+    yet. Returns [] on any failure or when unconfigured."""
+    credentials = _credentials()
+    if credentials is None:
+        return []
+
+    url, key = credentials
+    try:
+        response = requests.get(
+            f"{url}/rest/v1/candles",
+            params={
+                "symbol": f"eq.{symbol}",
+                "timeframe": f"eq.{timeframe}",
+                "open_time": f"gt.{_utc(after)}",
+                "select": "open_time,open,high,low,close,volume",
+                "order": "open_time.asc",
+                "limit": str(limit),
+            },
+            headers={"apikey": key, "Authorization": f"Bearer {key}"},
+            timeout=TIMEOUT,
+        )
+        response.raise_for_status()
+        rows = response.json()
+    except Exception:
+        return []
+
+    return [{**r, "open_time": _epoch(r["open_time"])} for r in rows]
+
+
+def publish_backtest_run(run):
+    """One timeframe's result from src/backtest.py."""
+    row = {k: v for k, v in run.items() if k not in ("open", "period_start", "period_end")}
+    row["open_trades"] = run["open"]
+    row["period_start"] = _utc(run["period_start"])
+    row["period_end"] = _utc(run["period_end"])
+    return _insert("backtest_runs", row)

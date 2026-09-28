@@ -1,0 +1,108 @@
+from src import backtest, config
+from src.signals import confluence, engine
+
+HOUR = 3600
+
+
+def _bar(t, o, h, low, c):
+    return {"open_time": t, "open": o, "high": h, "low": low, "close": c, "volume": 1.0}
+
+
+def _flat(n, start=0, step=HOUR, price=100.0):
+    return [_bar(start + i * step, price, price + 0.5, price - 0.5, price) for i in range(n)]
+
+
+BUY = {"verdict": "BUY", "entry": 100.0, "stop": 98.0, "target": 104.0, "confidence": 0.7}
+
+
+# --- trades_from_signals ---------------------------------------------------------
+
+
+def test_a_signal_opens_a_trade_that_later_candles_resolve():
+    candles = _flat(3) + [_bar(3 * HOUR, 100, 104.5, 99.5, 104)]
+    trades, skipped = backtest.trades_from_signals(candles, {HOUR: BUY}, cost_pct=0.0, max_bars=50)
+    assert skipped == 0
+    assert len(trades) == 1
+    assert trades[0]["status"] == "TARGET"
+    assert trades[0]["signal_time"] == HOUR
+    assert trades[0]["confidence"] == 0.7
+
+
+def test_a_signal_while_a_trade_is_open_is_skipped_not_counted_twice():
+    candles = _flat(6)
+    signals = {HOUR: BUY, 2 * HOUR: BUY, 3 * HOUR: {**BUY, "verdict": "SELL", "stop": 102.0, "target": 96.0}}
+    trades, skipped = backtest.trades_from_signals(candles, signals, cost_pct=0.0, max_bars=50)
+    assert skipped == 2
+    assert len(trades) == 1
+    assert trades[0]["status"] == "OPEN"
+
+
+def test_a_new_trade_can_open_on_the_candle_that_closes_the_old_one():
+    # The trade from t=1h is stopped out by the candle at t=2h, which also carries a new signal.
+    candles = _flat(2) + [_bar(2 * HOUR, 100, 100.5, 97.5, 99)] + _flat(1, start=3 * HOUR)
+    signals = {HOUR: BUY, 2 * HOUR: {**BUY, "entry": 99.0, "stop": 97.0, "target": 103.0}}
+    trades, skipped = backtest.trades_from_signals(candles, signals, cost_pct=0.0, max_bars=50)
+    assert skipped == 0
+    assert [t["status"] for t in trades] == ["STOP", "OPEN"]
+
+
+def test_the_candle_that_opens_a_trade_does_not_also_resolve_it():
+    # The signal candle itself reaches the target, but the trade is entered at its close.
+    candles = [_bar(0, 100, 105, 99, 100)] + _flat(1, start=HOUR)
+    trades, _ = backtest.trades_from_signals(candles, {0: BUY}, cost_pct=0.0, max_bars=50)
+    assert trades[0]["status"] == "OPEN"
+
+
+# --- confluence_signals ------------------------------------------------------------
+
+
+def test_the_higher_timeframe_bias_only_sees_anchor_candles_already_closed(monkeypatch):
+    seen = []
+
+    def spy(anchor_candles, *args, **kwargs):
+        seen.append(anchor_candles[-1]["open_time"] if anchor_candles else None)
+        return None
+
+    monkeypatch.setattr(confluence, "higher_timeframe_bias", spy)
+    candles = _flat(config.MIN_CANDLES_FOR_SIGNAL + 5)  # 1h
+    anchor = _flat(10, step=86_400)  # 1d
+    backtest.confluence_signals(candles, anchor, "1h", "1d", settings={}, start_time=0)
+
+    for candle, last_anchor in zip(candles[config.MIN_CANDLES_FOR_SIGNAL - 1:], seen):
+        if last_anchor is not None:
+            assert last_anchor + 86_400 <= candle["open_time"] + HOUR
+
+
+def test_no_signal_is_taken_before_the_start_time(monkeypatch):
+    monkeypatch.setattr(
+        engine,
+        "evaluate",
+        lambda window, **kwargs: {
+            "verdict": "BUY",
+            "confidence": None,
+            "levels": {"entry": window[-1]["close"], "stop": 90.0, "target": 120.0},
+        },
+    )
+    candles = _flat(100)
+    start = 80 * HOUR
+    signals, verdicts = backtest.confluence_signals(candles, [], "1h", None, settings={}, start_time=start)
+    assert min(signals) == start
+    assert verdicts["BUY"] == 20
+
+
+# --- reporting ---------------------------------------------------------------------------
+
+
+def test_the_report_has_one_row_per_timeframe():
+    rows = [
+        {
+            "timeframe": "1h", "start": 0, "end": 86_400, "signal_count": 3, "skipped": 1,
+            "stats": {
+                "trades": 2, "win_rate": 0.5, "avg_r_net": 0.4, "avg_r_gross": 0.6, "avg_cost_r": 0.2,
+                "profit_factor": 1.8, "total_r_net": 0.8, "max_drawdown_r": 1.0, "worst_losing_streak": 1,
+                "target_rate": 0.5, "stop_rate": 0.5, "timeout_rate": 0.0,
+            },
+        }
+    ]
+    report = backtest.markdown_report("BTCUSDT", "confluence", rows, 0.24, "Settings: database defaults.")
+    assert "| 1h | 1970-01-01 → 1970-01-02 | 3 | 2 | 1 | 50% | +0.40 | +0.60 | 0.20R | 1.80 |" in report

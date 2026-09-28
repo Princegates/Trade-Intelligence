@@ -1,0 +1,81 @@
+name: Backtest
+
+# Run by hand from the Actions tab: replays a strategy over historical
+# candles with the same trade rules as the live outcome tracker (see
+# src/backtest.py) and saves the results for /admin/performance.
+on:
+  workflow_dispatch:
+    inputs:
+      symbol:
+        description: "Market. Gold uses Twelve Data requests the live feed needs — run it rarely."
+        type: choice
+        options: [BTCUSDT, XAUUSD]
+        default: BTCUSDT
+      strategy:
+        description: "Strategy to replay"
+        type: choice
+        options: [confluence, guda_special, both]
+        default: both
+      timeframes:
+        description: "Timeframes for the confluence engine (GUDA SPECIAL is always 15m)"
+        type: string
+        default: "5m,15m,1h,4h,1d"
+      days:
+        description: "Days of history for every timeframe (blank = 60 for 5m up to 6 years for 1d)"
+        type: string
+        default: ""
+      publish:
+        description: "Save results to the admin Performance page"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backtest
+  cancel-in-progress: false
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run backtest
+        env:
+          SYMBOL: ${{ inputs.symbol }}
+          STRATEGY: ${{ inputs.strategy }}
+          TIMEFRAMES: ${{ inputs.timeframes }}
+          DAYS: ${{ inputs.days }}
+          PUBLISH: ${{ inputs.publish }}
+        run: |
+          args=(--symbol "$SYMBOL" --summary-file "$GITHUB_STEP_SUMMARY")
+          if [ -n "$DAYS" ]; then args+=(--days "$DAYS"); fi
+          if [ "$PUBLISH" = "true" ]; then args+=(--publish); fi
+          if [ "$STRATEGY" = "confluence" ] || [ "$STRATEGY" = "both" ]; then
+            python -m src.backtest "${args[@]}" --strategy confluence --timeframes "$TIMEFRAMES"
+          fi
+          if [ "$STRATEGY" = "guda_special" ] || [ "$STRATEGY" = "both" ]; then
+            python -m src.backtest "${args[@]}" --strategy guda_special
+          fi
+
+      - name: Keep the per-trade CSVs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backtest-${{ inputs.symbol }}-${{ github.run_id }}
+          path: backtest-results/
+          if-no-files-found: ignore

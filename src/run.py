@@ -4,7 +4,7 @@ store both. Run with `python -m src.run`."""
 import uuid
 from datetime import datetime, timezone
 
-from . import config, quality
+from . import config, quality, trade_sim
 from .ai import commentary
 from .ingest import binance, calendar, twelvedata
 from .signals import confluence, engine, event_risk, lifecycle, setups
@@ -243,6 +243,11 @@ def process(instrument, timeframe, now, events=(), engine_settings=None):
                     price,
                     candle_time,
                 )
+            if result["verdict"] in ("BUY", "SELL") and result["levels"]:
+                open_trade_outcome(
+                    "confluence", symbol, timeframe, config.STRATEGY_VERSION, candle_time,
+                    result["verdict"], result["levels"], result["confidence"],
+                )
 
     if not stored:
         return f"[kept] {symbol}/{timeframe}: candle already called, original signal left untouched"
@@ -313,6 +318,51 @@ def recheck_lifecycles(now, engine_settings=None):
                 new_state,
                 candle["close"],
             )
+
+
+def advance_trade_outcome(trade):
+    """Walks one tracked trade through every mirrored candle that closed
+    since it was last checked (src/trade_sim.py) — all of them, by high and
+    low, not just the newest close — and saves it if anything moved."""
+    candles = supabase.get_candles_after(trade["symbol"], trade["timeframe"], trade["last_candle_time"])
+    updated = trade_sim.advance(trade, candles, config.TRADE_MAX_BARS[trade["source"]])
+    if updated["bars"] != trade["bars"]:
+        _mirror(
+            supabase.publish_trade_outcome,
+            trade["source"], trade["symbol"], trade["timeframe"], trade["strategy_version"], updated,
+        )
+    return updated
+
+
+def advance_trade_outcomes():
+    for trade in supabase.get_open_trade_outcomes():
+        advance_trade_outcome(trade)
+
+
+def open_trade_outcome(source, symbol, timeframe, strategy_version, signal_time, verdict, levels, confidence=None):
+    """Starts tracking a just-published BUY/SELL as a trade — unless one is
+    already open for this strategy, market and timeframe, in which case the
+    signal is left untracked: one position at a time, so a single move
+    isn't counted several times over. An open trade is first brought up to
+    date, since the candle that carried this signal may be the one that
+    closed it. Same rule as src/backtest.py::trades_from_signals."""
+    for existing in supabase.get_open_trade_outcomes(source, symbol, timeframe):
+        if advance_trade_outcome(existing)["status"] == trade_sim.OPEN:
+            return False
+
+    trade = trade_sim.open_trade(
+        1 if verdict == "BUY" else -1,
+        levels.get("entry"),
+        levels.get("stop"),
+        levels.get("target"),
+        signal_time,
+        config.TRADE_COST_PCT.get(symbol, config.DEFAULT_TRADE_COST_PCT),
+    )
+    if trade is None:
+        return False
+    return _mirror(
+        supabase.publish_trade_outcome, source, symbol, timeframe, strategy_version, {**trade, "confidence": confidence}
+    )
 
 
 def detect_guda_special_setups(now, guda_special_settings=None):
@@ -470,7 +520,7 @@ def advance_guda_special_setups(now, guda_special_settings=None, events=()):
 
         signal = result["signal"]
         if signal is not None:
-            _mirror(
+            published = _mirror(
                 supabase.publish_guda_special_signal,
                 setup["symbol"],
                 setup["timeframe"],
@@ -480,6 +530,11 @@ def advance_guda_special_setups(now, guda_special_settings=None, events=()):
                 setup["strategy_version"],
                 **signal,
             )
+            if published and signal["verdict"] in ("BUY", "SELL"):
+                open_trade_outcome(
+                    "guda_special", setup["symbol"], setup["timeframe"], setup["strategy_version"],
+                    candles[-1]["open_time"], signal["verdict"], signal,
+                )
 
 
 def main():
@@ -528,6 +583,11 @@ def main():
             print("[info] guda_special_settings not configured — GUDA SPECIAL gates run with defaults only")
         detect_guda_special_setups(now, guda_special_settings)
         advance_guda_special_setups(now, guda_special_settings, events)
+
+        # Last, once every pair's newest candle is mirrored: moves every
+        # tracked trade on through the candles that closed since its last
+        # check. Trades opened this run have nothing newer yet.
+        advance_trade_outcomes()
 
 
 if __name__ == "__main__":
