@@ -6,6 +6,7 @@ import { buildAssetPanel } from "@/lib/asset-panel";
 import { ASSET_NAMES, getLatestSignals, getRecentSuppressions, unresolvedSuppressions } from "@/lib/signals";
 import { getGudaSpecialSettings } from "@/lib/guda-special-settings";
 import { getLatestGudaSpecialSignals, type GudaSpecialSignalView } from "@/lib/guda-special";
+import { getLiveResultsSettings, getLiveStats } from "@/lib/live-results";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth";
@@ -26,11 +27,9 @@ export async function AssetPage({ symbol }: { symbol: string }) {
   const user = await requireUser();
   const fullAccess = hasFullAccess(user);
 
-  const [{ source, signals }, allSuppressions, { enabled: gudaSpecialEnabled }] = await Promise.all([
-    getLatestSignals(),
-    getRecentSuppressions(),
-    getGudaSpecialSettings(),
-  ]);
+  const [{ source, signals }, allSuppressions, { enabled: gudaSpecialEnabled }, { enabled: liveResultsEnabled }] =
+    await Promise.all([getLatestSignals(), getRecentSuppressions(), getGudaSpecialSettings(), getLiveResultsSettings()]);
+  const liveStats = liveResultsEnabled ? await getLiveStats() : undefined;
 
   // Skipped entirely when the admin toggle is off — no point querying a
   // table nothing on the page will render.
@@ -83,7 +82,13 @@ export async function AssetPage({ symbol }: { symbol: string }) {
           </CardContent>
         </Card>
       ) : (
-        <AssetSection data={data} bordered={false} locked={!fullAccess} gudaSpecialEnabled={gudaSpecialEnabled} />
+        <AssetSection
+          data={data}
+          bordered={false}
+          locked={!fullAccess}
+          gudaSpecialEnabled={gudaSpecialEnabled}
+          liveStats={liveStats}
+        />
       )}
     </div>
   );

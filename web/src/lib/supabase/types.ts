@@ -624,6 +624,13 @@ export interface Database {
         Update: Record<string, never>;
         Relationships: [];
       };
+      // 0029_live_results_toggle.sql — singleton row; anyone reads, admins update.
+      live_results_settings: {
+        Row: { id: boolean; enabled: boolean; updated_at: string };
+        Insert: Record<string, never>;
+        Update: { enabled?: boolean; updated_at?: string };
+        Relationships: [];
+      };
       // 0028_trade_outcomes.sql — written only by the engine (service role);
       // admins read them at /admin/performance.
       trade_outcomes: {

@@ -145,6 +145,54 @@ export function latestBacktests(runs: BacktestRunView[]): BacktestRunView[] {
   );
 }
 
+// --- dashboard live results ---------------------------------------------------------
+
+/** What a user's signal card shows about its own timeframe's live record. */
+export interface LiveStat {
+  /** Closed trades counted — the most recent ones, up to the limit. */
+  trades: number;
+  winRate: number | null;
+  avgRNet: number | null;
+}
+
+/** Below this, a win rate swings too much from one trade to the next to be
+ * worth showing as a number. */
+export const LIVE_STAT_MIN_TRADES = 10;
+export const LIVE_STAT_WINDOW = 30;
+
+export function liveStatKey(source: TradeSource, symbol: string, timeframe: string): string {
+  return `${source}|${symbol}|${timeframe}`;
+}
+
+/** The last `limit` closed trades per strategy, market and timeframe,
+ * summed up — the only thing about live results that reaches users. */
+export function recentStats(
+  rows: Pick<TradeOutcomeView, "source" | "symbol" | "timeframe" | "status" | "rNet" | "exitTime">[],
+  limit: number = LIVE_STAT_WINDOW
+): Record<string, LiveStat> {
+  const closed = rows
+    .filter((r) => r.status !== "OPEN" && r.rNet !== null && r.exitTime !== null)
+    .sort((a, b) => (a.exitTime! < b.exitTime! ? 1 : a.exitTime! > b.exitTime! ? -1 : 0));
+
+  const byKey = new Map<string, number[]>();
+  for (const r of closed) {
+    const key = liveStatKey(r.source, r.symbol, r.timeframe);
+    const rs = byKey.get(key) ?? [];
+    if (rs.length < limit) rs.push(r.rNet!);
+    byKey.set(key, rs);
+  }
+
+  const stats: Record<string, LiveStat> = {};
+  for (const [key, rs] of byKey) {
+    stats[key] = {
+      trades: rs.length,
+      winRate: rs.filter((r) => r > 0).length / rs.length,
+      avgRNet: rs.reduce((a, b) => a + b, 0) / rs.length,
+    };
+  }
+  return stats;
+}
+
 // --- formatting -----------------------------------------------------------------
 
 export function formatR(v: number | null): string {

@@ -4,6 +4,7 @@ import { ArrowRight } from "lucide-react";
 import { ConsensusTile } from "@/components/dashboard/consensus-tile";
 import { SignalCard } from "@/components/dashboard/signal-card";
 import { GudaSpecialSignalCard } from "@/components/dashboard/guda-special-signal-card";
+import { liveStatKey, type LiveStat } from "@/lib/performance-view";
 import { ASSET_NAMES, TIMEFRAME_SECONDS } from "@/lib/signals";
 import type { AssetPanelData } from "@/lib/asset-panel";
 
@@ -44,12 +45,16 @@ export function AssetSection({
   detailed = true,
   locked = false,
   gudaSpecialEnabled = false,
+  liveStats,
 }: {
   data: AssetPanelData;
   bordered?: boolean;
   detailed?: boolean;
   locked?: boolean;
   gudaSpecialEnabled?: boolean;
+  /** Live records by liveStatKey(); undefined when the admin switch is off,
+   * which leaves the line off every card. */
+  liveStats?: Record<string, LiveStat>;
 }) {
   const { symbol, group, consensus, candlesByTimeframe, gudaSpecial } = data;
   const route = ASSET_ROUTES[symbol];
@@ -89,9 +94,17 @@ export function AssetSection({
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {orderedGroup.map((s) => (
             <Fragment key={`${s.symbol}-${s.timeframe}`}>
-              <SignalCard signal={s} locked={locked} />
+              <SignalCard
+                signal={s}
+                locked={locked}
+                live={liveStats && { stat: liveStats[liveStatKey("confluence", symbol, s.timeframe)] ?? null }}
+              />
               {gudaSpecialEnabled && s.timeframe === "15m" && (
-                <GudaSpecialSignalCard signal={gudaSpecial} locked={locked} />
+                <GudaSpecialSignalCard
+                  signal={gudaSpecial}
+                  locked={locked}
+                  live={liveStats && { stat: liveStats[liveStatKey("guda_special", symbol, "15m")] ?? null }}
+                />
               )}
             </Fragment>
           ))}

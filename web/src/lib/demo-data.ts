@@ -589,6 +589,11 @@ export const DEMO_TRADE_OUTCOMES: TradeOutcomeView[] = [
   demoTrade(11, { source: "guda_special", timeframe: "15m", status: "TARGET", rNet: 1.5, rCost: 0.3 }),
   demoTrade(12, { source: "guda_special", timeframe: "15m", status: "STOP", rNet: -1.3, rCost: 0.3 }),
   demoTrade(13, { symbol: "XAUUSD", timeframe: "1h", status: "TARGET", rNet: 1.4, rCost: 0.05, entry: 3_700, stop: 3_690, target: 3_715 }),
+  // A longer 4h record, so the dashboard's "Last N trades" line has enough
+  // trades to show numbers rather than "too few to judge".
+  ...[2.9, -1.0, -1.0, 2.9, -1.0, 0.4, -1.0, 2.9, -1.0, -1.0, 2.9, -1.0].map((r, i) =>
+    demoTrade(20 + i, { timeframe: "4h", status: r > 2 ? "TARGET" : r > 0 ? "TIMEOUT" : "STOP", rNet: r, rCost: 0.02 })
+  ),
 ];
 
 const demoBacktest = (

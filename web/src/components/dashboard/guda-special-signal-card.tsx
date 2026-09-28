@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { SignalLevels } from "@/components/dashboard/signal-card";
 import type { GudaSpecialSignalView } from "@/lib/guda-special";
 import { GUDA_SPECIAL_VERSION_LABEL } from "@/lib/guda-special-version";
+import { LiveStatLine } from "@/components/dashboard/live-stat-line";
+import type { LiveStat } from "@/lib/performance-view";
 
 function verdictVariant(v: GudaSpecialSignalView["verdict"]) {
   if (v === "BUY") return "success" as const;
@@ -47,9 +49,12 @@ const money = (n: number) => `$${n.toLocaleString(undefined, { maximumFractionDi
 export function GudaSpecialSignalCard({
   signal,
   locked = false,
+  live,
 }: {
   signal: GudaSpecialSignalView | null;
   locked?: boolean;
+  /** GUDA SPECIAL's own live record; absent when the admin switch is off. */
+  live?: { stat: LiveStat | null };
 }) {
   return (
     <Card>
@@ -74,6 +79,7 @@ export function GudaSpecialSignalCard({
             {money(signal.price)} &middot; {new Date(signal.generatedAt).toLocaleString()}
           </p>
         )}
+        {live && <LiveStatLine stat={live.stat} />}
       </CardHeader>
       <CardContent className={locked ? "relative" : undefined}>
         <div className={locked ? "pointer-events-none select-none blur-sm" : undefined} aria-hidden={locked}>

@@ -7,6 +7,8 @@ import { plainLanguageSummary } from "@/lib/plain-language";
 import { AiTakeDialog } from "@/components/dashboard/ai-take-dialog";
 import { isStale, type SignalView } from "@/lib/signals";
 import { SCALP_TIMEFRAMES, SCALP_WARNING } from "@/lib/signal-view";
+import { LiveStatLine } from "@/components/dashboard/live-stat-line";
+import type { LiveStat } from "@/lib/performance-view";
 
 function verdictVariant(v: string) {
   if (v === "BUY") return "success" as const;
@@ -132,7 +134,16 @@ export function SignalLevels({
  * gap) while blurring the actual verdict/reasoning/levels underneath a
  * lock overlay — informed that it's there and how to unlock it, rather
  * than the detail simply not existing on the page. */
-export function SignalCard({ signal, locked = false }: { signal: SignalView; locked?: boolean }) {
+export function SignalCard({
+  signal,
+  locked = false,
+  live,
+}: {
+  signal: SignalView;
+  locked?: boolean;
+  /** This timeframe's live record; absent when the admin switch is off. */
+  live?: { stat: LiveStat | null };
+}) {
   const stale = isStale(signal);
 
   return (
@@ -156,6 +167,7 @@ export function SignalCard({ signal, locked = false }: { signal: SignalView; loc
             Scalp · higher risk
           </Badge>
         )}
+        {live && <LiveStatLine stat={live.stat} />}
       </CardHeader>
       <CardContent className={locked ? "relative" : undefined}>
         <div className={locked ? "pointer-events-none select-none blur-sm" : undefined} aria-hidden={locked}>

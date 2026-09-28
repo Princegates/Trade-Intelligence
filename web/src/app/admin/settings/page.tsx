@@ -13,6 +13,8 @@ import { getAllProviderStates } from "@/lib/settings";
 import { getAccessPolicy } from "@/lib/access-policy";
 import { getEngineSettings } from "@/lib/engine-settings";
 import { getGudaSpecialSettings } from "@/lib/guda-special-settings";
+import { getLiveResultsSettings } from "@/lib/live-results";
+import { LiveResultsToggle } from "@/components/admin/live-results-toggle";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import type { SettingsCategory } from "@/lib/supabase/types";
 
@@ -26,12 +28,13 @@ const CATEGORIES: { key: SettingsCategory; label: string; icon: React.ReactNode 
 ];
 
 export default async function AdminSettingsPage() {
-  const [providersByCategory, { trialDays, codeExpiryDays }, engineSettings, gudaSpecialSettings] =
+  const [providersByCategory, { trialDays, codeExpiryDays }, engineSettings, gudaSpecialSettings, liveResults] =
     await Promise.all([
       Promise.all(CATEGORIES.map((c) => getAllProviderStates(c.key))),
       getAccessPolicy(),
       getEngineSettings(),
       getGudaSpecialSettings(),
+      getLiveResultsSettings(),
     ]);
 
   return (
@@ -89,6 +92,20 @@ export default async function AdminSettingsPage() {
         </CardHeader>
         <CardContent>
           <GudaSpecialToggle enabled={gudaSpecialSettings.enabled} />
+        </CardContent>
+      </Card>
+
+      <Card className="max-w-2xl">
+        <CardHeader>
+          <CardTitle>Live results on the dashboard</CardTitle>
+          <CardDescription>
+            Shows each signal card its own timeframe&apos;s live record — for example &quot;Last 30 trades: 43% won ·
+            +0.12R avg&quot; — from every call tracked as a real trade since tracking began, after spread costs. Users see only these summary
+            numbers. Full detail stays on the Performance page.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <LiveResultsToggle enabled={liveResults.enabled} />
         </CardContent>
       </Card>
 

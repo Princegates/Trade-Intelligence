@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   formatR,
+  liveStatKey,
+  recentStats,
   groupOutcomes,
   latestBacktests,
   summarizeOutcomes,
@@ -122,5 +124,23 @@ describe("formatR", () => {
     expect(formatR(-1)).toBe("−1.00R");
     expect(formatR(0)).toBe("0.00R");
     expect(formatR(null)).toBe("—");
+  });
+});
+
+describe("recentStats", () => {
+  it("sums up only the most recent closed trades per strategy, market and timeframe", () => {
+    const rows = [
+      ...Array.from({ length: 35 }, (_, i) =>
+        trade({ rNet: i < 30 ? 1 : -1, exitTime: `2026-09-${String(28 - Math.floor(i / 2)).padStart(2, "0")}T${i % 2 ? "01" : "02"}:00:00Z` })
+      ),
+      trade({ status: "OPEN", rNet: null, exitTime: null }),
+      trade({ timeframe: "4h", rNet: -1 }),
+    ];
+    const stats = recentStats(rows, 30);
+    const h1 = stats[liveStatKey("confluence", "BTCUSDT", "1h")];
+    expect(h1.trades).toBe(30);
+    expect(h1.winRate).toBe(1); // the 5 oldest (losses) fall outside the window
+    expect(h1.avgRNet).toBe(1);
+    expect(stats[liveStatKey("confluence", "BTCUSDT", "4h")]).toEqual({ trades: 1, winRate: 0, avgRNet: -1 });
   });
 });
