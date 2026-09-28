@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { HistoryFilters } from "@/components/dashboard/history-filters";
+import { AdminWhatsAppLink } from "@/components/account/admin-whatsapp-link";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -38,8 +39,8 @@ export default async function HistoryPage({ searchParams }: PageProps<"/dashboar
         <Card>
           <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-muted-foreground">
-              You&apos;re on the basic view — only the latest signal is shown. Ask your admin for an access code to
-              unlock full history.
+              You&apos;re on the basic view — only the latest signal is shown. Contact admin on WhatsApp only:{" "}
+              <AdminWhatsAppLink email={user.email} /> for a code to unlock premium and full history.
             </p>
             <Link href="/dashboard/settings" className="text-sm font-medium text-primary underline-offset-4 hover:underline">
               Redeem a code

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Lock } from "lucide-react";
+import { AdminWhatsAppLink } from "@/components/account/admin-whatsapp-link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { plainLanguageSummary } from "@/lib/plain-language";
@@ -243,6 +244,9 @@ export function SignalCard({ signal, locked = false }: { signal: SignalView; loc
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-b-xl bg-background/70 p-4 text-center backdrop-blur-[1px]">
             <Lock className="size-5 text-muted-foreground" />
             <p className="text-sm font-medium text-foreground">Full access required</p>
+            <p className="text-xs text-muted-foreground">
+              Contact admin on WhatsApp only: <AdminWhatsAppLink />
+            </p>
             <Link
               href="/dashboard/settings"
               className="text-xs font-medium text-primary underline-offset-4 hover:underline"

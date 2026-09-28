@@ -6,6 +6,7 @@ import { Lock, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ChatMascot } from "@/components/chat/chat-mascot";
+import { AdminWhatsAppLink } from "@/components/account/admin-whatsapp-link";
 import { sendChatMessage } from "@/lib/actions/chat";
 import type { ChatTurn } from "@/lib/gemini-chat";
 
@@ -58,7 +59,7 @@ function panelPosition(fab: Point): Point {
  * dashboard shell but resets on a full reload. Its on-screen position,
  * however, is saved to localStorage — a per-viewer convenience, not app
  * state — so it stays wherever a person last dragged it. */
-export function ChatWidget({ fullAccess }: { fullAccess: boolean }) {
+export function ChatWidget({ fullAccess, email }: { fullAccess: boolean; email: string }) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatTurn[]>([]);
   const [input, setInput] = useState("");
@@ -241,7 +242,8 @@ export function ChatWidget({ fullAccess }: { fullAccess: boolean }) {
               <Lock className="size-5 text-muted-foreground" />
               <p className="text-sm font-medium text-foreground">Full access required</p>
               <p className="text-sm text-muted-foreground">
-                Guda is a full-access feature. Ask your admin for an access code to unlock it.
+                Guda is a full-access feature. Contact admin on WhatsApp only:{" "}
+                <AdminWhatsAppLink email={email} /> for a code to unlock premium.
               </p>
               <Link
                 href="/dashboard/settings"

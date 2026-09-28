@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AssetSection } from "@/components/dashboard/asset-section";
+import { AdminWhatsAppLink } from "@/components/account/admin-whatsapp-link";
 import { SuppressionList } from "@/components/dashboard/suppression-list";
 import { buildAssetPanel } from "@/lib/asset-panel";
 import { ASSET_NAMES, getLatestSignals, getRecentSuppressions, unresolvedSuppressions } from "@/lib/signals";
@@ -58,8 +59,9 @@ export async function AssetPage({ symbol }: { symbol: string }) {
         <Card>
           <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-muted-foreground">
-              You&apos;re on the basic view — the cards below are locked. Ask your admin for an access code to
-              unlock full reasoning, levels, and patterns for every timeframe.
+              You&apos;re on the basic view — the cards below are locked. Contact admin on WhatsApp only:{" "}
+              <AdminWhatsAppLink email={user.email} /> for a code to unlock premium: full reasoning, levels, and
+              patterns for every timeframe.
             </p>
             <Link
               href="/dashboard/settings"

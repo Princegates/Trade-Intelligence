@@ -20,6 +20,7 @@ import { signOut } from "@/lib/actions/auth";
 import { useSignalsRealtime } from "@/lib/use-signals-realtime";
 import { ModeToggle } from "@/components/mode/mode-toggle";
 import { hasFullAccess, daysRemaining } from "@/lib/access";
+import { ADMIN_WHATSAPP } from "@/lib/site";
 import { ChatWidget } from "@/components/chat/chat-widget";
 import type { Role } from "@/lib/supabase/types";
 
@@ -124,9 +125,16 @@ export function DashboardShell({ title, nav, user, children }: DashboardShellPro
                   </Badge>
                 )
               ) : (
-                <Badge variant="warning" title="Ask your admin for an access code to unlock full trade history — see Settings">
-                  Basic view
-                </Badge>
+                // Links to Settings, where the WhatsApp contact and code box are —
+                // a tooltip alone does nothing on a phone.
+                <Link href="/dashboard/settings">
+                  <Badge
+                    variant="warning"
+                    title={`Contact admin on WhatsApp only (${ADMIN_WHATSAPP.display}) for a code to unlock premium`}
+                  >
+                    Basic view
+                  </Badge>
+                </Link>
               ))}
           </div>
 
@@ -181,7 +189,7 @@ export function DashboardShell({ title, nav, user, children }: DashboardShellPro
         <main className="flex-1 p-4 sm:p-6">{children}</main>
       </div>
 
-      <ChatWidget fullAccess={fullAccess} />
+      <ChatWidget fullAccess={fullAccess} email={user.email} />
     </div>
   );
 }
