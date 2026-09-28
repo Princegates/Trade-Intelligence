@@ -705,3 +705,20 @@ def test_open_guda_special_setups_failure_is_swallowed_not_raised(monkeypatch):
     monkeypatch.setattr(supabase.requests, "get", boom)
 
     assert supabase.get_open_guda_special_setups() == []
+
+
+def test_a_backtest_run_sends_only_known_columns(monkeypatch):
+    from src import trade_sim
+
+    sent = {}
+    monkeypatch.setattr(supabase, "_insert", lambda table, row, **kw: sent.update(table=table, row=row) or True)
+    stats = trade_sim.summarize([])  # includes figures with no column, e.g. "cancelled"
+    supabase.publish_backtest_run({
+        "strategy": "confluence", "strategy_version": "3.4.0", "symbol": "BTCUSDT", "timeframe": "1h",
+        "period_start": 0, "period_end": 3600, "candles": 10, "signals": 2, "skipped": 0, "cost_pct": 0.03,
+        "settings": {}, **stats,
+    })
+    assert sent["table"] == "backtest_runs"
+    assert "cancelled" not in sent["row"] and "open" not in sent["row"]
+    assert sent["row"]["open_trades"] == 0
+    assert sent["row"]["period_start"].startswith("1970-01-01")

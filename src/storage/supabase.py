@@ -874,9 +874,20 @@ def get_candles_after(symbol, timeframe, after, limit=1000):
     return [{**r, "open_time": _epoch(r["open_time"])} for r in rows]
 
 
+# backtest_runs' columns (0028_trade_outcomes.sql) besides the ones mapped
+# below. Only these are sent: a new figure added to trade_sim.summarize()
+# must not make every save fail on an unknown column.
+_BACKTEST_COLUMNS = (
+    "strategy", "strategy_version", "symbol", "timeframe", "candles", "signals", "skipped", "cost_pct",
+    "settings", "trades", "wins", "win_rate", "avg_r_net", "avg_r_gross", "avg_cost_r", "total_r_net",
+    "profit_factor", "max_drawdown_r", "worst_losing_streak", "avg_bars", "target_rate", "stop_rate",
+    "timeout_rate",
+)
+
+
 def publish_backtest_run(run):
     """One timeframe's result from src/backtest.py."""
-    row = {k: v for k, v in run.items() if k not in ("open", "period_start", "period_end")}
+    row = {k: run[k] for k in _BACKTEST_COLUMNS if k in run}
     row["open_trades"] = run["open"]
     row["period_start"] = _utc(run["period_start"])
     row["period_end"] = _utc(run["period_end"])
