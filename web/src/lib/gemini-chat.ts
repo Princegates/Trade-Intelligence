@@ -48,7 +48,12 @@ export async function generateChatReply(
   dataContext: string
 ): Promise<ChatReplyResult> {
   if (provider.provider !== "gemini") return { reply: null, rateLimited: false };
-  const apiKey = provider.config.api_key;
+  // Prefers a dedicated chat key so this user-driven, unpredictable-volume
+  // feature doesn't share a daily quota with AI commentary generation
+  // (src/ai/commentary.py, which always uses api_key and never this one) —
+  // falls back to api_key when chat_api_key isn't set, so nothing breaks
+  // for an admin who hasn't configured the split yet.
+  const apiKey = provider.config.chat_api_key || provider.config.api_key;
   if (!apiKey) return { reply: null, rateLimited: false };
   const model = provider.config.model || DEFAULT_MODEL;
 

@@ -410,7 +410,23 @@ export const SETTINGS_PROVIDERS: Record<SettingsCategory, ProviderDef[]> = {
     { provider: "fcm", label: "Firebase Cloud Messaging", fields: [{ key: "project_id", label: "Project ID" }, { key: "service_account_json", label: "Service Account JSON", secret: true }] },
   ],
   ai: [
-    { provider: "gemini", label: "Google Gemini (free tier)", fields: [{ key: "api_key", label: "API Key", secret: true }, { key: "model", label: "Model", placeholder: "gemini-3.5-flash-lite" }] },
+    {
+      provider: "gemini",
+      label: "Google Gemini (free tier)",
+      fields: [
+        { key: "api_key", label: "API Key", secret: true },
+        { key: "model", label: "Model", placeholder: "gemini-3.5-flash-lite" },
+        // Optional, separate from api_key above: the free tier's daily quota
+        // is per API key, shared by every caller using it. AI commentary
+        // (generated automatically on every new signal) and the Guda chat
+        // widget (user-driven, unpredictable volume) draw from the same key
+        // by default, so heavy chat use can starve commentary generation or
+        // vice versa. Setting this splits them onto two keys; leaving it
+        // blank keeps today's behavior (chat reuses the key above) — see
+        // src/lib/gemini-chat.ts.
+        { key: "chat_api_key", label: "Chat API Key (optional — reuses the key above if blank)", secret: true },
+      ],
+    },
     { provider: "anthropic", label: "Anthropic (Claude)", fields: [{ key: "api_key", label: "API Key", secret: true }, { key: "model", label: "Model", placeholder: "claude-sonnet-5" }] },
     { provider: "openai", label: "OpenAI", fields: [{ key: "api_key", label: "API Key", secret: true }, { key: "model", label: "Model", placeholder: "gpt-5" }] },
   ],
