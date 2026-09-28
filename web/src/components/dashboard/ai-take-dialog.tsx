@@ -1,7 +1,40 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Sparkles } from "lucide-react";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+
+// Tuned so a typical 2-4 sentence commentary (roughly 40-70 words) finishes
+// revealing in a couple of seconds — quick enough not to feel like a delay,
+// slow enough to actually read as "being written," not just a flicker.
+const REVEAL_WORD_INTERVAL_MS = 35;
+
+/** Reveals `text` one word at a time, starting as soon as it mounts. Purely
+ * a presentation effect signaling "this was AI-written" — the commentary is
+ * already fully generated and stored by the time this renders (see
+ * src/ai/commentary.py), there's no real stream to show. A separate
+ * component (not inline state in AiTakeDialog below) specifically so it
+ * remounts fresh — and the reveal replays from the start — every time the
+ * dialog re-opens: Radix's DialogContent unmounts its children on close. */
+function RevealingCommentary({ text }: { text: string }) {
+  const words = text.split(" ");
+  const [shown, setShown] = useState(0);
+
+  useEffect(() => {
+    if (shown >= words.length) return;
+    const id = setTimeout(() => setShown((n) => n + 1), REVEAL_WORD_INTERVAL_MS);
+    return () => clearTimeout(id);
+  }, [shown, words.length]);
+
+  return (
+    <p className="text-sm leading-relaxed text-foreground">
+      {words.slice(0, shown).join(" ")}
+      {shown < words.length && (
+        <span className="ml-0.5 inline-block h-3.5 w-1.5 translate-y-0.5 animate-pulse bg-primary/70 align-middle" />
+      )}
+    </p>
+  );
+}
 
 /** Collapsed by default — a small pill that opens the full AI commentary in
  * a dialog rather than taking up permanent space on every card. The
@@ -30,7 +63,7 @@ export function AiTakeDialog({ commentary, symbol, timeframe }: { commentary: st
             Additional color from an LLM, on top of the verdict above — not a second opinion, not financial advice.
           </DialogDescription>
         </DialogHeader>
-        <p className="text-sm leading-relaxed text-foreground">{commentary}</p>
+        <RevealingCommentary text={commentary} />
       </DialogContent>
     </Dialog>
   );

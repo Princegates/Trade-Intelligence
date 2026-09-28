@@ -107,3 +107,11 @@ def test_prompt_never_asks_the_model_to_change_the_verdict():
 
     assert "do not change it" in prompt.lower()
     assert "BUY" in prompt
+
+
+def test_prompt_asks_for_jargon_free_language():
+    prompt = commentary._build_prompt(_signal()).lower()
+
+    assert "new to trading" in prompt
+    assert "avoid jargon" in prompt
+    assert "rsi" in prompt  # named as an example term to avoid, not used as jargon itself
