@@ -178,7 +178,14 @@ def process(instrument, timeframe, now, events=(), engine_settings=None):
         )
         higher_bias = confluence.higher_timeframe_bias(anchor_candles)
 
-    result = engine.evaluate(recent, higher_timeframe_bias=higher_bias, settings=engine_settings)
+    # Stage 2 defaults, then the admin's saved settings, then this market's
+    # trading costs for the engine's cost check.
+    settings = {
+        **config.ENGINE_SETTING_DEFAULTS,
+        **(engine_settings or {}),
+        "round_trip_cost_pct": config.TRADE_COST_PCT.get(symbol, config.DEFAULT_TRADE_COST_PCT),
+    }
+    result = engine.evaluate(recent, higher_timeframe_bias=higher_bias, settings=settings)
 
     currency = config.EVENT_RISK_CURRENCY.get(symbol)
     if currency:

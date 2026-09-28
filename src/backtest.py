@@ -370,7 +370,9 @@ def main():
     if args.strategy == "confluence":
         live = supabase.get_engine_settings() if supabase.is_configured() else None
         base = {k: live[k] for k in ENGINE_DEFAULTS if live and live.get(k) is not None} if live else {}
-        settings = {**ENGINE_DEFAULTS, **base, **overrides}
+        # Same layering as src/run.py: database defaults, Stage 2 defaults,
+        # the admin's saved values, then this run's overrides.
+        settings = {**ENGINE_DEFAULTS, **config.ENGINE_SETTING_DEFAULTS, **base, **overrides}
         timeframes = [tf for tf in args.timeframes.split(",") if tf in TIMEFRAMES]
     else:
         live = supabase.get_guda_special_settings() if supabase.is_configured() else None

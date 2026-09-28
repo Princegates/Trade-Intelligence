@@ -440,10 +440,19 @@ def test_engine_settings_are_threaded_through_to_evaluate(temp_db, monkeypatch):
 
     monkeypatch.setattr(run.engine, "evaluate", capture_evaluate)
 
-    settings = {"min_confidence_threshold": 70}
+    settings = {"min_confidence_threshold": 70, "min_stop_atr": 2.0}
     run.process(INSTRUMENT, "1h", NOW, engine_settings=settings)
 
-    assert received.get("settings") == settings
+    passed = received.get("settings")
+    assert passed["min_confidence_threshold"] == 70
+    # The admin's saved value beats the Stage 2 default...
+    assert passed["min_stop_atr"] == 2.0
+    # ...any other configured default still applies...
+    for key, value in config.ENGINE_SETTING_DEFAULTS.items():
+        if key != "min_stop_atr":
+            assert passed[key] == value
+    # ...and the engine is told this market's trading costs.
+    assert passed["round_trip_cost_pct"] == config.TRADE_COST_PCT["BTCUSDT"]
 
 
 # --- New in 3.1.0 (Phase 2b): lifecycle row creation + recheck_lifecycles ---

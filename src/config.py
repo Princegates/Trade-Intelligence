@@ -176,6 +176,13 @@ DEFAULT_TRADE_COST_PCT = 0.10
 # src/backtest_guda.py (96 x 15m = one day).
 TRADE_MAX_BARS = {"confluence": 50, "guda_special": 96}
 
+# Engine options (src/signals/engine.py) switched on for every live run and
+# every backtest, on top of the engine's own defaults and under any value
+# an admin has saved in engine_settings. Empty means the engine's defaults
+# as they are; options are added here only once src/backtest.py shows they
+# help, with a STRATEGY_VERSION bump.
+ENGINE_SETTING_DEFAULTS = {}
+
 # A feed counts as stale once its newest closed candle is this many intervals
 # overdue. Stale markets get a suppression record instead of a signal, so a
 # closed or broken feed can never masquerade as a live call.
