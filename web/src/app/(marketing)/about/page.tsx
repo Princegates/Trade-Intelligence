@@ -69,7 +69,7 @@ const principles = [
 const steps = [
   {
     title: "Read the latest closed candles",
-    body: "Every few minutes the engine pulls fresh price data for each market and timeframe (Bitcoin from Binance.US, gold from Twelve Data). It only uses candles that have finished forming, and skips any feed that's stale, missing or sends an impossible candle.",
+    body: "Every few minutes the engine pulls fresh price data for each market and timeframe. It only uses candles that have finished forming, and skips any feed that's stale, missing or sends an impossible candle.",
   },
   {
     title: "Four independent checks vote",

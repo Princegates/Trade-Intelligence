@@ -57,10 +57,9 @@ export default function DisclaimerPage() {
             money if acted on.
           </p>
           <p>
-            Market data, candles, and economic-calendar events are sourced from third-party providers (currently
-            Binance, Twelve Data, and a public economic-calendar feed). We do not control, and cannot guarantee, the
-            accuracy, completeness, availability, or timeliness of any third-party data, and we are not liable for
-            errors, delays, outages, or omissions in it.
+            Market data, candles, news, and economic-calendar events are sourced from third-party providers. We do
+            not control, and cannot guarantee, the accuracy, completeness, availability, or timeliness of any
+            third-party data, and we are not liable for errors, delays, outages, or omissions in it.
           </p>
         </Section>
 
