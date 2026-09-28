@@ -39,6 +39,10 @@ STRUCTURE_BUFFER_ATR = 0.25
 ENTRY_ZONE_WIDTH_ATR = 0.5
 TOUCHES_FOR_FULL_SCORE = 4
 
+# Candles in the longer-run ATR that the volatility-regime options
+# (max_atr_ratio, min_atr_ratio, min_stop_baseline_atr) compare against.
+ATR_BASELINE_PERIOD = 100
+
 
 def _ema_trend(closes):
     """Trend read from the EMA stack rather than a single moving-average
@@ -609,6 +613,15 @@ def evaluate(candles, higher_timeframe_bias=None, settings=None):
     regime = structure["regime"]
     market_phase_label = ez.market_phase(regime, structure["break_event"], phase_zone)
 
+    # Volatility regime: this market's current ATR against its own longer-
+    # run ATR. Only computed when an option below uses it.
+    baseline_atr = (
+        ind.atr(candles, int(settings.get("atr_baseline_period") or ATR_BASELINE_PERIOD))
+        if any(settings.get(k) is not None for k in ("max_atr_ratio", "min_atr_ratio", "min_stop_baseline_atr"))
+        else None
+    )
+    atr_ratio = atr_val / baseline_atr if atr_val and baseline_atr else None
+
     votes = {"trend": trend_vote, "momentum": momentum["vote"], "structure": structure["vote"], "pattern": pattern["vote"]}
     evidence = sum(1 for v in votes.values() if v is not None)
     score = sum(v for v in votes.values() if v is not None)
@@ -679,6 +692,16 @@ def evaluate(candles, higher_timeframe_bias=None, settings=None):
         ):
             reasons.append(f"Overridden to HOLD — RSI at {momentum['rsi']:.0f} is stretched; not chasing this move")
             verdict = "HOLD"
+        elif atr_ratio is not None and settings.get("max_atr_ratio") is not None and atr_ratio > settings["max_atr_ratio"]:
+            reasons.append(
+                f"Overridden to HOLD — volatility is {atr_ratio:.1f}x its usual level; too wild to place a stop"
+            )
+            verdict = "HOLD"
+        elif atr_ratio is not None and settings.get("min_atr_ratio") is not None and atr_ratio < settings["min_atr_ratio"]:
+            reasons.append(
+                f"Overridden to HOLD — volatility is {atr_ratio:.1f}x its usual level; too quiet for a move to follow through"
+            )
+            verdict = "HOLD"
 
     stop_atrs = settings.get("atr_stop_multiplier", STOP_ATRS)
     reward_to_risk_value = settings.get("reward_to_risk", REWARD_TO_RISK)
@@ -697,11 +720,17 @@ def evaluate(candles, higher_timeframe_bias=None, settings=None):
         s_target = (
             ez.structural_target(side, struct_levels) if side and settings.get("target_mode") != "atr" else None
         )
-        min_stop = (
-            atr_val * settings["min_stop_atr"]
-            if settings.get("min_stop_atr") is not None and atr_val
-            else None
-        )
+        # The stop's minimum distance: min_stop_atr of the current ATR, and
+        # min_stop_baseline_atr of the longer-run ATR, whichever is wider —
+        # so a quiet stretch doesn't shrink the stop below the market's
+        # usual swing.
+        floors = [
+            atr_val * settings["min_stop_atr"] if settings.get("min_stop_atr") is not None and atr_val else None,
+            baseline_atr * settings["min_stop_baseline_atr"]
+            if settings.get("min_stop_baseline_atr") is not None and baseline_atr
+            else None,
+        ]
+        min_stop = max((f for f in floors if f is not None), default=None)
         # Pullback entry: a limit at the near edge of the entry zone when
         # price has already left it (the usual case on a breakout candle);
         # inside the zone, the close is already a pullback entry.

@@ -47,10 +47,10 @@ def _patch_categories(trend=(0, "flat", []), momentum=NEUTRAL_MOMENTUM, structur
     )
 
 
-def _evaluate_with(higher_timeframe_bias=None, settings=None, **overrides):
+def _evaluate_with(higher_timeframe_bias=None, settings=None, candles=None, **overrides):
     patches = _patch_categories(**overrides)
     with patches[0], patches[1], patches[2], patches[3], patches[4]:
-        return engine.evaluate(_candles(), higher_timeframe_bias=higher_timeframe_bias, settings=settings)
+        return engine.evaluate(candles or _candles(), higher_timeframe_bias=higher_timeframe_bias, settings=settings)
 
 
 def test_two_agreeing_categories_produce_buy():
@@ -616,3 +616,56 @@ def test_timing_only_override_turns_a_call_into_hold_and_leaves_hold_alone():
     hold = _evaluate_with()
     before = list(hold["reasoning"])
     assert engine.apply_timing_only_override(hold, _candles(), "5m")["reasoning"] == before
+
+
+# --- Stage 3: volatility regime, also off unless set --------------------------------
+
+TRENDING_BUY = {
+    "trend": (1, "up", []),
+    "structure": {"vote": 1, "reasons": [], "regime": "TRENDING", "swings": [], "swept": None, "break_event": None, "trend_bias": None},
+}
+
+
+def _regime_candles(recent_half_range, n=150, recent=20):
+    """Ordinary 0.4-wide candles, then `recent` candles of a different size."""
+    out = []
+    for i in range(n):
+        close = 100.0 + i * 0.1
+        h = recent_half_range if i >= n - recent else 0.2
+        out.append({"open_time": i * 3600, "open": close, "high": close + h, "low": close - h, "close": close, "volume": 1.0})
+    return out
+
+
+def test_max_atr_ratio_holds_a_call_when_volatility_blows_out():
+    wild = _regime_candles(5.0)
+    assert _evaluate_with(candles=wild, **TRENDING_BUY)["verdict"] == "BUY"
+    held = _evaluate_with(candles=wild, settings={"max_atr_ratio": 1.5}, **TRENDING_BUY)
+    assert held["verdict"] == "HOLD"
+    assert any("too wild" in r for r in held["reasoning"])
+    calm = _evaluate_with(candles=_regime_candles(0.2), settings={"max_atr_ratio": 1.5}, **TRENDING_BUY)
+    assert calm["verdict"] == "BUY"
+
+
+def test_min_atr_ratio_holds_a_call_in_a_dead_market():
+    quiet = _regime_candles(0.04)
+    held = _evaluate_with(candles=quiet, settings={"min_atr_ratio": 0.7}, **TRENDING_BUY)
+    assert held["verdict"] == "HOLD"
+    assert any("too quiet" in r for r in held["reasoning"])
+    assert _evaluate_with(candles=_regime_candles(0.2), settings={"min_atr_ratio": 0.7}, **TRENDING_BUY)["verdict"] == "BUY"
+
+
+def test_the_regime_options_do_nothing_without_enough_history_for_the_baseline():
+    # 60 candles: no 100-candle ATR, so neither gate can judge.
+    result = _evaluate_with(settings={"max_atr_ratio": 0.01, "min_atr_ratio": 100}, **TRENDING_BUY)
+    assert result["verdict"] == "BUY"
+
+
+def test_min_stop_baseline_atr_keeps_a_quiet_markets_stop_at_its_usual_size():
+    quiet = _regime_candles(0.04)
+    baseline = ind.atr(quiet, engine.ATR_BASELINE_PERIOD)
+    current = ind.atr(quiet, 14)
+    assert current < baseline
+    only_current = _evaluate_with(candles=quiet, settings={"min_stop_atr": 1.0}, **TRENDING_BUY)["levels"]
+    both = _evaluate_with(candles=quiet, settings={"min_stop_atr": 1.0, "min_stop_baseline_atr": 1.0}, **TRENDING_BUY)["levels"]
+    assert only_current["entry"] - only_current["stop"] < baseline
+    assert both["entry"] - both["stop"] >= baseline - 1e-9

@@ -9,6 +9,7 @@ Usage:
     python -m src.backtest --symbol BTCUSDT --timeframes 1h,4h --days 365
     python -m src.backtest --symbol BTCUSDT --setting min_reward_to_risk=2
     python -m src.backtest --symbol BTCUSDT --variant "base:" --variant "wide: min_stop_atr=1"
+    python -m src.backtest --symbol BTCUSDT --timeframes 1d --variant "base:" --variant "weekly: anchor_1d=1w"
     python -m src.backtest --symbol BTCUSDT --publish --summary-file "$GITHUB_STEP_SUMMARY"
 
 Faithful to src/run.py where it matters: the same engine and settings (the
@@ -40,6 +41,11 @@ from .signals import confluence, engine
 from .storage import db, supabase
 
 TIMEFRAMES = ["5m", "15m", "1h", "4h", "1d"]
+
+# Confidence score bands (out of 100) for comparing a call's score with how
+# its trade turned out. The engine's default minimum is 65, so the first
+# band is normally empty.
+CONFIDENCE_BANDS = ((0, 64), (65, 69), (70, 74), (75, 79), (80, 100))
 
 # How far back each timeframe is replayed by default: roughly 17,000
 # candles for the short ones, enough trades to mean something without
@@ -287,6 +293,40 @@ def halves(trades, start, end):
     return older["avg_r_net"], newer["avg_r_net"]
 
 
+def confidence_bands(trades):
+    """How trades turned out grouped by their call's confidence score — the
+    check on whether a higher score actually means a better trade. Bands
+    with no closed trades are left out."""
+    rows = []
+    for low, high in CONFIDENCE_BANDS:
+        band = [t for t in trades if t.get("confidence") is not None and low <= round(t["confidence"] * 100) <= high]
+        s = trade_sim.summarize(band)
+        if s["trades"]:
+            rows.append({
+                "low": low, "high": high, "trades": s["trades"], "target_rate": s["target_rate"],
+                "win_rate": s["win_rate"], "avg_r_net": s["avg_r_net"],
+            })
+    return rows
+
+
+def bands_report(results):
+    """One row per confidence band per timeframe (per variant, if any)."""
+    lines = [
+        "#### Confidence score vs results",
+        "",
+        "| Timeframe | Variant | Confidence | Trades | Reached target | Won | Avg R after costs |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for name, rows in results:
+        for r in rows:
+            for b in r["bands"]:
+                lines.append(
+                    f"| {r['timeframe']} | {name or '—'} | {b['low']}–{b['high']} | {b['trades']} "
+                    f"| {_fmt_pct(b['target_rate'])} | {_fmt_pct(b['win_rate'])} | {_fmt_r(b['avg_r_net'])} |"
+                )
+    return "\n".join(lines) + "\n"
+
+
 def comparison_report(symbol, strategy, results, cost_pct):
     """One row per timeframe per variant, grouped by timeframe."""
     lines = [
@@ -319,6 +359,13 @@ def parse_variant(text):
     name, _, rest = text.partition(":")
     pairs = [p.strip() for p in rest.split(",") if p.strip()]
     return name.strip() or "variant", dict(backtest_guda._parse_setting(p) for p in pairs)
+
+
+def anchor_for(timeframe, default, extra):
+    """The anchor timeframe a variant uses for `timeframe`: its own
+    "anchor_<timeframe>" entry ("none" for no anchor), else the default."""
+    value = extra.get(f"anchor_{timeframe}", default)
+    return None if value in (None, "none") else value
 
 
 def write_trades_csv(path, symbol, strategy, timeframe, trades):
@@ -386,6 +433,8 @@ def main():
     now = int(datetime.now(timezone.utc).timestamp())
     max_bars = config.TRADE_MAX_BARS[args.strategy]
 
+    variants = [parse_variant(v) for v in args.variant] or [(None, {})]
+
     # Each timeframe is fetched once, far enough back for its own replay
     # plus warm-up, and for any timeframe that uses it as an anchor.
     needs = {}
@@ -399,28 +448,30 @@ def main():
         days = args.days or DEFAULT_DAYS[tf]
         anchor = backtest_guda.HTF if args.strategy == "guda_special" else confluence.ANCHOR_TIMEFRAME.get(tf)
         need(tf, days, config.CANDLE_FETCH_LIMIT)
-        if anchor:
-            need(anchor, days, config.CANDLE_FETCH_LIMIT)
+        for a in {anchor, *(anchor_for(tf, anchor, extra) for _, extra in variants)} - {None}:
+            need(a, days, config.CANDLE_FETCH_LIMIT)
         plan.append((tf, anchor, now - days * 86_400))
 
     cache = {}
-    for tf in sorted(needs, key=TIMEFRAMES.index):
+    for tf in sorted(needs, key=config.TIMEFRAME_SECONDS.get):
         print(f"fetching {args.symbol} {tf} since {_day(needs[tf])}...", flush=True)
         cache[tf] = load_candles(instrument, tf, needs[tf], args.source)
         print(f"  {len(cache[tf])} candles", flush=True)
 
-    variants = [parse_variant(v) for v in args.variant] or [(None, {})]
     results = []
     for name, extra in variants:
         # A variant may set its own round-trip cost ("cost_pct=0.06") to see
-        # how results depend on what a broker charges.
+        # how results depend on what a broker charges, and its own
+        # higher-timeframe anchors ("anchor_1d=1w").
         extra = dict(extra)
         vcost = float(extra.pop("cost_pct", cost_pct))
+        vanchors = {k: extra.pop(k) for k in list(extra) if k.startswith("anchor_")}
         # The engine's cost check needs this market's costs; harmless otherwise.
         vsettings = {**settings, **extra, "round_trip_cost_pct": vcost}
         fill_window = vsettings.get("fill_window", 5)
         rows = []
-        for tf, anchor, start_time in plan:
+        for tf, default_anchor, start_time in plan:
+            anchor = anchor_for(tf, default_anchor, vanchors)
             candles = cache[tf]
             if len(candles) < config.MIN_CANDLES_FOR_SIGNAL:
                 print(f"{tf}: only {len(candles)} candles — skipped")
@@ -442,7 +493,7 @@ def main():
             rows.append({
                 "timeframe": tf, "start": period_start, "end": period_end, "candles": len(replayed),
                 "signal_count": len(signals), "verdicts": dict(verdicts), "skipped": skipped, "stats": stats,
-                "halves": halves(trades, period_start, period_end),
+                "halves": halves(trades, period_start, period_end), "bands": confidence_bands(trades),
             })
             suffix = f"-{name}" if name else ""
             write_trades_csv(Path(args.out) / f"{args.strategy}-{args.symbol}-{tf}{suffix}.csv",
@@ -456,6 +507,8 @@ def main():
         report = comparison_report(args.symbol, args.strategy, results, cost_pct)
     else:
         report = markdown_report(args.symbol, args.strategy, results[0][1], cost_pct, settings_note)
+    if args.strategy == "confluence":
+        report += "\n" + bands_report(results)
     rows = results[0][1]
     print()
     print(report)

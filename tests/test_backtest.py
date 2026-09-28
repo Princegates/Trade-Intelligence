@@ -130,3 +130,38 @@ def test_a_limit_signal_opens_a_pending_trade_that_can_go_unfilled():
     limit = {**BUY, "entry": 99.0, "stop": 97.0, "target": 103.0, "entry_type": "limit"}
     trades, _ = backtest.trades_from_signals(candles, {0: limit}, cost_pct=0.0, max_bars=50, fill_window=3)
     assert [t["status"] for t in trades] == ["CANCELLED"]
+
+
+# --- Stage 3 ------------------------------------------------------------------------
+
+
+def test_a_variant_can_change_or_drop_a_timeframes_anchor():
+    assert backtest.anchor_for("1d", None, {"anchor_1d": "1w"}) == "1w"
+    assert backtest.anchor_for("4h", "1d", {"anchor_4h": "none"}) is None
+    assert backtest.anchor_for("4h", "1d", {"anchor_1d": "1w"}) == "1d"
+    _, extra = backtest.parse_variant("weekly: anchor_1d=1w, min_stop_atr=1.5")
+    assert extra == {"anchor_1d": "1w", "min_stop_atr": 1.5}
+
+
+def test_confidence_bands_group_closed_trades_by_their_calls_score():
+    def closed(confidence, status, r):
+        return {"confidence": confidence, "status": status, "r_net": r, "r_gross": r, "r_cost": 0.0,
+                "exit_time": 1, "bars": 1}
+
+    trades = [
+        closed(0.66, "TARGET", 3.0), closed(0.68, "STOP", -1.0),
+        closed(0.82, "TARGET", 3.0), closed(0.9, "TARGET", 3.0), closed(0.85, "STOP", -1.0),
+        {**closed(0.7, "OPEN", None), "exit_time": None},
+        closed(None, "TARGET", 3.0),
+    ]
+    bands = backtest.confidence_bands(trades)
+    assert [(b["low"], b["high"], b["trades"]) for b in bands] == [(65, 69, 2), (80, 100, 3)]
+    assert bands[0]["target_rate"] == 0.5
+    assert bands[1]["avg_r_net"] == __import__("pytest").approx(5 / 3)
+
+
+def test_bands_report_lists_each_band():
+    rows = [{"timeframe": "1h", "bands": [{"low": 70, "high": 74, "trades": 12, "target_rate": 0.25,
+                                           "win_rate": 0.3, "avg_r_net": 0.1}]}]
+    report = backtest.bands_report([(None, rows)])
+    assert "| 1h | — | 70–74 | 12 | 25% | 30% | +0.10 |" in report
