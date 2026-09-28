@@ -80,8 +80,14 @@ export async function sendChatMessage(history: ChatTurn[], message: string): Pro
   const { signals } = await getLatestSignals();
   const dataContext = formatSignalsForChat(signals);
 
-  const reply = await generateChatReply(history, trimmed, provider, dataContext);
-  if (!reply) return { error: "The assistant didn't respond — try again in a moment." };
+  const { reply, rateLimited } = await generateChatReply(history, trimmed, provider, dataContext);
+  if (!reply) {
+    return {
+      error: rateLimited
+        ? "Guda's AI provider has hit its rate limit — try again in a minute."
+        : "The assistant didn't respond — try again in a moment.",
+    };
+  }
 
   return { reply };
 }

@@ -23,22 +23,33 @@ const SYSTEM_INSTRUCTION =
   "at right now — use it directly when the user asks about current signals, prices, or which " +
   "asset looks stronger or weaker; don't say you lack access to it.\n\n";
 
+export interface ChatReplyResult {
+  reply: string | null;
+  /** True specifically for Gemini's 429 (RESOURCE_EXHAUSTED) response —
+   * the one failure mode worth telling the user apart from every other
+   * "something went wrong": the free tier's shared daily/per-minute quota
+   * (500 requests/day for the default model at the time of writing, split
+   * between this chat feature and the AI-commentary generator, which both
+   * use the same admin-configured API key) was exhausted, not a bug. See
+   * src/lib/actions/chat.ts for how this becomes the user-facing message. */
+  rateLimited: boolean;
+}
+
 /** Calls Gemini's chat-style generateContent with the running history plus
  * a new message. `dataContext` (see src/lib/signal-view.ts#formatSignalsForChat)
  * is folded into the system instruction, not sent as a chat turn, so it
  * grounds every answer without cluttering the visible conversation or
- * counting against MAX_HISTORY_TURNS. Returns the reply text, or null on
- * any failure — a provider outage should read as "try again," never crash
- * the page. */
+ * counting against MAX_HISTORY_TURNS. Returns null on any failure — a
+ * provider outage should read as "try again," never crash the page. */
 export async function generateChatReply(
   history: ChatTurn[],
   message: string,
   provider: AiProvider,
   dataContext: string
-): Promise<string | null> {
-  if (provider.provider !== "gemini") return null;
+): Promise<ChatReplyResult> {
+  if (provider.provider !== "gemini") return { reply: null, rateLimited: false };
   const apiKey = provider.config.api_key;
-  if (!apiKey) return null;
+  if (!apiKey) return { reply: null, rateLimited: false };
   const model = provider.config.model || DEFAULT_MODEL;
 
   const trimmedHistory = history.slice(-MAX_HISTORY_TURNS);
@@ -66,13 +77,14 @@ export async function generateChatReply(
     );
 
     if (!response.ok) {
-      // Logged, not surfaced to the browser — the most common causes are an
-      // invalid API key (400/403), a model name Gemini doesn't recognize
-      // (404), or the free tier's rate limit (429). Check Vercel's function
+      // Full body still logged (not surfaced to the browser) for every
+      // other cause — an invalid API key (400/403), a model name Gemini
+      // doesn't recognize (404), or a 429 for a reason other than the
+      // quota this function already distinguishes. Check Vercel's function
       // logs for this line to tell which one it actually was.
       const body = await response.text().catch(() => "");
       console.error(`[gemini-chat] ${response.status} ${response.statusText}: ${body.slice(0, 500)}`);
-      return null;
+      return { reply: null, rateLimited: response.status === 429 };
     }
 
     const data = await response.json();
@@ -84,12 +96,12 @@ export async function generateChatReply(
       console.error(
         `[gemini-chat] no text in response — blockReason=${data?.promptFeedback?.blockReason} finishReason=${data?.candidates?.[0]?.finishReason}`
       );
-      return null;
+      return { reply: null, rateLimited: false };
     }
     const trimmed = text.trim();
-    return trimmed || null;
+    return { reply: trimmed || null, rateLimited: false };
   } catch (exc) {
     console.error(`[gemini-chat] request failed: ${exc}`);
-    return null;
+    return { reply: null, rateLimited: false };
   }
 }
