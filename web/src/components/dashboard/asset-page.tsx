@@ -33,10 +33,11 @@ export async function AssetPage({ symbol }: { symbol: string }) {
     getGudaSpecialSettings(),
     getLiveResultsSettings(),
   ]);
-  // Each only fetched when its admin switch is on.
+  // Live stats only when that admin switch is on; backtest figures always,
+  // since they also decide the "Strong backtest" badges.
   const [liveStats, oddsSources] = await Promise.all([
     results.enabled ? getLiveStats() : undefined,
-    results.showBacktestOdds ? getBacktestOddsSources() : undefined,
+    getBacktestOddsSources(),
   ]);
 
   // Skipped entirely when the admin toggle is off — no point querying a
@@ -97,6 +98,7 @@ export async function AssetPage({ symbol }: { symbol: string }) {
           gudaSpecialEnabled={gudaSpecialEnabled}
           liveStats={liveStats}
           oddsSources={oddsSources}
+          showBacktestOdds={results.showBacktestOdds}
         />
       )}
     </div>

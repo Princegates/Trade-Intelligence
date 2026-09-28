@@ -9,7 +9,7 @@ import { isStale, type SignalView } from "@/lib/signals";
 import { SCALP_TIMEFRAMES, SCALP_WARNING } from "@/lib/signal-view";
 import { LiveStatLine } from "@/components/dashboard/live-stat-line";
 import { PositionSizeDialog } from "@/components/dashboard/position-size-dialog";
-import type { BacktestOdds, LiveStat } from "@/lib/performance-view";
+import { formatR, type BacktestOdds, type LiveStat } from "@/lib/performance-view";
 import { BacktestOddsLine } from "@/components/dashboard/backtest-odds-line";
 
 function verdictVariant(v: string) {
@@ -149,9 +149,13 @@ export function SignalCard({
   locked = false,
   live,
   odds,
+  strong,
 }: {
   signal: SignalView;
   locked?: boolean;
+  /** This timeframe's backtest figures when they clear the "Strong
+   * backtest" bar (performance-view.ts strongBacktest), else null. */
+  strong?: BacktestOdds | null;
   /** This timeframe's live record; absent when the admin switch is off. */
   live?: { stat: LiveStat | null };
   /** How similar calls did in the backtest; null when the switch is off,
@@ -176,6 +180,19 @@ export function SignalCard({
           ${signal.price.toLocaleString(undefined, { maximumFractionDigits: 2 })} &middot;{" "}
           {new Date(signal.generatedAt).toLocaleString()}
         </CardDescription>
+        {strong && (
+          <Badge
+            variant="success"
+            className="w-fit"
+            title={
+              `Backtest of this engine version: ${signal.timeframe} calls averaged ${formatR(strong.avgRNet)} per trade ` +
+              `after costs over ${strong.trades} trades, reaching the target ${Math.round(strong.targetRate * 100)}% ` +
+              "of the time. Backtests can't see past news, and past results don't guarantee future ones."
+            }
+          >
+            Strong backtest · {formatR(strong.avgRNet)} avg
+          </Badge>
+        )}
         {SCALP_TIMEFRAMES.includes(signal.timeframe) && (
           <Badge variant="warning" className="w-fit" title={SCALP_WARNING}>
             Scalp · higher risk

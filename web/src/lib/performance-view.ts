@@ -256,6 +256,18 @@ export function backtestOdds(run: BacktestOddsSource | undefined): BacktestOdds 
   return { trades: run.trades, targetRate: run.targetRate, avgRNet: run.avgRNet };
 }
 
+/** A timeframe whose backtest clearly made money, not just broke even:
+ * enough trades to mean something, and at least this much per trade after
+ * costs. At the Stage 3 backtests: Bitcoin 1d, gold 4h and gold 1d — not
+ * Bitcoin 4h (+0.07R) or anything shorter. */
+export const STRONG_BACKTEST_MIN_AVG_R = 0.2;
+
+/** The figures behind a card's "Strong backtest" badge, or null. */
+export function strongBacktest(run: BacktestOddsSource | undefined): BacktestOdds | null {
+  const odds = backtestOdds(run);
+  return odds && odds.avgRNet !== null && odds.avgRNet >= STRONG_BACKTEST_MIN_AVG_R ? odds : null;
+}
+
 // --- formatting -----------------------------------------------------------------
 
 export function formatR(v: number | null): string {

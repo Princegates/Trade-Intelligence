@@ -8,6 +8,7 @@ import {
   backtestOdds,
   backtestOddsKey,
   liveStatKey,
+  strongBacktest,
   type BacktestOddsSource,
   type LiveStat,
 } from "@/lib/performance-view";
@@ -54,6 +55,7 @@ export function AssetSection({
   gudaSpecialEnabled = false,
   liveStats,
   oddsSources,
+  showBacktestOdds = false,
 }: {
   data: AssetPanelData;
   bordered?: boolean;
@@ -63,21 +65,23 @@ export function AssetSection({
   /** Live records by liveStatKey(); undefined when the admin switch is off,
    * which leaves the line off every card. */
   liveStats?: Record<string, LiveStat>;
-  /** Backtest figures by backtestOddsKey(); undefined when that admin
-   * switch is off. */
+  /** Backtest figures by backtestOddsKey(), for the "Strong backtest"
+   * badges and, when `showBacktestOdds` (the admin switch) is on, each
+   * BUY/SELL card's backtest line. */
   oddsSources?: Record<string, BacktestOddsSource>;
+  showBacktestOdds?: boolean;
 }) {
   const { symbol, group, consensus, candlesByTimeframe, gudaSpecial } = data;
   const route = ASSET_ROUTES[symbol];
 
-  // Shortest timeframe first (5m, 15m, 1h, 4h, 1d, ...) rather than
-  // whichever order rows happened to come back in (recency of last
-  // regeneration) — reuses TIMEFRAME_SECONDS rather than a second,
-  // separately-maintained order list. An unrecognized timeframe (not in
-  // the map) sorts after every known one instead of crashing on
-  // `undefined - undefined`.
+  // Longest timeframe first (1d, 4h, 1h, 15m, 5m) rather than whichever
+  // order rows happened to come back in: the backtests found the engine's
+  // edge on 4h and 1d for both markets, while 5m and 15m lost after costs,
+  // so the calls worth the most attention lead. Reuses TIMEFRAME_SECONDS
+  // rather than a second, separately-maintained order list; an
+  // unrecognized timeframe sorts after every known one.
   const orderedGroup = [...group].sort(
-    (a, b) => (TIMEFRAME_SECONDS[a.timeframe] ?? Infinity) - (TIMEFRAME_SECONDS[b.timeframe] ?? Infinity)
+    (a, b) => (TIMEFRAME_SECONDS[b.timeframe] ?? -Infinity) - (TIMEFRAME_SECONDS[a.timeframe] ?? -Infinity)
   );
 
   return (
@@ -103,33 +107,36 @@ export function AssetSection({
 
       {detailed && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {orderedGroup.map((s) => (
-            <Fragment key={`${s.symbol}-${s.timeframe}`}>
-              <SignalCard
-                signal={s}
-                locked={locked}
-                live={
-                  liveStats && { stat: liveStats[liveStatKey("confluence", symbol, s.timeframe, s.strategyVersion)] ?? null }
-                }
-                odds={
-                  oddsSources && s.verdict !== "HOLD"
-                    ? backtestOdds(oddsSources[backtestOddsKey(symbol, s.timeframe, s.strategyVersion)])
-                    : null
-                }
-              />
-              {gudaSpecialEnabled && s.timeframe === "15m" && (
-                <GudaSpecialSignalCard
-                  signal={gudaSpecial}
+          {orderedGroup.map((s) => {
+            const backtest = oddsSources?.[backtestOddsKey(symbol, s.timeframe, s.strategyVersion)];
+            return (
+              <Fragment key={`${s.symbol}-${s.timeframe}`}>
+                <SignalCard
+                  signal={s}
                   locked={locked}
+                  strong={strongBacktest(backtest)}
                   live={
                     liveStats && {
-                      stat: liveStats[liveStatKey("guda_special", symbol, "15m", GUDA_SPECIAL_STRATEGY_VERSION)] ?? null,
+                      stat: liveStats[liveStatKey("confluence", symbol, s.timeframe, s.strategyVersion)] ?? null,
                     }
                   }
+                  odds={showBacktestOdds && s.verdict !== "HOLD" ? backtestOdds(backtest) : null}
                 />
-              )}
-            </Fragment>
-          ))}
+                {gudaSpecialEnabled && s.timeframe === "15m" && (
+                  <GudaSpecialSignalCard
+                    signal={gudaSpecial}
+                    locked={locked}
+                    live={
+                      liveStats && {
+                        stat:
+                          liveStats[liveStatKey("guda_special", symbol, "15m", GUDA_SPECIAL_STRATEGY_VERSION)] ?? null,
+                      }
+                    }
+                  />
+                )}
+              </Fragment>
+            );
+          })}
         </div>
       )}
     </section>

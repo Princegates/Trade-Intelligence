@@ -642,4 +642,5 @@ export const DEMO_BACKTEST_RUNS: BacktestRunView[] = [
   }),
   demoBacktest(4, { timeframe: "4h", trades: 140, winRate: 0.44, avgRNet: 0.12, avgCostR: 0.2 }),
   demoBacktest(5, { strategy: "guda_special", timeframe: "15m", trades: 60, winRate: 0.4, avgRNet: 0.05, avgCostR: 0.3 }),
+  demoBacktest(6, { timeframe: "1d", trades: 40, winRate: 0.53, avgRNet: 0.96, avgCostR: 0.01, periodStart: hoursAgo(24 * 365 * 6) }),
 ];

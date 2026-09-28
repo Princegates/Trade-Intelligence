@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   backtestOdds,
+  strongBacktest,
   formatR,
   liveStatKey,
   recentStats,
@@ -176,5 +177,18 @@ describe("backtestOdds", () => {
     expect(backtestOdds(undefined)).toBeNull();
     expect(backtestOdds({ trades: 20, targetRate: 0.3, avgRNet: 0.05 })).toBeNull();
     expect(backtestOdds({ trades: 300, targetRate: null, avgRNet: null })).toBeNull();
+  });
+});
+
+describe("strongBacktest", () => {
+  it("marks only timeframes that clearly made money over enough trades", () => {
+    expect(strongBacktest({ trades: 148, targetRate: 0.33, avgRNet: 0.39 })).toEqual({
+      trades: 148,
+      targetRate: 0.33,
+      avgRNet: 0.39,
+    });
+    expect(strongBacktest({ trades: 174, targetRate: 0.25, avgRNet: 0.07 })).toBeNull();
+    expect(strongBacktest({ trades: 20, targetRate: 0.5, avgRNet: 1.2 })).toBeNull();
+    expect(strongBacktest(undefined)).toBeNull();
   });
 });

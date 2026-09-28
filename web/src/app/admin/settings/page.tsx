@@ -117,7 +117,8 @@ export default async function AdminSettingsPage() {
             the same engine version was replayed over past candles — for example &quot;Backtest: 1h calls reached
             their target 30% of the time · +0.04R avg · 387 trades&quot;. Uses the latest published backtest for that
             market and timeframe; nothing shows without one on the call&apos;s engine version or with fewer than 30
-            trades. Needs migration 0030.
+            trades. Needs migration 0030. Separately, and whether this is on or not, a timeframe whose backtest
+            averaged +0.2R or more per trade gets a &quot;Strong backtest&quot; badge on its cards.
           </CardDescription>
         </CardHeader>
         <CardContent>
