@@ -184,6 +184,30 @@ body {
   animation: dialog-content-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* AI Take dialog only (src/components/dashboard/ai-take-dialog.tsx) —
+   swells up from small like a balloon inflating and springs past full
+   size before settling, rather than the subtle fade/scale every other
+   dialog gets above. The overshoot comes entirely from the "back" easing
+   curve (it dips above 1 partway through), not from extra keyframe
+   stops — the standard technique for a bouncy pop-in. Applied via an
+   extra className alongside "dialog-content" (see DialogContent's cn()
+   merge), so this has to sit after the rule above to win on source order
+   — both selectors are equally specific (one class + one attribute). */
+@keyframes ai-take-balloon-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.35);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+.ai-take-content[data-state="open"] {
+  animation: ai-take-balloon-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
 /* Chat mascot (src/components/chat/chat-mascot.tsx) — a little robot
    character on the FAB instead of a static icon, so the assistant reads as
    something alive, not a button. Bounces continuously (a real hop, with

@@ -53,7 +53,7 @@ export function AiTakeDialog({ commentary, symbol, timeframe }: { commentary: st
           AI take
         </button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="ai-take-content">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-1.5">
             <Sparkles className="size-4 text-primary" />
