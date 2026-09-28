@@ -1,18 +1,24 @@
+import { MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ADMIN_WHATSAPP, adminWhatsAppUrl } from "@/lib/site";
 
-/** The admin's WhatsApp number as a link that opens a chat — the one place
- * users are told to get an access code. No hooks, so it works in server and
- * client components alike. */
-export function AdminWhatsAppLink({ email, className }: { email?: string | null; className?: string }) {
+/** "Chat with admin" — opens a WhatsApp chat with the admin, the one place
+ * users are told to get an access code. It goes through /contact/whatsapp,
+ * which adds the signed-in user's email to the message and keeps the
+ * admin's number off the page. No hooks, so it works in server and client
+ * components alike. */
+export function AdminWhatsAppLink({ className }: { className?: string }) {
   return (
     <a
-      href={adminWhatsAppUrl(email)}
+      href="/contact/whatsapp"
       target="_blank"
       rel="noopener noreferrer"
-      className={cn("font-medium text-foreground underline-offset-4 hover:underline", className)}
+      className={cn(
+        "inline-flex items-center gap-1 whitespace-nowrap font-medium text-foreground underline-offset-4 hover:underline",
+        className
+      )}
     >
-      {ADMIN_WHATSAPP.display}
+      <MessageCircle className="size-3.5" aria-hidden />
+      Chat with admin
     </a>
   );
 }

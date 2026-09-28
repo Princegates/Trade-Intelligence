@@ -39,8 +39,8 @@ export default async function HistoryPage({ searchParams }: PageProps<"/dashboar
         <Card>
           <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-muted-foreground">
-              You&apos;re on the basic view — only the latest signal is shown. Contact admin on WhatsApp only:{" "}
-              <AdminWhatsAppLink email={user.email} /> for a code to unlock premium and full history.
+              You&apos;re on the basic view — only the latest signal is shown. For a code to unlock premium and
+              full history, contact admin on WhatsApp only: <AdminWhatsAppLink />
             </p>
             <Link href="/dashboard/settings" className="text-sm font-medium text-primary underline-offset-4 hover:underline">
               Redeem a code

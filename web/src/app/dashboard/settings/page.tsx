@@ -21,8 +21,7 @@ export default async function AccountSettingsPage() {
                 `Full access — ${remaining === 0 ? "trial ends today" : `${remaining} day${remaining === 1 ? "" : "s"} left`}.`
               ) : (
                 <>
-                  Enter a code to unlock premium. Contact admin on WhatsApp only:{" "}
-                  <AdminWhatsAppLink email={user.email} />.
+                  Enter a code to unlock premium. Contact admin on WhatsApp only: <AdminWhatsAppLink />
                 </>
               )}
             </CardDescription>

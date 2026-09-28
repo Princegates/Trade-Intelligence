@@ -58,9 +58,9 @@ export async function AssetPage({ symbol }: { symbol: string }) {
         <Card>
           <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-muted-foreground">
-              You&apos;re on the basic view — the cards below are locked. Contact admin on WhatsApp only:{" "}
-              <AdminWhatsAppLink email={user.email} /> for a code to unlock premium: full reasoning, levels, and
-              patterns for every timeframe.
+              You&apos;re on the basic view — the cards below are locked. For a code to unlock premium (full
+              reasoning, levels, and patterns for every timeframe), contact admin on WhatsApp only:{" "}
+              <AdminWhatsAppLink />
             </p>
             <Link
               href="/dashboard/settings"

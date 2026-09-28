@@ -20,7 +20,6 @@ import { signOut } from "@/lib/actions/auth";
 import { useSignalsRealtime } from "@/lib/use-signals-realtime";
 import { ModeToggle } from "@/components/mode/mode-toggle";
 import { hasFullAccess, daysRemaining } from "@/lib/access";
-import { ADMIN_WHATSAPP } from "@/lib/site";
 import { ChatWidget } from "@/components/chat/chat-widget";
 import type { Role } from "@/lib/supabase/types";
 
@@ -130,7 +129,7 @@ export function DashboardShell({ title, nav, user, children }: DashboardShellPro
                 <Link href="/dashboard/settings">
                   <Badge
                     variant="warning"
-                    title={`Contact admin on WhatsApp only (${ADMIN_WHATSAPP.display}) for a code to unlock premium`}
+                    title="Contact admin on WhatsApp only for a code to unlock premium"
                   >
                     Basic view
                   </Badge>
@@ -189,7 +188,7 @@ export function DashboardShell({ title, nav, user, children }: DashboardShellPro
         <main className="flex-1 p-4 sm:p-6">{children}</main>
       </div>
 
-      <ChatWidget fullAccess={fullAccess} email={user.email} />
+      <ChatWidget fullAccess={fullAccess} />
     </div>
   );
 }

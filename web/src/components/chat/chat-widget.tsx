@@ -59,7 +59,7 @@ function panelPosition(fab: Point): Point {
  * dashboard shell but resets on a full reload. Its on-screen position,
  * however, is saved to localStorage — a per-viewer convenience, not app
  * state — so it stays wherever a person last dragged it. */
-export function ChatWidget({ fullAccess, email }: { fullAccess: boolean; email: string }) {
+export function ChatWidget({ fullAccess }: { fullAccess: boolean }) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatTurn[]>([]);
   const [input, setInput] = useState("");
@@ -242,8 +242,8 @@ export function ChatWidget({ fullAccess, email }: { fullAccess: boolean; email: 
               <Lock className="size-5 text-muted-foreground" />
               <p className="text-sm font-medium text-foreground">Full access required</p>
               <p className="text-sm text-muted-foreground">
-                Guda is a full-access feature. Contact admin on WhatsApp only:{" "}
-                <AdminWhatsAppLink email={email} /> for a code to unlock premium.
+                Guda is a full-access feature. For a code to unlock premium, contact admin on WhatsApp
+                only: <AdminWhatsAppLink />
               </p>
               <Link
                 href="/dashboard/settings"
