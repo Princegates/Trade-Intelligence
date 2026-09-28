@@ -27,12 +27,25 @@ function RevealingCommentary({ text }: { text: string }) {
   }, [shown, words.length]);
 
   return (
-    <p className="text-sm leading-relaxed text-foreground">
-      {words.slice(0, shown).join(" ")}
-      {shown < words.length && (
-        <span className="ml-0.5 inline-block h-3.5 w-1.5 translate-y-0.5 animate-pulse bg-primary/70 align-middle" />
-      )}
-    </p>
+    <div className="relative">
+      {/* Invisible sizer at the full, final text — reserves the dialog's
+          real height immediately on mount, so the box doesn't visibly grow
+          taller over the ~2s the words take to reveal (it has no fixed
+          height otherwise, and being vertically centered, a growing box
+          expands outward in both directions — slow, obvious motion that
+          drowned out the balloon-pop entrance below, which finishes in a
+          fraction of that time). Same text, same classes, so it wraps to
+          the same line count the revealed copy will. */}
+      <p className="invisible text-sm leading-relaxed" aria-hidden="true">
+        {text}
+      </p>
+      <p className="absolute inset-0 text-sm leading-relaxed text-foreground">
+        {words.slice(0, shown).join(" ")}
+        {shown < words.length && (
+          <span className="ml-0.5 inline-block h-3.5 w-1.5 translate-y-0.5 animate-pulse bg-primary/70 align-middle" />
+        )}
+      </p>
+    </div>
   );
 }
 
