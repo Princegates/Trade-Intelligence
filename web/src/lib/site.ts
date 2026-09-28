@@ -9,3 +9,8 @@ export const SITE_DESCRIPTION =
   "Trade intelligence for BTC and gold: rule-based signals with the reasoning behind every call, and a track record you can audit.";
 
 export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
+// Where users get an access code — WhatsApp only, shown on the dashboard's
+// Settings page. The link needs the number in international form (Ghana,
+// +233, without the leading 0).
+export const ADMIN_WHATSAPP = { display: "0596909643", international: "233596909643" };
