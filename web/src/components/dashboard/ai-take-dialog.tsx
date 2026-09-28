@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Sparkles } from "lucide-react";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
@@ -8,8 +8,13 @@ import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, Dialog
 // revealing in a couple of seconds — quick enough not to feel like a delay,
 // slow enough to actually read as "being written," not just a flicker.
 const REVEAL_WORD_INTERVAL_MS = 35;
+// Most of the balloon inflate (0.7s, ai-take-balloon-grow in globals.css) —
+// the words start once the box is nearly full size, not while it's a speck.
+const REVEAL_START_DELAY_MS = 550;
+// max-w-lg on DialogContent: the dialog's width wherever the viewport allows.
+const DIALOG_MAX_WIDTH_PX = 512;
 
-/** Reveals `text` one word at a time, starting as soon as it mounts. Purely
+/** Reveals `text` one word at a time, starting shortly after it mounts. Purely
  * a presentation effect signaling "this was AI-written" — the commentary is
  * already fully generated and stored by the time this renders (see
  * src/ai/commentary.py), there's no real stream to show. A separate
@@ -22,7 +27,8 @@ function RevealingCommentary({ text }: { text: string }) {
 
   useEffect(() => {
     if (shown >= words.length) return;
-    const id = setTimeout(() => setShown((n) => n + 1), REVEAL_WORD_INTERVAL_MS);
+    const delay = shown === 0 ? REVEAL_START_DELAY_MS : REVEAL_WORD_INTERVAL_MS;
+    const id = setTimeout(() => setShown((n) => n + 1), delay);
     return () => clearTimeout(id);
   }, [shown, words.length]);
 
@@ -53,10 +59,22 @@ function RevealingCommentary({ text }: { text: string }) {
  * second opinion, which the dialog says explicitly rather than assuming
  * that's obvious out of context. */
 export function AiTakeDialog({ commentary, symbol, timeframe }: { commentary: string; symbol: string; timeframe: string }) {
+  const pillRef = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const [origin, setOrigin] = useState<CSSProperties>({});
+
+  // Re-measured on close as well as open, so the dialog deflates into the
+  // pill wherever it is right then (a resize or rotate while it was open).
+  function handleOpenChange(next: boolean) {
+    setOrigin(pillOrigin(pillRef.current));
+    setOpen(next);
+  }
+
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <button
+          ref={pillRef}
           type="button"
           className="relative mb-3 inline-flex items-center gap-1.5 rounded-full border border-dashed border-border px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
         >
@@ -70,7 +88,7 @@ export function AiTakeDialog({ commentary, symbol, timeframe }: { commentary: st
           AI take
         </button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="ai-take-content" overlayClassName="ai-take-overlay" style={origin}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-1.5">
             <Sparkles className="size-4 text-primary" />
@@ -84,4 +102,20 @@ export function AiTakeDialog({ commentary, symbol, timeframe }: { commentary: st
       </DialogContent>
     </Dialog>
   );
+}
+
+
+/** Where the balloon inflates from and deflates back into: the pill's center
+ * as an offset from the viewport center (where the dialog sits), and the
+ * scale at which the dialog is about the pill's width. Read by the
+ * ai-take-balloon-* keyframes in globals.css. */
+function pillOrigin(pill: HTMLElement | null): CSSProperties {
+  if (!pill) return {};
+  const r = pill.getBoundingClientRect();
+  const dialogWidth = Math.min(DIALOG_MAX_WIDTH_PX, window.innerWidth);
+  return {
+    "--ai-take-dx": `${r.left + r.width / 2 - window.innerWidth / 2}px`,
+    "--ai-take-dy": `${r.top + r.height / 2 - window.innerHeight / 2}px`,
+    "--ai-take-scale": String(Math.max(0.05, r.width / dialogWidth)),
+  } as CSSProperties;
 }

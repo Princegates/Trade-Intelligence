@@ -165,14 +165,28 @@ body {
   }
 }
 
+@keyframes dialog-overlay-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* Relative to where the dialog already sits: it's centered by Tailwind's
+   -translate-x/y-1/2, which (Tailwind v4) set the separate CSS `translate`
+   property, not `transform`. Keyframes that also wrote translate(-50%, -50%)
+   into `transform` shifted it a second half-size up-left for the length of
+   the animation, then it snapped to center when the animation ended. */
 @keyframes dialog-content-in {
   from {
     opacity: 0;
-    transform: translate(-50%, -48%) scale(0.95);
+    transform: translateY(2%) scale(0.95);
   }
   to {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
+    transform: translateY(0) scale(1);
   }
 }
 
@@ -182,6 +196,77 @@ body {
 
 .dialog-content[data-state="open"] {
   animation: dialog-content-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* AI Take dialog (src/components/dashboard/ai-take-dialog.tsx) inflates like
+   a balloon out of the "AI take" pill that opened it, and deflates back into
+   it on close. --ai-take-dx/dy (the pill's center relative to the viewport
+   center) and --ai-take-scale (pill width / dialog width) are measured on
+   click and set inline, so every card's dialog grows from its own pill.
+   Every keyframe spells out the same translate() scale() list so each
+   function interpolates on its own rather than through a matrix. Declared
+   after .dialog-content's rule above so it wins at equal specificity. */
+@keyframes ai-take-balloon-grow {
+  0% {
+    opacity: 0;
+    transform: translate(var(--ai-take-dx), var(--ai-take-dy)) scale(var(--ai-take-scale));
+  }
+  8% {
+    opacity: 1;
+  }
+  62% {
+    transform: translate(0, 0) scale(1.06);
+  }
+  82% {
+    transform: translate(0, 0) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+@keyframes ai-take-balloon-shrink {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  20% {
+    transform: translate(0, 0) scale(1.04);
+  }
+  88% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--ai-take-dx), var(--ai-take-dy)) scale(var(--ai-take-scale));
+  }
+}
+
+/* ease-in-out, not a snappy ease-out: CSS applies the timing function to
+   each keyframe segment, and a strong ease-out covered most of the trip
+   from the pill in the first ~50ms — it read as popping up mid-screen, not
+   growing out of the pill. Even pacing keeps the journey visible. */
+.ai-take-content[data-state="open"] {
+  animation: ai-take-balloon-grow 0.7s ease-in-out both;
+}
+
+.ai-take-content[data-state="closed"] {
+  animation: ai-take-balloon-shrink 0.45s ease-in-out both;
+}
+
+.ai-take-overlay[data-state="closed"] {
+  animation: dialog-overlay-out 0.45s ease-in both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-take-content[data-state="open"] {
+    animation: dialog-overlay-in 0.2s ease-out both;
+  }
+  .ai-take-content[data-state="closed"],
+  .ai-take-overlay[data-state="closed"] {
+    animation: dialog-overlay-out 0.15s ease-in both;
+  }
 }
 
 /* AI Take pill on each signal card (src/components/dashboard/ai-take-dialog.tsx)
