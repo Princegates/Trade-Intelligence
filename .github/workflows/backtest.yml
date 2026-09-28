@@ -1,9 +1,19 @@
 name: Backtest
 
-# Run by hand from the Actions tab: replays a strategy over historical
-# candles with the same trade rules as the live outcome tracker (see
-# src/backtest.py) and saves the results for /admin/performance.
+# Replays a strategy over historical candles with the same trade rules as
+# the live outcome tracker (see src/backtest.py) and saves the results for
+# /admin/performance and the dashboard's "Strong backtest" badges and
+# backtest lines.
+#
+# Runs by itself every Sunday for both markets and both strategies, so
+# those figures stay current, and by hand from the Actions tab. Sunday
+# because it's the day Twelve Data's free 800 requests have the most room:
+# the live gold feed peaks on Saturday (about 700, retrying a closed
+# market) and a full gold backtest adds about 25. Each week adds 12 small
+# rows to backtest_runs.
 on:
+  schedule:
+    - cron: "17 3 * * 0" # Sundays 03:17 UTC
   workflow_dispatch:
     inputs:
       symbol:
@@ -44,6 +54,14 @@ jobs:
   backtest:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      # One market at a time, like a manual run.
+      max-parallel: 1
+      matrix:
+        # A manual run backtests the market it was given; the weekly run
+        # does both.
+        symbol: ${{ fromJSON(github.event_name == 'schedule' && '["BTCUSDT","XAUUSD"]' || format('["{0}"]', inputs.symbol)) }}
     env:
       TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -59,12 +77,14 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run backtest
+        # A scheduled run has no inputs: every strategy and timeframe, the
+        # default history, saved.
         env:
-          SYMBOL: ${{ inputs.symbol }}
-          STRATEGY: ${{ inputs.strategy }}
-          TIMEFRAMES: ${{ inputs.timeframes }}
+          SYMBOL: ${{ matrix.symbol }}
+          STRATEGY: ${{ inputs.strategy || 'both' }}
+          TIMEFRAMES: ${{ inputs.timeframes || '5m,15m,1h,4h,1d' }}
           DAYS: ${{ inputs.days }}
-          PUBLISH: ${{ inputs.publish }}
+          PUBLISH: ${{ github.event_name == 'schedule' || inputs.publish }}
           VARIANTS: ${{ inputs.variants }}
         run: |
           args=(--symbol "$SYMBOL" --summary-file "$GITHUB_STEP_SUMMARY")
@@ -85,6 +105,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: backtest-${{ inputs.symbol }}-${{ github.run_id }}
+          name: backtest-${{ matrix.symbol }}-${{ github.run_id }}
           path: backtest-results/
           if-no-files-found: ignore

@@ -171,9 +171,10 @@ export default async function AdminPerformancePage() {
         <CardHeader>
           <CardTitle className="text-base">Backtests</CardTitle>
           <CardDescription>
-            The latest replay of each strategy over past candles, with the engine&apos;s live settings. Run a new one
-            from GitHub: Actions → Backtest → Run workflow. Backtests can&apos;t see past economic news, so results
-            around big releases are slightly optimistic.
+            The latest replay of each strategy over past candles, with the engine&apos;s live settings. Both markets
+            rerun by themselves every Sunday; to run one sooner (after changing a setting, say), use GitHub: Actions →
+            Backtest → Run workflow. Backtests can&apos;t see past economic news, so results around big releases are
+            slightly optimistic.
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
