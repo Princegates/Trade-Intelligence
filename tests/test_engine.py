@@ -604,3 +604,15 @@ def test_swing_lookback_is_passed_to_structure():
     with patch("src.signals.engine.struct.swing_points", side_effect=lambda c, lb: seen.append(lb) or []):
         engine.evaluate(_candles(), settings={"swing_lookback": 5})
     assert seen and seen[0] == 5
+
+
+def test_timing_only_override_turns_a_call_into_hold_and_leaves_hold_alone():
+    call = _evaluate_with(**BUY_NEAR_SUPPORT)
+    held = engine.apply_timing_only_override(call, _candles(), "5m")
+    assert held["verdict"] == "HOLD"
+    assert held["levels"]["entry"] is None and held["confidence"] is None
+    assert any("timing only" in r for r in held["reasoning"])
+
+    hold = _evaluate_with()
+    before = list(hold["reasoning"])
+    assert engine.apply_timing_only_override(hold, _candles(), "5m")["reasoning"] == before

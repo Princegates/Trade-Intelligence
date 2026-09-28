@@ -71,7 +71,10 @@ export default async function AdminPerformancePage() {
             <li>Every later candle checked by its high and low, so a wick through the stop counts.</li>
             <li>A candle touching both stop and target counts as the stop.</li>
             <li>Closed at market if neither is hit within 50 candles (96 for GUDA SPECIAL).</li>
-            <li>Fees and slippage taken off every trade: 0.24% round trip for Bitcoin, 0.04% for gold.</li>
+            <li>
+              Costs taken off every trade, sized for an Exness Standard account&apos;s spread with room for slippage:
+              0.03% round trip for Bitcoin, 0.02% for gold.
+            </li>
             <li>One position at a time per strategy, market and timeframe; calls made while one is open aren&apos;t counted.</li>
           </ul>
           <p className="mt-3 text-sm text-muted-foreground">

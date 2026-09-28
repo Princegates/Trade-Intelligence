@@ -107,7 +107,7 @@ const vetoes = [
   { title: "Price already ran away", body: "Price is too far from its entry zone. Chasing it would mean a poor entry." },
   {
     title: "Costs too high",
-    body: "Fees and slippage would eat more than a quarter of what the trade risks. This rules out most very short-timeframe calls.",
+    body: "The spread, fees and slippage would eat more than a quarter of what the trade risks, so being right about direction couldn't pay.",
   },
   {
     title: "Not enough reward, or confidence",

@@ -79,7 +79,12 @@ BINANCE_BASE_URL = os.environ.get("BINANCE_BASE_URL") or "https://api.binance.us
 # risk, and no call whose trading costs exceed a quarter of its risk. Same
 # votes and gates otherwise; different levels and fewer short-timeframe
 # calls for identical candles.
-STRATEGY_VERSION = "3.3.0"
+#
+# 3.4.0: trading costs set to Exness Standard spreads (TRADE_COST_PCT), which
+# changes what the cost check lets through — at these costs it rarely
+# fires, so 5m/15m calls publish again. CALL_TIMEFRAMES can hold a
+# timeframe's calls back to HOLD; all five currently publish.
+STRATEGY_VERSION = "3.4.0"
 
 # GUDA SPECIAL is a second, independent strategy (15m Break & Retest ->
 # Fibonacci retracement -> candlestick confirmation) published alongside
@@ -170,17 +175,28 @@ CANDLE_FETCH_LIMIT = 260
 # the backtest so both measure the same thing.
 #
 # Round-trip trading cost as a percent of price, subtracted from every
-# trade's result: fees in and out plus slippage. BTC: 0.10% taker fee each
-# side (Binance spot, no BNB discount) plus ~0.02% slippage each side. Gold:
-# a typical retail XAU/USD spread plus slippage. Deliberately not the
-# cheapest tier — a result that only survives best-case costs isn't one.
-TRADE_COST_PCT = {"BTCUSDT": 0.24, "XAUUSD": 0.04}
+# trade's result. Sized for an Exness Standard account (spread only, no
+# commission), measured 2026-09-28: BTCUSDm $10 on ~$83,690 (0.012%) and
+# XAUUSDm $0.24 on ~$4,128 (0.006%). Set at about 2.5x those to allow for
+# spreads widening around news and some slippage — a result that only
+# survives best-case costs isn't one. (Exchange spot trading costs far
+# more: ~0.24% round trip at Binance taker fees.)
+TRADE_COST_PCT = {"BTCUSDT": 0.03, "XAUUSD": 0.02}
 DEFAULT_TRADE_COST_PCT = 0.10
 
 # Candles of the trade's own timeframe before a trade that has hit neither
 # stop nor target is closed at that candle's close. GUDA SPECIAL's matches
 # src/backtest_guda.py (96 x 15m = one day).
 TRADE_MAX_BARS = {"confluence": 50, "guda_special": 96}
+
+# Timeframes whose confluence-engine BUY/SELL calls are published. A
+# timeframe left out is still evaluated and shown, but a directional
+# reading on it is published as HOLD (engine.apply_timing_only_override).
+# All five publish: 5m and 15m are kept for scalp traders (owner's call,
+# 2026-09-28), though backtested on BTC at Exness costs they lost about
+# 0.2R a trade in both halves of their history, where 1h, 4h and 1d were
+# profitable in both. GUDA SPECIAL (15m) has its own rules either way.
+CALL_TIMEFRAMES = ("5m", "15m", "1h", "4h", "1d")
 
 # Engine options (src/signals/engine.py) switched on for every live run and
 # every backtest, on top of the engine's own defaults and under any value

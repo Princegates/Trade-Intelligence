@@ -1007,3 +1007,44 @@ def test_a_published_buy_starts_a_tracked_trade(temp_db, monkeypatch):
     source, symbol, timeframe, version, signal_time, verdict, levels, confidence = opened[0]
     assert (source, symbol, timeframe, verdict) == ("confluence", "BTCUSDT", "1h", "BUY")
     assert levels == _buy_result()["levels"]
+
+
+# --- 3.4.0: 5m/15m readings are shown for timing only -------------------------
+
+
+def _feed_every(count, now, step):
+    candles = []
+    for i in range(count):
+        open_time = now - (count - 1 - i) * step
+        price = 100.0 + i
+        candles.append({"open_time": open_time, "open": price, "high": price + 1, "low": price - 1,
+                        "close": price, "volume": 10.0, "complete": open_time + step <= now})
+    return candles
+
+
+def test_a_buy_on_a_timing_only_timeframe_is_published_as_hold(temp_db, monkeypatch):
+    monkeypatch.setattr(config, "CALL_TIMEFRAMES", ("1h", "4h", "1d"))
+    instrument = {**INSTRUMENT, "timeframes": ["5m"]}
+    monkeypatch.setattr(run, "fetch_candles", lambda i, tf: _feed_every(61, NOW, 300))
+    monkeypatch.setattr(run.engine, "evaluate", lambda candles, **kwargs: _buy_result())
+    opened = []
+    monkeypatch.setattr(run, "open_trade_outcome", lambda *a, **k: opened.append(a))
+
+    message = run.process(instrument, "5m", NOW)
+
+    assert message.startswith("BTCUSDT/5m: HOLD")
+    assert "Shown for timing only" in message
+    assert opened == []
+
+
+def test_a_buy_on_a_call_timeframe_is_published(temp_db, monkeypatch):
+    assert "1h" in config.CALL_TIMEFRAMES
+    _serve(monkeypatch, _feed(61, NOW))
+    monkeypatch.setattr(run.engine, "evaluate", lambda candles, **kwargs: _buy_result())
+
+    assert run.process(INSTRUMENT, "1h", NOW).startswith("BTCUSDT/1h: BUY")
+
+
+def test_every_timeframe_publishes_calls_for_now():
+    # 5m and 15m kept for scalp traders; see config.CALL_TIMEFRAMES.
+    assert set(config.CALL_TIMEFRAMES) == {"5m", "15m", "1h", "4h", "1d"}

@@ -346,11 +346,32 @@ def apply_event_risk_override(result, candles, event, currency):
     """
     if result["verdict"] == "HOLD":
         return result
-
-    atr_val = ind.atr(candles, 14)
-    result["reasoning"].append(
-        f"Overridden to HOLD — {event['title']} ({currency}, high impact) scheduled within the event-risk window"
+    return _override_to_hold(
+        result,
+        candles,
+        f"Overridden to HOLD — {event['title']} ({currency}, high impact) scheduled within the event-risk window",
     )
+
+
+def apply_timing_only_override(result, candles, timeframe):
+    """Pulls a directional call back to HOLD on a timeframe that only
+    publishes for timing (config.CALL_TIMEFRAMES): its reading is still
+    shown, to time entries on the calls the longer timeframes make, but its
+    own BUY/SELL calls haven't beaten costs in backtests (src/backtest.py).
+    A HOLD is left untouched."""
+    if result["verdict"] == "HOLD":
+        return result
+    return _override_to_hold(
+        result,
+        candles,
+        f"Shown for timing only — {timeframe} calls on their own haven't been profitable in testing, "
+        f"so this {result['verdict']} reading isn't published as a call",
+    )
+
+
+def _override_to_hold(result, candles, reason):
+    atr_val = ind.atr(candles, 14)
+    result["reasoning"].append(reason)
     # A directional call's confidence and structural fields describe that
     # call specifically — once it's overridden to HOLD there's no live call
     # left for any of them to be about, same "None means HOLD" contract

@@ -195,6 +195,9 @@ def process(instrument, timeframe, now, events=(), engine_settings=None):
         if event:
             result = engine.apply_event_risk_override(result, recent, event, currency)
 
+    if timeframe not in config.CALL_TIMEFRAMES:
+        result = engine.apply_timing_only_override(result, recent, timeframe)
+
     reasoning_text = "; ".join(result["reasoning"])
 
     signal = {
