@@ -29,6 +29,7 @@ export function PriceChart({
   candles,
   levels = [],
   liveCandle = null,
+  seriesKey,
   height = 320,
 }: {
   candles: Candle[];
@@ -37,6 +38,10 @@ export function PriceChart({
    * the stored series so the chart moves between closes; never mixed into
    * `candles`, which are the quality-gated ones the signals used. */
   liveCandle?: Candle | null;
+  /** Which series this is (symbol and timeframe). The view is fitted to the
+   * candles when it changes — not on every refresh of the same series,
+   * which would undo the viewer's zoom and pan once a minute. */
+  seriesKey?: string;
   height?: number;
 }) {
   const container = useRef<HTMLDivElement>(null);
@@ -53,6 +58,10 @@ export function PriceChart({
   // unchanged candles leaves an empty chart, and unchanged levels leaves it
   // with no lines.
   const [chartGeneration, setChartGeneration] = useState(0);
+
+  // The series the view was last fitted to; cleared when the chart is
+  // rebuilt so a fresh chart is fitted once.
+  const fittedFor = useRef<string | null>(null);
 
   // Create once. Re-creating on every data change would drop the viewer's
   // zoom and pan.
@@ -98,6 +107,7 @@ export function PriceChart({
     });
 
     chart.current = created;
+    fittedFor.current = null;
     setChartGeneration((n) => n + 1);
 
     return () => {
@@ -111,8 +121,12 @@ export function PriceChart({
     if (!series.current || candles.length === 0) return;
     // `time` is a branded UTCTimestamp in v5; ours are already epoch seconds.
     series.current.setData(candles.map((c) => ({ ...c, time: c.time as UTCTimestamp })));
-    chart.current?.timeScale().fitContent();
-  }, [candles, chartGeneration]);
+    const fitKey = seriesKey ?? "";
+    if (fittedFor.current !== fitKey) {
+      chart.current?.timeScale().fitContent();
+      fittedFor.current = fitKey;
+    }
+  }, [candles, chartGeneration, seriesKey]);
 
   // The live candle arrives many times a second. `update` touches only the
   // last bar, unlike setData which rebuilds the series and would fight the

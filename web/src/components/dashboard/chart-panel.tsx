@@ -56,7 +56,7 @@ export function ChartPanel({
         ))}
       </div>
 
-      <PriceChart candles={candles} levels={levels} liveCandle={liveCandle} />
+      <PriceChart candles={candles} levels={levels} liveCandle={liveCandle} seriesKey={`${symbol}:${timeframe}`} />
 
       <p className="mt-1 text-[11px] text-muted-foreground">
         {liveCandle && (
