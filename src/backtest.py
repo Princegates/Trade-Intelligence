@@ -35,7 +35,7 @@ from pathlib import Path
 
 import requests
 
-from . import backtest_guda, config, trade_sim
+from . import backtest_guda, config, funding as funding_data, trade_sim
 from .ingest import twelvedata
 from .signals import confluence, engine
 from .storage import db, supabase
@@ -75,10 +75,12 @@ TWELVEDATA_RETRIES = 2
 # --- replay (pure) --------------------------------------------------------------
 
 
-def confluence_signals(candles, anchor_candles, timeframe, anchor_timeframe, settings, start_time):
+def confluence_signals(candles, anchor_candles, timeframe, anchor_timeframe, settings, start_time, funding=None):
     """{candle open_time: signal} for every BUY/SELL the confluence engine
     would have published from `start_time` on, plus a count of every
-    verdict. `candles` include warm-up history before `start_time`."""
+    verdict. `candles` include warm-up history before `start_time`.
+    `funding`, if given, maps a close time to the day's average funding
+    rate (funding.daily_average), for the crowded-funding veto."""
     tf_seconds = config.TIMEFRAME_SECONDS[timeframe]
     anchor_seconds = config.TIMEFRAME_SECONDS[anchor_timeframe] if anchor_timeframe else 0
     window_size = config.CANDLE_FETCH_LIMIT
@@ -97,7 +99,8 @@ def confluence_signals(candles, anchor_candles, timeframe, anchor_timeframe, set
                 anchor_i += 1
             bias = confluence.higher_timeframe_bias(anchor_candles[max(0, anchor_i - window_size):anchor_i])
 
-        result = engine.evaluate(window, higher_timeframe_bias=bias, settings=settings)
+        rate = funding(candle["open_time"] + tf_seconds) if funding else None
+        result = engine.evaluate(window, higher_timeframe_bias=bias, settings=settings, funding=rate)
         verdicts[result["verdict"]] += 1
         levels = result["levels"]
         if result["verdict"] in ("BUY", "SELL") and levels:
@@ -492,6 +495,22 @@ def main():
             cache[tf] = []
         print(f"  {len(cache[tf])} candles", flush=True)
 
+    # Funding rates, only when something asks for the crowded-funding veto.
+    # Bitcoin only: gold has no perpetual futures market to read.
+    funding_at = None
+    wants_funding = args.strategy == "confluence" and any(
+        {**settings, **extra}.get("max_crowded_funding") is not None for _, extra in variants
+    )
+    if wants_funding and args.symbol == "BTCUSDT":
+        print("fetching funding rates...", flush=True)
+        _, series = funding_data.fetch_history(min(needs.values()))
+        if series:
+            funding_at = funding_data.daily_average(series)
+        else:
+            print("  [warn] no funding source answered; the crowded-funding veto can't act this run", flush=True)
+    elif wants_funding:
+        print(f"[info] no funding rates for {args.symbol}; the crowded-funding veto can't act", flush=True)
+
     results = []
     for name, extra in variants:
         # A variant may set its own round-trip cost ("cost_pct=0.06") to see
@@ -512,7 +531,9 @@ def main():
                 continue
             started = time.time()
             if args.strategy == "confluence":
-                signals, verdicts = confluence_signals(candles, cache.get(anchor, []), tf, anchor, vsettings, start_time)
+                signals, verdicts = confluence_signals(
+                    candles, cache.get(anchor, []), tf, anchor, vsettings, start_time, funding_at
+                )
             else:
                 warmup = config.CANDLE_FETCH_LIMIT * config.TIMEFRAME_SECONDS[tf]
                 in_range = [c for c in candles if c["open_time"] >= start_time - warmup]

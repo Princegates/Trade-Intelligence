@@ -213,3 +213,19 @@ def test_twelvedata_requests_are_spaced_across_timeframes(monkeypatch):
     backtest.fetch_twelvedata("XAU/USD", "4h", 0)
     assert len(calls) == 2
     assert sleeps and 0 < sleeps[0] <= backtest.TWELVEDATA_PAUSE_SECONDS
+
+
+def test_the_replay_passes_the_days_funding_at_each_close(monkeypatch):
+    seen = []
+
+    def fake_evaluate(window, higher_timeframe_bias=None, settings=None, funding=None):
+        seen.append(funding)
+        return {"verdict": "HOLD", "levels": None, "confidence": None}
+
+    monkeypatch.setattr(engine, "evaluate", fake_evaluate)
+    candles = _flat(config.MIN_CANDLES_FOR_SIGNAL + 2)
+    closes = []
+    backtest.confluence_signals(candles, [], "1h", None, {}, 0, funding=lambda t: closes.append(t) or 0.05)
+    assert seen == [0.05] * 3
+    # Asked at each candle's close, not its open.
+    assert closes[0] == candles[config.MIN_CANDLES_FOR_SIGNAL - 1]["open_time"] + HOUR

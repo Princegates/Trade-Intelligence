@@ -47,10 +47,12 @@ def _patch_categories(trend=(0, "flat", []), momentum=NEUTRAL_MOMENTUM, structur
     )
 
 
-def _evaluate_with(higher_timeframe_bias=None, settings=None, candles=None, **overrides):
+def _evaluate_with(higher_timeframe_bias=None, settings=None, candles=None, funding=None, **overrides):
     patches = _patch_categories(**overrides)
     with patches[0], patches[1], patches[2], patches[3], patches[4]:
-        return engine.evaluate(candles or _candles(), higher_timeframe_bias=higher_timeframe_bias, settings=settings)
+        return engine.evaluate(
+            candles or _candles(), higher_timeframe_bias=higher_timeframe_bias, settings=settings, funding=funding
+        )
 
 
 def test_two_agreeing_categories_produce_buy():
@@ -669,3 +671,27 @@ def test_min_stop_baseline_atr_keeps_a_quiet_markets_stop_at_its_usual_size():
     both = _evaluate_with(candles=quiet, settings={"min_stop_atr": 1.0, "min_stop_baseline_atr": 1.0}, **TRENDING_BUY)["levels"]
     assert only_current["entry"] - only_current["stop"] < baseline
     assert both["entry"] - both["stop"] >= baseline - 1e-9
+
+
+# --- crowded funding, off unless set ------------------------------------------------
+
+TRENDING_SELL = {
+    "trend": (-1, "down", []),
+    "structure": {"vote": -1, "reasons": [], "regime": "TRENDING", "swings": [], "swept": None, "break_event": None, "trend_bias": None},
+}
+
+
+def test_crowded_funding_holds_a_call_on_the_crowded_side_only():
+    limit = {"max_crowded_funding": 0.05}
+    held = _evaluate_with(settings=limit, funding=0.08, **TRENDING_BUY)
+    assert held["verdict"] == "HOLD"
+    assert any("paying 0.080% every 8 hours to stay long" in r for r in held["reasoning"])
+    # Longs paying heavily is no reason to hold back a SELL.
+    assert _evaluate_with(settings=limit, funding=0.08, **TRENDING_SELL)["verdict"] == "SELL"
+    assert _evaluate_with(settings=limit, funding=-0.08, **TRENDING_SELL)["verdict"] == "HOLD"
+    assert _evaluate_with(settings=limit, funding=0.03, **TRENDING_BUY)["verdict"] == "BUY"
+
+
+def test_crowded_funding_needs_both_the_setting_and_a_rate():
+    assert _evaluate_with(funding=0.5, **TRENDING_BUY)["verdict"] == "BUY"
+    assert _evaluate_with(settings={"max_crowded_funding": 0.05}, **TRENDING_BUY)["verdict"] == "BUY"

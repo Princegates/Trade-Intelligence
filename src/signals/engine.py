@@ -569,7 +569,7 @@ def _rr_below_minimum(levels, min_rr):
     return (reward / risk) < (min_rr - 1e-9)
 
 
-def evaluate(candles, higher_timeframe_bias=None, settings=None):
+def evaluate(candles, higher_timeframe_bias=None, settings=None, funding=None):
     """`candles` are closed candles, oldest first, each with open/high/low/
     close/volume.
 
@@ -581,7 +581,12 @@ def evaluate(candles, higher_timeframe_bias=None, settings=None):
     overrides; a missing field falls back to today's fixed constant/
     behavior individually, never all-or-nothing. Both parameters default to
     values that reproduce exactly today's behavior when omitted, so every
-    existing caller and test keeps working unmodified."""
+    existing caller and test keeps working unmodified.
+
+    `funding` is Bitcoin perpetual futures' average funding rate over the
+    last day, in percent per 8 hours (src/funding.py), or None. With the
+    max_crowded_funding setting it holds back a call on the side futures
+    traders are already paying heavily to hold."""
     settings = settings or {}
     closes = [c["close"] for c in candles]
     atr_val = ind.atr(candles, 14)
@@ -700,6 +705,16 @@ def evaluate(candles, higher_timeframe_bias=None, settings=None):
         elif atr_ratio is not None and settings.get("min_atr_ratio") is not None and atr_ratio < settings["min_atr_ratio"]:
             reasons.append(
                 f"Overridden to HOLD — volatility is {atr_ratio:.1f}x its usual level; too quiet for a move to follow through"
+            )
+            verdict = "HOLD"
+        elif funding is not None and settings.get("max_crowded_funding") is not None and (
+            (verdict == "BUY" and funding > settings["max_crowded_funding"])
+            or (verdict == "SELL" and funding < -settings["max_crowded_funding"])
+        ):
+            side = "long" if verdict == "BUY" else "short"
+            reasons.append(
+                f"Overridden to HOLD — futures traders are paying {abs(funding):.3f}% every 8 hours to stay {side}; "
+                "a crowded trade that often snaps back"
             )
             verdict = "HOLD"
 
