@@ -5,6 +5,8 @@ import { z } from "zod";
 import { requireUser, requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { actorOf, logActivity } from "@/lib/activity-log";
+import { diffFields } from "@/lib/activity-log-view";
 
 export interface RedeemFormState {
   error?: string;
@@ -20,7 +22,7 @@ const codeSchema = z.string().trim().min(1, "Enter the code your admin gave you.
  * why: it lets a user redeem their own code without ever being granted
  * UPDATE on either table. */
 export async function redeemAccessCode(_prevState: RedeemFormState, formData: FormData): Promise<RedeemFormState> {
-  await requireUser();
+  const user = await requireUser();
 
   const parsed = codeSchema.safeParse(formData.get("code"));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input." };
@@ -30,9 +32,19 @@ export async function redeemAccessCode(_prevState: RedeemFormState, formData: Fo
   const supabase = await createClient();
   if (!supabase) return { error: "Could not connect to Supabase." };
 
+  // The code itself is never logged — only whether it worked. Failures are
+  // kept so repeated guessing shows up.
   const { data, error } = await supabase.rpc("redeem_access_code", { p_code: parsed.data.toUpperCase() });
-  if (error) return { error: error.message };
-  if (!data) return { error: "That code is invalid or has already been used." };
+  if (error || !data) {
+    logActivity({
+      action: "account.access_code_redeemed",
+      actor: actorOf(user),
+      outcome: "failure",
+      details: { reason: error ? error.message : "Invalid, expired or already-used code" },
+    });
+    return { error: error ? error.message : "That code is invalid or has already been used." };
+  }
+  logActivity({ action: "account.access_code_redeemed", actor: actorOf(user) });
 
   revalidatePath("/dashboard", "layout");
   return { success: true };
@@ -62,6 +74,12 @@ export async function setAccessPolicy(
   const supabase = await createClient();
   if (!supabase) return { error: "Could not connect to Supabase." };
 
+  const { data: before } = await supabase
+    .from("access_policy")
+    .select("trial_days, code_expiry_days")
+    .eq("id", true)
+    .maybeSingle();
+
   const { error } = await supabase
     .from("access_policy")
     .update({
@@ -73,6 +91,18 @@ export async function setAccessPolicy(
     .eq("id", true);
 
   if (error) return { error: error.message };
+
+  logActivity({
+    action: "admin.access_policy_changed",
+    actor: actorOf(admin),
+    target: { type: "setting", label: "Access policy" },
+    details: {
+      changes: diffFields(
+        { "Trial length (days)": before?.trial_days, "Access code expiry (days)": before?.code_expiry_days },
+        { "Trial length (days)": trialDays.data, "Access code expiry (days)": codeExpiryDays.data }
+      ),
+    },
+  });
 
   revalidatePath("/admin/settings");
   return { success: true };

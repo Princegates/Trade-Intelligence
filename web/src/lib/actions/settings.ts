@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { actorOf, logActivity } from "@/lib/activity-log";
+import { diffFields } from "@/lib/activity-log-view";
 import { SETTINGS_PROVIDERS } from "@/lib/demo-data";
 import type { SettingsCategory } from "@/lib/supabase/types";
 
@@ -32,16 +34,20 @@ export async function saveProviderSettings(
 
   const { data: existing } = await supabase
     .from("app_settings")
-    .select("config")
+    .select("config, is_active")
     .eq("category", category)
     .eq("provider", provider)
     .maybeSingle();
 
   const config: Record<string, unknown> = { ...((existing?.config as Record<string, unknown>) ?? {}) };
 
+  // Which fields were filled in — names only, never values: several are
+  // API keys and passwords.
+  const fieldsUpdated: string[] = [];
   for (const field of def.fields) {
     const raw = formData.get(field.key);
     if (typeof raw === "string" && raw.trim() !== "") {
+      if (config[field.key] !== raw.trim()) fieldsUpdated.push(field.label);
       config[field.key] = raw.trim();
     }
     // Blank field: keep whatever was already saved (this is how secret
@@ -63,6 +69,16 @@ export async function saveProviderSettings(
   );
 
   if (error) return { error: error.message };
+
+  logActivity({
+    action: "admin.provider_settings_saved",
+    actor: actorOf(admin),
+    target: { type: "setting", label: `${category} · ${def.label}` },
+    details: {
+      changes: diffFields({ Active: existing?.is_active ?? false }, { Active: isActive }),
+      fields_updated: fieldsUpdated,
+    },
+  });
 
   revalidatePath("/admin/settings");
   return { success: true };

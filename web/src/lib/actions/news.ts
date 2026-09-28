@@ -2,6 +2,7 @@
 
 import { revalidateTag } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
+import { actorOf, logActivity } from "@/lib/activity-log";
 
 /** Forces getMarketNews()'s next call to skip its 20-minute cache and hit
  * Marketaux fresh. Exists because that cache is a Vercel Data Cache entry
@@ -10,10 +11,11 @@ import { requireAdmin } from "@/lib/auth";
  * logic, waiting up to 20 minutes to see the effect isn't necessary once
  * an admin can just ask for it directly. */
 export async function refreshMarketNewsCache() {
-  await requireAdmin();
+  const admin = await requireAdmin();
   // { expire: 0 }, not the recommended "max" profile: an admin pressing
   // this button wants the next load to actually be fresh, not served
   // stale content while a background refetch happens.
   revalidateTag("market-news", { expire: 0 });
+  logActivity({ action: "admin.news_cache_refreshed", actor: actorOf(admin) });
   return { success: true };
 }

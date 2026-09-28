@@ -7,6 +7,7 @@ import { getLatestSignals } from "@/lib/signals";
 import { formatSignalsForChat } from "@/lib/signal-view";
 import { generateChatReply, type ChatTurn } from "@/lib/gemini-chat";
 import { createServiceClient } from "@/lib/supabase/service";
+import { actorOf, logActivity } from "@/lib/activity-log";
 
 export interface ChatResult {
   reply?: string;
@@ -66,7 +67,17 @@ export async function sendChatMessage(history: ChatTurn[], message: string): Pro
   const trimmed = message.trim();
   if (!trimmed) return { error: "Type a message first." };
 
+  // The message text isn't stored — only that one was sent and its length.
+  const logSend = (failureReason?: string) =>
+    logActivity({
+      action: "chat.message_sent",
+      actor: actorOf(user),
+      outcome: failureReason ? "failure" : "success",
+      details: failureReason ? { message_length: trimmed.length, reason: failureReason } : { message_length: trimmed.length },
+    });
+
   if (!(await withinChatRateLimit(user.id))) {
+    logSend("Rate limit reached");
     return {
       error: `Guda's had a lot of messages from you in the last ${Math.round(RATE_LIMIT_WINDOW_SECONDS / 60)} minutes — try again shortly.`,
     };
@@ -74,6 +85,7 @@ export async function sendChatMessage(history: ChatTurn[], message: string): Pro
 
   const provider = await getActiveAiProvider();
   if (!provider) {
+    logSend("No AI provider configured");
     return { error: "No AI provider is configured yet — ask your admin to set one up in Settings." };
   }
 
@@ -82,6 +94,7 @@ export async function sendChatMessage(history: ChatTurn[], message: string): Pro
 
   const { reply, rateLimited } = await generateChatReply(history, trimmed, provider, dataContext);
   if (!reply) {
+    logSend(rateLimited ? "AI provider rate limit" : "AI provider didn't respond");
     return {
       error: rateLimited
         ? "Guda's AI provider has hit its rate limit — try again in a minute."
@@ -89,5 +102,6 @@ export async function sendChatMessage(history: ChatTurn[], message: string): Pro
     };
   }
 
+  logSend();
   return { reply };
 }

@@ -7,6 +7,7 @@ import type { SessionUser } from "@/lib/auth";
 import type { LifecycleState, SettingsCategory } from "@/lib/supabase/types";
 import type { CalendarEvent } from "@/lib/calendar-view";
 import type { NewsItem } from "@/lib/news-view";
+import type { ActivityView } from "@/lib/activity-log-view";
 
 export const DEMO_USER: SessionUser = {
   id: "demo-user",
@@ -446,4 +447,94 @@ export const DEMO_SETTINGS: DemoSetting[] = [
   { category: "email", provider: "resend", isActive: true, config: { from_address: "alerts@signalsvaultai.com" } },
   { category: "sms", provider: "hubtel", isActive: false, config: {} },
   { category: "payments", provider: "paystack", isActive: false, config: {} },
+];
+
+// A day of system-log activity (see /admin/logs), newest first, covering
+// each category and one failed sign-in, so the page and its filters have
+// something to show in demo mode.
+const minutesAgo = (m: number) => new Date(Date.now() - m * 60 * 1000).toISOString();
+const DEMO_UA = {
+  chromeMac:
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+  safariIphone:
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1",
+  edgeWindows:
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0",
+};
+const demoActivity = (
+  id: number,
+  minutes: number,
+  row: Partial<ActivityView> & Pick<ActivityView, "action">
+): ActivityView => ({
+  id,
+  createdAt: minutesAgo(minutes),
+  actorId: null,
+  actorEmail: null,
+  actorRole: null,
+  targetType: null,
+  targetId: null,
+  targetLabel: null,
+  details: {},
+  outcome: "success",
+  ip: "203.0.113.24",
+  userAgent: DEMO_UA.chromeMac,
+  ...row,
+});
+const demoTrader = { actorId: "2", actorEmail: "trader@example.com", actorRole: "user" };
+const demoAdmin = { actorId: "1", actorEmail: "admin@example.com", actorRole: "admin", ip: "198.51.100.7", userAgent: DEMO_UA.edgeWindows };
+
+export const DEMO_ACTIVITY: ActivityView[] = [
+  demoActivity(14, 4, { ...demoTrader, action: "chat.message_sent", details: { message_length: 64 }, userAgent: DEMO_UA.safariIphone }),
+  demoActivity(13, 9, { ...demoTrader, action: "auth.signed_in", userAgent: DEMO_UA.safariIphone }),
+  demoActivity(12, 11, {
+    action: "auth.sign_in_failed",
+    actorEmail: "trader@example.com",
+    outcome: "failure",
+    details: { reason: "Invalid login credentials" },
+    ip: "192.0.2.150",
+    userAgent: DEMO_UA.safariIphone,
+  }),
+  demoActivity(11, 38, {
+    ...demoAdmin,
+    action: "admin.engine_settings_changed",
+    targetType: "setting",
+    targetLabel: "Signal engine",
+    details: { changes: { "Minimum reward:risk": { from: 1.5, to: 2 } } },
+  }),
+  demoActivity(10, 52, {
+    ...demoAdmin,
+    action: "admin.access_code_generated",
+    targetType: "user",
+    targetId: "4",
+    targetLabel: "sam.k@example.com",
+    details: { code_expires: days(7).slice(0, 10) },
+  }),
+  demoActivity(9, 75, {
+    ...demoAdmin,
+    action: "admin.user_approved",
+    targetType: "user",
+    targetId: "2",
+    targetLabel: "trader@example.com",
+    details: { trial_days: 7 },
+  }),
+  demoActivity(8, 90, { ...demoTrader, action: "auth.email_confirmed" }),
+  demoActivity(7, 96, { ...demoTrader, action: "auth.signed_up", details: { name: "Demo Trader" } }),
+  demoActivity(6, 180, {
+    action: "lead.access_requested",
+    actorEmail: "jane.doe@example.com",
+    targetType: "lead",
+    targetLabel: "jane.doe@example.com",
+    ip: "192.0.2.44",
+  }),
+  demoActivity(5, 320, {
+    ...demoAdmin,
+    action: "admin.access_policy_changed",
+    targetType: "setting",
+    targetLabel: "Access policy",
+    details: { changes: { "Trial length (days)": { from: 5, to: 7 } } },
+  }),
+  demoActivity(4, 700, { ...demoAdmin, action: "admin.guda_special_toggled", targetType: "setting", targetLabel: "GUDA SPECIAL", details: { visible_to_users: true } }),
+  demoActivity(3, 1300, { ...demoTrader, action: "account.name_changed", details: { changes: { Name: { from: "Trader", to: "Demo Trader" } } } }),
+  demoActivity(2, 60 * 30, { ...demoAdmin, action: "admin.appearance_changed", targetType: "setting", targetLabel: "Site appearance", details: { changes: { Theme: { from: "default", to: "ocean" } } } }),
+  demoActivity(1, 60 * 24 * 12, { ...demoAdmin, action: "auth.signed_in" }),
 ];

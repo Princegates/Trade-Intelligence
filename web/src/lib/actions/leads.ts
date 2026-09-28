@@ -5,6 +5,7 @@ import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { actorOf, logActivity } from "@/lib/activity-log";
 import { notifyAdminsOfNewLead } from "@/lib/notifications";
 import type { LeadKind } from "@/lib/supabase/types";
 
@@ -47,6 +48,15 @@ async function submitLead(kind: LeadKind, formData: FormData): Promise<LeadFormS
   const { error } = await supabase.from("leads").insert({ kind, email: parsed.data.email, name, note });
   if (error) return { error: error.message };
 
+  // A visitor, usually not signed in — the email they gave is the only
+  // identity there is.
+  logActivity({
+    action: kind === "waitlist" ? "lead.waitlist_joined" : "lead.access_requested",
+    actor: { id: null, email: parsed.data.email },
+    target: { type: "lead", label: parsed.data.email },
+    details: name ? { name } : {},
+  });
+
   // Best-effort — the lead is already saved above regardless of whether an
   // admin gets emailed about it.
   await notifyAdminsOfNewLead(kind, parsed.data.email, name, note);
@@ -63,15 +73,26 @@ export async function requestAccess(_prevState: LeadFormState, formData: FormDat
 }
 
 export async function setLeadHandled(leadId: string, handled: boolean) {
-  await requireAdmin();
+  const admin = await requireAdmin();
 
   if (!isSupabaseConfigured()) return { error: "Demo mode: changes aren't persisted." };
 
   const supabase = await createClient();
   if (!supabase) return { error: "Could not connect to Supabase." };
 
-  const { error } = await supabase.from("leads").update({ handled }).eq("id", leadId);
+  const { data: lead, error } = await supabase
+    .from("leads")
+    .update({ handled })
+    .eq("id", leadId)
+    .select("email")
+    .maybeSingle();
   if (error) return { error: error.message };
+
+  logActivity({
+    action: handled ? "admin.lead_marked_handled" : "admin.lead_reopened",
+    actor: actorOf(admin),
+    target: { type: "lead", id: leadId, label: lead?.email ?? null },
+  });
 
   revalidatePath("/admin/leads");
   return { success: true };

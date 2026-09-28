@@ -5,6 +5,8 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { actorOf, logActivity } from "@/lib/activity-log";
+import { diffFields } from "@/lib/activity-log-view";
 
 export interface ProfileFormState {
   error?: string;
@@ -33,6 +35,12 @@ export async function updateProfile(_prevState: ProfileFormState, formData: Form
 
   const { error } = await supabase.from("profiles").update({ full_name: parsed.data.fullName }).eq("id", user.id);
   if (error) return { error: error.message };
+
+  logActivity({
+    action: "account.name_changed",
+    actor: actorOf(user),
+    details: { changes: diffFields({ Name: user.fullName }, { Name: parsed.data.fullName }) },
+  });
 
   revalidatePath("/dashboard", "layout");
   revalidatePath("/admin", "layout");
@@ -72,10 +80,22 @@ export async function updatePassword(_prevState: ProfileFormState, formData: For
     email: user.email,
     password: parsed.data.currentPassword,
   });
-  if (reauthError) return { error: "Current password is incorrect." };
+  if (reauthError) {
+    logActivity({
+      action: "account.password_changed",
+      actor: actorOf(user),
+      outcome: "failure",
+      details: { reason: "Current password was incorrect" },
+    });
+    return { error: "Current password is incorrect." };
+  }
 
   const { error } = await supabase.auth.updateUser({ password: parsed.data.newPassword });
-  if (error) return { error: error.message };
+  if (error) {
+    logActivity({ action: "account.password_changed", actor: actorOf(user), outcome: "failure", details: { reason: error.message } });
+    return { error: error.message };
+  }
 
+  logActivity({ action: "account.password_changed", actor: actorOf(user) });
   return { success: true };
 }

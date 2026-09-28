@@ -5,6 +5,8 @@ import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { actorOf, logActivity } from "@/lib/activity-log";
+import { diffFields } from "@/lib/activity-log-view";
 
 export interface EngineSettingsFormState {
   error?: string;
@@ -41,6 +43,29 @@ const schema = z
     path: ["confidenceHighThreshold"],
   });
 
+// How each engine_settings column reads in the system log.
+const FIELD_LABELS = {
+  atr_stop_multiplier: "ATR stop multiplier",
+  reward_to_risk: "Reward:risk",
+  min_reward_to_risk: "Minimum reward:risk",
+  min_confidence_threshold: "Minimum confidence",
+  confidence_high_threshold: "High-confidence threshold",
+  confidence_very_high_threshold: "Very-high-confidence threshold",
+  require_higher_timeframe_confluence: "Require higher-timeframe confluence",
+  structure_buffer_atr: "Structure buffer (ATR)",
+  entry_zone_width_atr: "Entry zone width (ATR)",
+  max_entry_zone_distance_atr: "Maximum entry-zone distance (ATR)",
+  lifecycle_watch_zone_half_widths: "Watch zone half-widths",
+  lifecycle_confirm_move_r: "Confirm move (R)",
+  lifecycle_expiry_candles: "Expiry candles",
+} as const;
+
+type EngineField = keyof typeof FIELD_LABELS;
+
+function labelled(values: Partial<Record<EngineField, unknown>> | null): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(FIELD_LABELS).map(([key, label]) => [label, values?.[key as EngineField]]));
+}
+
 /** Saves the admin-configurable entry-quality thresholds the Python signal
  * engine reads once per run (src/storage/supabase.py::get_engine_settings(),
  * threaded into src/signals/engine.py::evaluate() — see that module's own
@@ -75,28 +100,41 @@ export async function setEngineSettings(
 
   const requireConfluence = formData.get("requireHigherTimeframeConfluence") === "on";
 
+  const { data: before } = await supabase
+    .from("engine_settings")
+    .select("*")
+    .eq("id", true)
+    .maybeSingle();
+
+  const values = {
+    atr_stop_multiplier: parsed.data.atrStopMultiplier,
+    reward_to_risk: parsed.data.rewardToRisk,
+    min_reward_to_risk: parsed.data.minRewardToRisk,
+    min_confidence_threshold: parsed.data.minConfidenceThreshold,
+    confidence_high_threshold: parsed.data.confidenceHighThreshold,
+    confidence_very_high_threshold: parsed.data.confidenceVeryHighThreshold,
+    require_higher_timeframe_confluence: requireConfluence,
+    structure_buffer_atr: parsed.data.structureBufferAtr,
+    entry_zone_width_atr: parsed.data.entryZoneWidthAtr,
+    max_entry_zone_distance_atr: parsed.data.maxEntryZoneDistanceAtr,
+    lifecycle_watch_zone_half_widths: parsed.data.lifecycleWatchZoneHalfWidths,
+    lifecycle_confirm_move_r: parsed.data.lifecycleConfirmMoveR,
+    lifecycle_expiry_candles: parsed.data.lifecycleExpiryCandles,
+  };
+
   const { error } = await supabase
     .from("engine_settings")
-    .update({
-      atr_stop_multiplier: parsed.data.atrStopMultiplier,
-      reward_to_risk: parsed.data.rewardToRisk,
-      min_reward_to_risk: parsed.data.minRewardToRisk,
-      min_confidence_threshold: parsed.data.minConfidenceThreshold,
-      confidence_high_threshold: parsed.data.confidenceHighThreshold,
-      confidence_very_high_threshold: parsed.data.confidenceVeryHighThreshold,
-      require_higher_timeframe_confluence: requireConfluence,
-      structure_buffer_atr: parsed.data.structureBufferAtr,
-      entry_zone_width_atr: parsed.data.entryZoneWidthAtr,
-      max_entry_zone_distance_atr: parsed.data.maxEntryZoneDistanceAtr,
-      lifecycle_watch_zone_half_widths: parsed.data.lifecycleWatchZoneHalfWidths,
-      lifecycle_confirm_move_r: parsed.data.lifecycleConfirmMoveR,
-      lifecycle_expiry_candles: parsed.data.lifecycleExpiryCandles,
-      updated_by: admin.id,
-      updated_at: new Date().toISOString(),
-    })
+    .update({ ...values, updated_by: admin.id, updated_at: new Date().toISOString() })
     .eq("id", true);
 
   if (error) return { error: error.message };
+
+  logActivity({
+    action: "admin.engine_settings_changed",
+    actor: actorOf(admin),
+    target: { type: "setting", label: "Signal engine" },
+    details: { changes: diffFields(labelled(before), labelled(values)) },
+  });
 
   revalidatePath("/admin/settings");
   return { success: true };

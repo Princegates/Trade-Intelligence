@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { notifyAdminsOfNewSignup } from "@/lib/notifications";
+import { logActivity } from "@/lib/activity-log";
 
 export interface AuthFormState {
   error?: string;
@@ -33,8 +34,19 @@ export async function login(_prevState: AuthFormState, formData: FormData): Prom
   const supabase = await createClient();
   if (!supabase) return { info: DEMO_MODE_MESSAGE };
 
-  const { error } = await supabase.auth.signInWithPassword(parsed.data);
-  if (error) return { error: error.message };
+  const { data, error } = await supabase.auth.signInWithPassword(parsed.data);
+  if (error) {
+    // Failed attempts are logged too — repeated ones against one address
+    // are what an admin would look for.
+    logActivity({
+      action: "auth.sign_in_failed",
+      actor: { id: null, email: parsed.data.email },
+      outcome: "failure",
+      details: { reason: error.message },
+    });
+    return { error: error.message };
+  }
+  logActivity({ action: "auth.signed_in", actor: { id: data.user.id, email: data.user.email ?? parsed.data.email } });
 
   const next = formData.get("next");
   redirect(typeof next === "string" && next.startsWith("/") ? next : "/dashboard");
@@ -69,7 +81,20 @@ export async function signup(_prevState: AuthFormState, formData: FormData): Pro
       emailRedirectTo: `${origin}/auth/callback`,
     },
   });
-  if (error) return { error: error.message };
+  if (error) {
+    logActivity({
+      action: "auth.signed_up",
+      actor: { id: null, email: parsed.data.email },
+      outcome: "failure",
+      details: { reason: error.message },
+    });
+    return { error: error.message };
+  }
+  logActivity({
+    action: "auth.signed_up",
+    actor: { id: data.user?.id ?? null, email: parsed.data.email, role: "user" },
+    details: { name: parsed.data.fullName },
+  });
 
   // The 0001_init.sql trigger has already created the (unapproved) profile
   // row by this point. Without this, a sign-up sits on /pending until an
@@ -87,6 +112,13 @@ export async function signup(_prevState: AuthFormState, formData: FormData): Pro
 
 export async function signOut() {
   const supabase = await createClient();
-  if (supabase) await supabase.auth.signOut();
+  if (supabase) {
+    // Read before signing out — afterwards there's no session to say who it was.
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    await supabase.auth.signOut();
+    if (user) logActivity({ action: "auth.signed_out", actor: { id: user.id, email: user.email ?? null } });
+  }
   redirect("/");
 }

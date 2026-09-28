@@ -21,6 +21,7 @@ export type SuppressionReason =
 // (lifecycle.py::tracks()) — HOLD and ATR-fallback calls never do.
 export type LifecycleState = "WAIT" | "WATCH" | "READY" | "CONFIRMED" | "INVALIDATED" | "EXPIRED";
 export type LeadKind = "waitlist" | "access_request";
+export type ActivityOutcome = "success" | "failure";
 
 export interface Database {
   public: {
@@ -584,6 +585,41 @@ export interface Database {
         Update: {
           handled?: boolean;
         };
+        Relationships: [];
+      };
+      // Append-only (0027_activity_log.sql): the trigger rejects every
+      // update/delete, so there's no Update shape for app code to use.
+      activity_log: {
+        Row: {
+          id: number;
+          created_at: string;
+          actor_id: string | null;
+          actor_email: string | null;
+          actor_role: string | null;
+          action: string;
+          target_type: string | null;
+          target_id: string | null;
+          target_label: string | null;
+          details: Record<string, unknown>;
+          outcome: ActivityOutcome;
+          ip: string | null;
+          user_agent: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          actor_id?: string | null;
+          actor_email?: string | null;
+          actor_role?: string | null;
+          action: string;
+          target_type?: string | null;
+          target_id?: string | null;
+          target_label?: string | null;
+          details?: Record<string, unknown>;
+          outcome?: ActivityOutcome;
+          ip?: string | null;
+          user_agent?: string | null;
+        };
+        Update: Record<string, never>;
         Relationships: [];
       };
     };
