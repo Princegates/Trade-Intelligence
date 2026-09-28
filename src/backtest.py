@@ -292,7 +292,7 @@ def comparison_report(symbol, strategy, results, cost_pct):
     lines = [
         f"### {strategy} variants — {symbol}",
         "",
-        f"Costs: {cost_pct:.2f}% round trip. Same trade rules as the live tracker. "
+        f"Costs: {cost_pct:.2f}% round trip unless a variant sets cost_pct. Same trade rules as the live tracker. "
         "Halves: average R after costs in the older and newer half of the period.",
         "",
         "| Timeframe | Variant | Trades | Unfilled | Win rate | Avg before costs | Avg after costs | Profit factor "
@@ -412,8 +412,12 @@ def main():
     variants = [parse_variant(v) for v in args.variant] or [(None, {})]
     results = []
     for name, extra in variants:
+        # A variant may set its own round-trip cost ("cost_pct=0.06") to see
+        # how results depend on what a broker charges.
+        extra = dict(extra)
+        vcost = float(extra.pop("cost_pct", cost_pct))
         # The engine's cost check needs this market's costs; harmless otherwise.
-        vsettings = {**settings, **extra, "round_trip_cost_pct": cost_pct}
+        vsettings = {**settings, **extra, "round_trip_cost_pct": vcost}
         fill_window = vsettings.get("fill_window", 5)
         rows = []
         for tf, anchor, start_time in plan:
@@ -430,7 +434,7 @@ def main():
                 signals, verdicts = guda_special_signals(in_range, cache.get(anchor, []), vsettings)
             replayed = [c for c in candles if c["open_time"] >= start_time]
             trades, skipped = trades_from_signals(
-                replayed, signals, cost_pct, max_bars, fill_window, vsettings.get("be_at_r")
+                replayed, signals, vcost, max_bars, fill_window, vsettings.get("be_at_r")
             )
             stats = trade_sim.summarize(trades)
             period_start = replayed[0]["open_time"] if replayed else start_time
