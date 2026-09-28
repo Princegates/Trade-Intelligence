@@ -66,7 +66,14 @@ BINANCE_BASE_URL = os.environ.get("BINANCE_BASE_URL") or "https://api.binance.us
 # support/resistance categories now read real entry-zone/pooled-touches
 # data instead of 3.0.0's documented proxies — same eight categories and
 # point totals, more accurate inputs.
-STRATEGY_VERSION = "3.1.0"
+#
+# 3.2.0: high-impact USD releases now hold back BTC calls too, not only gold
+# (EVENT_RISK_CURRENCY below) — the same candle can publish HOLD where 3.1.0
+# published a BUY/SELL. Also available from 3.2.0, all off unless an
+# engine setting switches them on: min_stop_atr, target_mode, swing_lookback,
+# max_cost_to_risk, momentum_mode, rsi_chase_limit and entry_mode (see
+# src/signals/engine.py) — tested with src/backtest.py before any is used.
+STRATEGY_VERSION = "3.2.0"
 
 # GUDA SPECIAL is a second, independent strategy (15m Break & Retest ->
 # Fibonacci retracement -> candlestick confirmation) published alongside
@@ -81,6 +88,11 @@ STRATEGY_VERSION = "3.1.0"
 # actually fire; stop beyond the broken level; minimum reward-to-risk to
 # the nearest structure; WEAK confirmations and HTF-opposed CHoCH setups
 # rejected; no publishing inside a high-impact release window.
+#
+# The release window follows EVENT_RISK_CURRENCY, so from engine 3.2.0 it
+# covers BTC setups as well as gold — a config change outside GUDA
+# SPECIAL's own rules, deliberately not a version bump (that would reset
+# the dashboard card to waiting for a first signal).
 GUDA_SPECIAL_STRATEGY_VERSION = "guda-special-1.1.0"
 
 INSTRUMENTS = [
@@ -202,10 +214,12 @@ EQUAL_LEVEL_TOLERANCE = 0.0015
 VOLATILITY_SPIKE_ATR = 2.5
 
 # Which currency's high-impact releases should gate an instrument (spec
-# section 6, gold's USD/Fed/macro sensitivity). BTC is deliberately absent:
-# its own spec section calls out funding/leverage/liquidations instead of a
-# macro calendar, and there is no free feed for those either — see README.
-EVENT_RISK_CURRENCY = {"XAUUSD": "USD"}
+# section 6, gold's USD/Fed/macro sensitivity). BTC was left out at first,
+# its spec pointing at funding/leverage/liquidations instead — but it moves
+# as hard as gold on US CPI, FOMC and payrolls, and a call made minutes
+# before one is a coin toss with a stop in the way. Since 3.2.0 it's gated
+# on the same USD releases.
+EVENT_RISK_CURRENCY = {"XAUUSD": "USD", "BTCUSDT": "USD"}
 
 # How long before and after a high-impact release to hold off. Spread widens
 # and price can spike in either direction right at release and for a while

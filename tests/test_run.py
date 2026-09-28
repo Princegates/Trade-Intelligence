@@ -287,13 +287,22 @@ def test_a_medium_impact_event_never_gates_a_call(temp_db, monkeypatch):
     assert message.startswith("XAUUSD/1h: BUY")
 
 
-def test_btc_is_never_gated_by_the_calendar(temp_db, monkeypatch):
-    """BTC has no currency mapped in EVENT_RISK_CURRENCY at all — the same
-    event that would hold gold back must not touch it."""
+def test_btc_is_held_back_around_a_high_impact_usd_release(temp_db, monkeypatch):
+    """Since 3.2.0 BTC is gated on the same USD releases as gold."""
     _serve(monkeypatch, _feed(61, NOW))
     monkeypatch.setattr(run.engine, "evaluate", lambda candles, **kwargs: _buy_result())
 
     events = [{"title": "CPI m/m", "country": "USD", "impact": "High", "event_time": NOW}]
+    message = run.process(INSTRUMENT, "1h", NOW, events=events)
+
+    assert message.startswith("BTCUSDT/1h: HOLD")
+
+
+def test_btc_is_not_gated_by_another_currencys_release(temp_db, monkeypatch):
+    _serve(monkeypatch, _feed(61, NOW))
+    monkeypatch.setattr(run.engine, "evaluate", lambda candles, **kwargs: _buy_result())
+
+    events = [{"title": "ECB Rate Decision", "country": "EUR", "impact": "High", "event_time": NOW}]
     message = run.process(INSTRUMENT, "1h", NOW, events=events)
 
     assert message.startswith("BTCUSDT/1h: BUY")
@@ -310,8 +319,8 @@ def test_no_events_passed_defaults_to_no_gate(temp_db, monkeypatch):
     assert message.startswith("XAUUSD/1h: BUY")
 
 
-def test_event_risk_currency_maps_gold_to_usd_only():
-    assert config.EVENT_RISK_CURRENCY == {"XAUUSD": "USD"}
+def test_event_risk_currency_gates_both_markets_on_usd():
+    assert config.EVENT_RISK_CURRENCY == {"XAUUSD": "USD", "BTCUSDT": "USD"}
 
 
 # --- New in 3.0.0: confluence anchor wiring + engine_settings threading ---
@@ -841,7 +850,7 @@ def test_advance_guda_special_setups_retires_an_older_version_setup_without_a_si
     assert signal_calls == []
 
 
-def test_advance_guda_special_setups_passes_an_event_blackout_for_gold_only(monkeypatch):
+def test_advance_guda_special_setups_passes_an_event_blackout_to_both_markets(monkeypatch):
     monkeypatch.setattr(
         run.supabase, "get_open_guda_special_setups",
         lambda: [_open_setup(symbol="XAUUSD"), _open_setup(symbol="BTCUSDT")],
@@ -860,7 +869,7 @@ def test_advance_guda_special_setups_passes_an_event_blackout_for_gold_only(monk
     run.advance_guda_special_setups(NOW, guda_special_settings=None, events=[cpi])
 
     assert seen["XAUUSD"] == cpi
-    assert seen["BTCUSDT"] is None
+    assert seen["BTCUSDT"] == cpi
 
 
 def test_advance_guda_special_setups_is_a_no_op_with_no_open_setups(monkeypatch):

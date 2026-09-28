@@ -102,7 +102,7 @@ const vetoes = [
   },
   {
     title: "Major economic news",
-    body: "Gold calls pause from 30 minutes before to 60 minutes after a scheduled high-impact US release, when spreads and whipsaws spike.",
+    body: "Calls on both markets pause from 30 minutes before to 60 minutes after a scheduled high-impact US release, such as inflation, Fed or jobs data, when spreads and whipsaws spike.",
   },
   { title: "Price already ran away", body: "Price is too far from its entry zone. Chasing it would mean a poor entry." },
   {
