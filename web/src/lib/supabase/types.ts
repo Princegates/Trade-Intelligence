@@ -22,6 +22,8 @@ export type SuppressionReason =
 export type LifecycleState = "WAIT" | "WATCH" | "READY" | "CONFIRMED" | "INVALIDATED" | "EXPIRED";
 export type LeadKind = "waitlist" | "access_request";
 export type ActivityOutcome = "success" | "failure";
+export type TradeSource = "confluence" | "guda_special";
+export type TradeStatus = "OPEN" | "TARGET" | "STOP" | "TIMEOUT";
 
 export interface Database {
   public: {
@@ -619,6 +621,74 @@ export interface Database {
           ip?: string | null;
           user_agent?: string | null;
         };
+        Update: Record<string, never>;
+        Relationships: [];
+      };
+      // 0028_trade_outcomes.sql — written only by the engine (service role);
+      // admins read them at /admin/performance.
+      trade_outcomes: {
+        Row: {
+          id: string;
+          source: TradeSource;
+          symbol: string;
+          timeframe: string;
+          strategy_version: string;
+          signal_time: string;
+          direction: 1 | -1;
+          entry: number;
+          stop: number;
+          target: number;
+          confidence: number | null;
+          cost_pct: number;
+          status: TradeStatus;
+          bars: number;
+          last_candle_time: string;
+          mfe_r: number;
+          mae_r: number;
+          exit_price: number | null;
+          exit_time: string | null;
+          r_gross: number | null;
+          r_cost: number;
+          r_net: number | null;
+          opened_at: string;
+          updated_at: string;
+        };
+        Insert: Record<string, never>;
+        Update: Record<string, never>;
+        Relationships: [];
+      };
+      backtest_runs: {
+        Row: {
+          id: string;
+          created_at: string;
+          strategy: TradeSource;
+          strategy_version: string;
+          symbol: string;
+          timeframe: string;
+          period_start: string;
+          period_end: string;
+          candles: number;
+          signals: number;
+          skipped: number;
+          cost_pct: number;
+          settings: Record<string, unknown>;
+          trades: number;
+          open_trades: number;
+          wins: number;
+          win_rate: number | null;
+          avg_r_net: number | null;
+          avg_r_gross: number | null;
+          avg_cost_r: number | null;
+          total_r_net: number;
+          profit_factor: number | null;
+          max_drawdown_r: number;
+          worst_losing_streak: number;
+          avg_bars: number | null;
+          target_rate: number | null;
+          stop_rate: number | null;
+          timeout_rate: number | null;
+        };
+        Insert: Record<string, never>;
         Update: Record<string, never>;
         Relationships: [];
       };

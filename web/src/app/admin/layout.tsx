@@ -1,9 +1,10 @@
-import { LayoutDashboard, ShieldCheck, Palette, User, Settings, Inbox, ScrollText } from "lucide-react";
+import { LayoutDashboard, ShieldCheck, Palette, User, Settings, Inbox, ScrollText, TrendingUp } from "lucide-react";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { requireAdmin } from "@/lib/auth";
 
 const nav = [
   { href: "/admin", label: "Overview", icon: <LayoutDashboard className="size-4" /> },
+  { href: "/admin/performance", label: "Performance", icon: <TrendingUp className="size-4" /> },
   { href: "/admin/users", label: "Access Control", icon: <ShieldCheck className="size-4" /> },
   { href: "/admin/leads", label: "Leads", icon: <Inbox className="size-4" /> },
   { href: "/admin/logs", label: "System log", icon: <ScrollText className="size-4" /> },

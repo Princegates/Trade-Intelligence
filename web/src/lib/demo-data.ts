@@ -8,6 +8,7 @@ import type { LifecycleState, SettingsCategory } from "@/lib/supabase/types";
 import type { CalendarEvent } from "@/lib/calendar-view";
 import type { NewsItem } from "@/lib/news-view";
 import type { ActivityView } from "@/lib/activity-log-view";
+import type { BacktestRunView, TradeOutcomeView } from "@/lib/performance-view";
 
 export const DEMO_USER: SessionUser = {
   id: "demo-user",
@@ -537,4 +538,84 @@ export const DEMO_ACTIVITY: ActivityView[] = [
   demoActivity(3, 1300, { ...demoTrader, action: "account.name_changed", details: { changes: { Name: { from: "Trader", to: "Demo Trader" } } } }),
   demoActivity(2, 60 * 30, { ...demoAdmin, action: "admin.appearance_changed", targetType: "setting", targetLabel: "Site appearance", details: { changes: { Theme: { from: "default", to: "ocean" } } } }),
   demoActivity(1, 60 * 24 * 12, { ...demoAdmin, action: "auth.signed_in" }),
+];
+
+// Sample tracked trades and backtests for /admin/performance in demo mode —
+// invented, mixed results, so the tables have something honest-looking to
+// lay out rather than a wall of wins.
+const hoursAgo = (h: number) => new Date(Date.now() - h * 3600 * 1000).toISOString();
+const demoTrade = (
+  id: number,
+  row: Partial<TradeOutcomeView> & Pick<TradeOutcomeView, "timeframe" | "status" | "rNet">
+): TradeOutcomeView => {
+  const closed = row.status !== "OPEN";
+  const trade: TradeOutcomeView = {
+    id: `demo-trade-${id}`,
+    source: "confluence",
+    symbol: "BTCUSDT",
+    signalTime: hoursAgo(id * 7 + 10),
+    direction: id % 3 === 0 ? -1 : 1,
+    entry: 68_000,
+    stop: 67_600,
+    target: 68_600,
+    bars: closed ? 6 : 2,
+    exitPrice: closed ? 68_300 : null,
+    exitTime: closed ? hoursAgo(id * 7) : null,
+    rGross: null,
+    rCost: 0.4,
+    ...row,
+  };
+  // Exit price and gross R follow from the net result, so each row adds up.
+  const rGross = trade.rNet === null ? null : trade.rNet + trade.rCost;
+  const risk = Math.abs(trade.entry - trade.stop);
+  return {
+    ...trade,
+    rGross,
+    exitPrice: rGross === null ? null : Math.round(trade.entry + trade.direction * rGross * risk),
+  };
+};
+
+export const DEMO_TRADE_OUTCOMES: TradeOutcomeView[] = [
+  demoTrade(1, { timeframe: "1h", status: "OPEN", rNet: null }),
+  demoTrade(2, { timeframe: "1h", status: "TARGET", rNet: 1.1 }),
+  demoTrade(3, { timeframe: "1h", status: "STOP", rNet: -1.4 }),
+  demoTrade(4, { timeframe: "1h", status: "TARGET", rNet: 1.1 }),
+  demoTrade(5, { timeframe: "1h", status: "TIMEOUT", rNet: 0.2 }),
+  demoTrade(6, { timeframe: "15m", status: "STOP", rNet: -2.1, rCost: 1.1 }),
+  demoTrade(7, { timeframe: "15m", status: "TARGET", rNet: 0.4, rCost: 1.1 }),
+  demoTrade(8, { timeframe: "15m", status: "STOP", rNet: -2.1, rCost: 1.1 }),
+  demoTrade(9, { timeframe: "4h", status: "TARGET", rNet: 1.3, rCost: 0.2 }),
+  demoTrade(10, { timeframe: "4h", status: "STOP", rNet: -1.2, rCost: 0.2 }),
+  demoTrade(11, { source: "guda_special", timeframe: "15m", status: "TARGET", rNet: 1.5, rCost: 0.3 }),
+  demoTrade(12, { source: "guda_special", timeframe: "15m", status: "STOP", rNet: -1.3, rCost: 0.3 }),
+  demoTrade(13, { symbol: "XAUUSD", timeframe: "1h", status: "TARGET", rNet: 1.4, rCost: 0.05, entry: 3_700, stop: 3_690, target: 3_715 }),
+];
+
+const demoBacktest = (
+  id: number,
+  row: Partial<BacktestRunView> & Pick<BacktestRunView, "timeframe" | "trades" | "winRate" | "avgRNet" | "avgCostR">
+): BacktestRunView => ({
+  id: `demo-backtest-${id}`,
+  createdAt: hoursAgo(3),
+  strategy: "confluence",
+  symbol: "BTCUSDT",
+  periodStart: hoursAgo(24 * 365),
+  periodEnd: hoursAgo(4),
+  signals: row.trades + 12,
+  skipped: 12,
+  costPct: 0.24,
+  avgRGross: (row.avgRNet ?? 0) + (row.avgCostR ?? 0),
+  totalRNet: (row.avgRNet ?? 0) * row.trades,
+  profitFactor: row.avgRNet !== null && row.avgRNet > 0 ? 1.2 : 0.8,
+  maxDrawdownR: 12,
+  worstLosingStreak: 7,
+  ...row,
+});
+
+export const DEMO_BACKTEST_RUNS: BacktestRunView[] = [
+  demoBacktest(1, { timeframe: "5m", trades: 410, winRate: 0.31, avgRNet: -0.62, avgCostR: 1.3, periodStart: hoursAgo(24 * 60) }),
+  demoBacktest(2, { timeframe: "15m", trades: 380, winRate: 0.36, avgRNet: -0.28, avgCostR: 0.8, periodStart: hoursAgo(24 * 180) }),
+  demoBacktest(3, { timeframe: "1h", trades: 290, winRate: 0.41, avgRNet: 0.04, avgCostR: 0.4 }),
+  demoBacktest(4, { timeframe: "4h", trades: 140, winRate: 0.44, avgRNet: 0.12, avgCostR: 0.2 }),
+  demoBacktest(5, { strategy: "guda_special", timeframe: "15m", trades: 60, winRate: 0.4, avgRNet: 0.05, avgCostR: 0.3 }),
 ];

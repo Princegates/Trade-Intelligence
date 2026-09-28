@@ -1,0 +1,172 @@
+// Pure helpers for /admin/performance — no Supabase or Next imports, so the
+// numbers are unit-testable. The statistics mirror src/trade_sim.py's
+// summarize() exactly, so a live row and a backtest row mean the same thing.
+
+import type { TradeSource, TradeStatus } from "@/lib/supabase/types";
+
+export const SOURCE_LABELS: Record<TradeSource, string> = {
+  confluence: "Confluence engine",
+  guda_special: "GUDA SPECIAL",
+};
+
+const TIMEFRAME_ORDER = ["5m", "15m", "1h", "4h", "1d"];
+
+export interface TradeOutcomeView {
+  id: string;
+  source: TradeSource;
+  symbol: string;
+  timeframe: string;
+  signalTime: string;
+  direction: 1 | -1;
+  entry: number;
+  stop: number;
+  target: number;
+  status: TradeStatus;
+  bars: number;
+  exitPrice: number | null;
+  exitTime: string | null;
+  rGross: number | null;
+  rCost: number;
+  rNet: number | null;
+}
+
+export interface BacktestRunView {
+  id: string;
+  createdAt: string;
+  strategy: TradeSource;
+  symbol: string;
+  timeframe: string;
+  periodStart: string;
+  periodEnd: string;
+  signals: number;
+  skipped: number;
+  costPct: number;
+  trades: number;
+  winRate: number | null;
+  avgRNet: number | null;
+  avgRGross: number | null;
+  avgCostR: number | null;
+  totalRNet: number;
+  profitFactor: number | null;
+  maxDrawdownR: number;
+  worstLosingStreak: number;
+}
+
+export interface OutcomeStats {
+  trades: number;
+  open: number;
+  winRate: number | null;
+  avgRNet: number | null;
+  avgRGross: number | null;
+  avgCostR: number | null;
+  totalRNet: number;
+  /** null when there were no losing trades to divide by. */
+  profitFactor: number | null;
+  maxDrawdownR: number;
+  worstLosingStreak: number;
+}
+
+export function summarizeOutcomes(rows: TradeOutcomeView[]): OutcomeStats {
+  const closed = rows
+    .filter((r) => r.status !== "OPEN" && r.rNet !== null && r.exitTime !== null)
+    .sort((a, b) => (a.exitTime! < b.exitTime! ? -1 : a.exitTime! > b.exitTime! ? 1 : 0));
+  const rs = closed.map((r) => r.rNet!);
+  const n = rs.length;
+
+  let equity = 0;
+  let peak = 0;
+  let drawdown = 0;
+  let streak = 0;
+  let worst = 0;
+  for (const r of rs) {
+    equity += r;
+    peak = Math.max(peak, equity);
+    drawdown = Math.max(drawdown, peak - equity);
+    streak = r <= 0 ? streak + 1 : 0;
+    worst = Math.max(worst, streak);
+  }
+
+  const gains = rs.filter((r) => r > 0).reduce((a, b) => a + b, 0);
+  const losses = -rs.filter((r) => r < 0).reduce((a, b) => a + b, 0);
+  const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
+
+  return {
+    trades: n,
+    open: rows.filter((r) => r.status === "OPEN").length,
+    winRate: n ? rs.filter((r) => r > 0).length / n : null,
+    avgRNet: mean(rs),
+    avgRGross: mean(closed.map((r) => r.rGross ?? 0)),
+    avgCostR: mean(closed.map((r) => r.rCost)),
+    totalRNet: rs.reduce((a, b) => a + b, 0),
+    profitFactor: losses > 0 ? gains / losses : null,
+    maxDrawdownR: drawdown,
+    worstLosingStreak: worst,
+  };
+}
+
+export interface OutcomeGroup {
+  source: TradeSource;
+  symbol: string;
+  timeframe: string;
+  stats: OutcomeStats;
+}
+
+function compareGroups(a: { source: string; symbol: string; timeframe: string }, b: typeof a): number {
+  return (
+    a.source.localeCompare(b.source) ||
+    a.symbol.localeCompare(b.symbol) ||
+    TIMEFRAME_ORDER.indexOf(a.timeframe) - TIMEFRAME_ORDER.indexOf(b.timeframe)
+  );
+}
+
+/** One row per strategy, market and timeframe — the unit a position limit
+ * applies to, so the rows never double-count one another's trades. */
+export function groupOutcomes(rows: TradeOutcomeView[]): OutcomeGroup[] {
+  const groups = new Map<string, TradeOutcomeView[]>();
+  for (const row of rows) {
+    const key = `${row.source}|${row.symbol}|${row.timeframe}`;
+    groups.set(key, [...(groups.get(key) ?? []), row]);
+  }
+  return [...groups.values()]
+    .map((g) => ({ source: g[0].source, symbol: g[0].symbol, timeframe: g[0].timeframe, stats: summarizeOutcomes(g) }))
+    .sort(compareGroups);
+}
+
+/** The newest run for each strategy, market and timeframe. */
+export function latestBacktests(runs: BacktestRunView[]): BacktestRunView[] {
+  const latest = new Map<string, BacktestRunView>();
+  for (const run of runs) {
+    const key = `${run.strategy}|${run.symbol}|${run.timeframe}`;
+    const seen = latest.get(key);
+    if (!seen || run.createdAt > seen.createdAt) latest.set(key, run);
+  }
+  return [...latest.values()].sort((a, b) =>
+    compareGroups({ source: a.strategy, ...a }, { source: b.strategy, ...b })
+  );
+}
+
+// --- formatting -----------------------------------------------------------------
+
+export function formatR(v: number | null): string {
+  if (v === null) return "—";
+  return `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(2)}R`;
+}
+
+/** A cost, always a positive amount taken off — no sign. */
+export function formatCostR(v: number | null): string {
+  return v === null ? "—" : `${v.toFixed(2)}R`;
+}
+
+export function formatPct(v: number | null): string {
+  return v === null ? "—" : `${Math.round(v * 100)}%`;
+}
+
+export function formatRatio(v: number | null): string {
+  return v === null ? "—" : v.toFixed(2);
+}
+
+/** Text colour for an R value: green when positive, red when negative. */
+export function rTone(v: number | null): string {
+  if (v === null || v === 0) return "";
+  return v > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400";
+}
