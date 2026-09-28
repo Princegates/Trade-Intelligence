@@ -603,6 +603,7 @@ const demoBacktest = (
   id: `demo-backtest-${id}`,
   createdAt: hoursAgo(3),
   strategy: "confluence",
+  strategyVersion: "demo",
   symbol: "BTCUSDT",
   periodStart: hoursAgo(24 * 365),
   periodEnd: hoursAgo(4),
@@ -614,13 +615,28 @@ const demoBacktest = (
   profitFactor: row.avgRNet !== null && row.avgRNet > 0 ? 1.2 : 0.8,
   maxDrawdownR: 12,
   worstLosingStreak: 7,
+  targetRate: row.winRate === null ? null : row.winRate * 0.8,
+  calibration: null,
   ...row,
 });
 
 export const DEMO_BACKTEST_RUNS: BacktestRunView[] = [
   demoBacktest(1, { timeframe: "5m", trades: 410, winRate: 0.31, avgRNet: -0.62, avgCostR: 1.3, periodStart: hoursAgo(24 * 60) }),
   demoBacktest(2, { timeframe: "15m", trades: 380, winRate: 0.36, avgRNet: -0.28, avgCostR: 0.8, periodStart: hoursAgo(24 * 180) }),
-  demoBacktest(3, { timeframe: "1h", trades: 290, winRate: 0.41, avgRNet: 0.04, avgCostR: 0.4 }),
+  demoBacktest(3, {
+    timeframe: "1h",
+    trades: 290,
+    winRate: 0.41,
+    avgRNet: 0.04,
+    avgCostR: 0.4,
+    // Bitcoin 1h from the Stage 3 backtest: no pattern by score.
+    calibration: [
+      { low: 65, high: 69, trades: 36, targetRate: 0.14, winRate: 0.17, avgRNet: -0.38 },
+      { low: 70, high: 74, trades: 113, targetRate: 0.24, winRate: 0.31, avgRNet: 0.07 },
+      { low: 75, high: 79, trades: 92, targetRate: 0.29, winRate: 0.36, avgRNet: 0.28 },
+      { low: 80, high: 100, trades: 146, targetRate: 0.23, winRate: 0.28, avgRNet: -0.02 },
+    ],
+  }),
   demoBacktest(4, { timeframe: "4h", trades: 140, winRate: 0.44, avgRNet: 0.12, avgCostR: 0.2 }),
   demoBacktest(5, { strategy: "guda_special", timeframe: "15m", trades: 60, winRate: 0.4, avgRNet: 0.05, avgCostR: 0.3 }),
 ];

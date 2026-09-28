@@ -109,6 +109,22 @@ export default async function AdminSettingsPage() {
         </CardContent>
       </Card>
 
+      <Card className="max-w-2xl">
+        <CardHeader>
+          <CardTitle>Backtest odds on signals</CardTitle>
+          <CardDescription>
+            Adds a line to each BUY/SELL call saying how often that timeframe&apos;s calls reached their target when
+            the same engine version was replayed over past candles — for example &quot;Backtest: 1h calls reached
+            their target 30% of the time · +0.04R avg · 387 trades&quot;. Uses the latest published backtest for that
+            market and timeframe; nothing shows without one on the call&apos;s engine version or with fewer than 30
+            trades. Needs migration 0030.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <LiveResultsToggle enabled={liveResults.showBacktestOdds} setting="odds" />
+        </CardContent>
+      </Card>
+
       <div>
         <h2 className="mb-1 text-lg font-semibold">Platform integrations</h2>
         <p className="mb-4 text-sm text-muted-foreground">

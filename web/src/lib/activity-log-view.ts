@@ -41,6 +41,7 @@ export const ACTIVITY_ACTIONS = {
   "admin.appearance_changed": "Changed the site appearance",
   "admin.guda_special_toggled": "Changed GUDA SPECIAL visibility",
   "admin.live_results_toggled": "Changed live-results visibility",
+  "admin.backtest_odds_toggled": "Changed backtest-odds visibility",
   "admin.news_cache_refreshed": "Refreshed the market news",
   "admin.log_exported": "Exported the system log",
 } as const;

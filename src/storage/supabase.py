@@ -881,7 +881,7 @@ _BACKTEST_COLUMNS = (
     "strategy", "strategy_version", "symbol", "timeframe", "candles", "signals", "skipped", "cost_pct",
     "settings", "trades", "wins", "win_rate", "avg_r_net", "avg_r_gross", "avg_cost_r", "total_r_net",
     "profit_factor", "max_drawdown_r", "worst_losing_streak", "avg_bars", "target_rate", "stop_rate",
-    "timeout_rate",
+    "timeout_rate", "calibration",
 )
 
 

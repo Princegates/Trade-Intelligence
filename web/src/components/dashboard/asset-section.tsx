@@ -4,7 +4,13 @@ import { ArrowRight } from "lucide-react";
 import { ConsensusTile } from "@/components/dashboard/consensus-tile";
 import { SignalCard } from "@/components/dashboard/signal-card";
 import { GudaSpecialSignalCard } from "@/components/dashboard/guda-special-signal-card";
-import { liveStatKey, type LiveStat } from "@/lib/performance-view";
+import {
+  backtestOdds,
+  backtestOddsKey,
+  liveStatKey,
+  type BacktestOddsSource,
+  type LiveStat,
+} from "@/lib/performance-view";
 import { ASSET_NAMES, TIMEFRAME_SECONDS } from "@/lib/signals";
 import type { AssetPanelData } from "@/lib/asset-panel";
 
@@ -46,6 +52,7 @@ export function AssetSection({
   locked = false,
   gudaSpecialEnabled = false,
   liveStats,
+  oddsSources,
 }: {
   data: AssetPanelData;
   bordered?: boolean;
@@ -55,6 +62,9 @@ export function AssetSection({
   /** Live records by liveStatKey(); undefined when the admin switch is off,
    * which leaves the line off every card. */
   liveStats?: Record<string, LiveStat>;
+  /** Backtest figures by backtestOddsKey(); undefined when that admin
+   * switch is off. */
+  oddsSources?: Record<string, BacktestOddsSource>;
 }) {
   const { symbol, group, consensus, candlesByTimeframe, gudaSpecial } = data;
   const route = ASSET_ROUTES[symbol];
@@ -98,6 +108,11 @@ export function AssetSection({
                 signal={s}
                 locked={locked}
                 live={liveStats && { stat: liveStats[liveStatKey("confluence", symbol, s.timeframe)] ?? null }}
+                odds={
+                  oddsSources && s.verdict !== "HOLD"
+                    ? backtestOdds(oddsSources[backtestOddsKey(symbol, s.timeframe, s.strategyVersion)])
+                    : null
+                }
               />
               {gudaSpecialEnabled && s.timeframe === "15m" && (
                 <GudaSpecialSignalCard

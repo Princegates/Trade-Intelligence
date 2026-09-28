@@ -9,7 +9,8 @@ import { isStale, type SignalView } from "@/lib/signals";
 import { SCALP_TIMEFRAMES, SCALP_WARNING } from "@/lib/signal-view";
 import { LiveStatLine } from "@/components/dashboard/live-stat-line";
 import { PositionSizeDialog } from "@/components/dashboard/position-size-dialog";
-import type { LiveStat } from "@/lib/performance-view";
+import type { BacktestOdds, LiveStat } from "@/lib/performance-view";
+import { BacktestOddsLine } from "@/components/dashboard/backtest-odds-line";
 
 function verdictVariant(v: string) {
   if (v === "BUY") return "success" as const;
@@ -147,11 +148,15 @@ export function SignalCard({
   signal,
   locked = false,
   live,
+  odds,
 }: {
   signal: SignalView;
   locked?: boolean;
   /** This timeframe's live record; absent when the admin switch is off. */
   live?: { stat: LiveStat | null };
+  /** How similar calls did in the backtest; null when the switch is off,
+   * the call is a HOLD, or there's no backtest of this engine version. */
+  odds?: BacktestOdds | null;
 }) {
   const stale = isStale(signal);
 
@@ -258,6 +263,8 @@ export function SignalCard({
               )}
             </ul>
           </details>
+
+          {!stale && odds && <BacktestOddsLine odds={odds} timeframe={signal.timeframe} />}
 
           <p className="mt-3 border-t pt-2 text-xs text-muted-foreground">
             {signal.confidence === null

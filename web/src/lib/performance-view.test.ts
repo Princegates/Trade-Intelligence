@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  backtestOdds,
   formatR,
   liveStatKey,
   recentStats,
@@ -89,6 +90,7 @@ describe("latestBacktests", () => {
     id: String(++seq),
     createdAt: "2026-09-01T00:00:00Z",
     strategy: "confluence",
+    strategyVersion: "3.4.0",
     symbol: "BTCUSDT",
     timeframe: "1h",
     periodStart: "2024-09-01T00:00:00Z",
@@ -105,6 +107,8 @@ describe("latestBacktests", () => {
     profitFactor: 1.2,
     maxDrawdownR: 3,
     worstLosingStreak: 3,
+    targetRate: 0.4,
+    calibration: null,
     ...overrides,
   });
 
@@ -142,5 +146,21 @@ describe("recentStats", () => {
     expect(h1.winRate).toBe(1); // the 5 oldest (losses) fall outside the window
     expect(h1.avgRNet).toBe(1);
     expect(stats[liveStatKey("confluence", "BTCUSDT", "4h")]).toEqual({ trades: 1, winRate: 0, avgRNet: -1 });
+  });
+});
+
+describe("backtestOdds", () => {
+  it("gives the timeframe's backtested hit rate", () => {
+    expect(backtestOdds({ trades: 300, targetRate: 0.3, avgRNet: 0.05 })).toEqual({
+      trades: 300,
+      targetRate: 0.3,
+      avgRNet: 0.05,
+    });
+  });
+
+  it("shows nothing without a matching backtest or with too few trades", () => {
+    expect(backtestOdds(undefined)).toBeNull();
+    expect(backtestOdds({ trades: 20, targetRate: 0.3, avgRNet: 0.05 })).toBeNull();
+    expect(backtestOdds({ trades: 300, targetRate: null, avgRNet: null })).toBeNull();
   });
 });

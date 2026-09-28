@@ -24,6 +24,16 @@ export type LeadKind = "waitlist" | "access_request";
 export type ActivityOutcome = "success" | "failure";
 export type TradeSource = "confluence" | "guda_special";
 export type TradeStatus = "OPEN" | "TARGET" | "STOP" | "TIMEOUT";
+/** One entry of backtest_runs.calibration (0030): a confidence-score band
+ * and how its trades turned out. */
+export interface ConfidenceBandRow {
+  low: number;
+  high: number;
+  trades: number;
+  target_rate: number | null;
+  win_rate: number | null;
+  avg_r_net: number | null;
+}
 
 export interface Database {
   public: {
@@ -626,9 +636,10 @@ export interface Database {
       };
       // 0029_live_results_toggle.sql — singleton row; anyone reads, admins update.
       live_results_settings: {
-        Row: { id: boolean; enabled: boolean; updated_at: string };
+        // show_backtest_odds: 0030.
+        Row: { id: boolean; enabled: boolean; show_backtest_odds: boolean; updated_at: string };
         Insert: Record<string, never>;
-        Update: { enabled?: boolean; updated_at?: string };
+        Update: { enabled?: boolean; show_backtest_odds?: boolean; updated_at?: string };
         Relationships: [];
       };
       // 0028_trade_outcomes.sql — written only by the engine (service role);
@@ -694,6 +705,8 @@ export interface Database {
           target_rate: number | null;
           stop_rate: number | null;
           timeout_rate: number | null;
+          // 0030; null on older runs and GUDA SPECIAL runs.
+          calibration: ConfidenceBandRow[] | null;
         };
         Insert: Record<string, never>;
         Update: Record<string, never>;

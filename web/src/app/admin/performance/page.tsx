@@ -46,6 +46,7 @@ export default async function AdminPerformancePage() {
   const { outcomes, backtests, unavailable } = await getPerformance();
   const groups = groupOutcomes(outcomes);
   const latest = latestBacktests(backtests);
+  const calibrated = latest.filter((b) => b.calibration && b.calibration.length > 0);
   const recent = outcomes
     .filter((o) => o.status !== "OPEN" && o.exitTime)
     .sort((a, b) => (a.exitTime! < b.exitTime! ? 1 : -1))
@@ -209,6 +210,52 @@ export default async function AdminPerformancePage() {
           )}
         </CardContent>
       </Card>
+
+      {calibrated.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Confidence score vs results</CardTitle>
+            <CardDescription>
+              The same backtests split by the confidence score each call carried. If the score meant something,
+              higher bands would reach their target more often and average more R. In the Stage 3 backtests on
+              Bitcoin they didn&apos;t: the bands moved up and down with no pattern, which is why cards describe the
+              score as confluence strength rather than odds. Bands under 30 trades are mostly luck.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Setup</TableHead>
+                  <TableHead>Confidence</TableHead>
+                  <TableHead>Trades</TableHead>
+                  <TableHead>Reached target</TableHead>
+                  <TableHead>Win rate</TableHead>
+                  <TableHead>Avg after costs</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {calibrated.flatMap((b) =>
+                  b.calibration!.map((band, i) => (
+                    <TableRow key={`${b.id}-${band.low}`}>
+                      <TableCell>{i === 0 && <Setup source={b.strategy} symbol={b.symbol} timeframe={b.timeframe} />}</TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {band.low}–{band.high}
+                      </TableCell>
+                      <TableCell>
+                        <Count n={band.trades} />
+                      </TableCell>
+                      <TableCell>{formatPct(band.targetRate)}</TableCell>
+                      <TableCell className="text-muted-foreground">{formatPct(band.winRate)}</TableCell>
+                      <TableCell className={`font-medium ${rTone(band.avgRNet)}`}>{formatR(band.avgRNet)}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

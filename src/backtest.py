@@ -529,6 +529,8 @@ def main():
                     "timeframe": r["timeframe"], "period_start": r["start"], "period_end": r["end"],
                     "candles": r["candles"], "signals": r["signal_count"], "skipped": r["skipped"],
                     "cost_pct": cost_pct, "settings": {**settings, "overrides": overrides}, **r["stats"],
+                    # Needs migration 0030; GUDA SPECIAL calls carry no score.
+                    **({"calibration": r["bands"]} if args.strategy == "confluence" else {}),
                 })
                 print(f"published {r['timeframe']}: {'ok' if ok else 'Supabase not configured'}")
             except Exception as exc:

@@ -722,3 +722,17 @@ def test_a_backtest_run_sends_only_known_columns(monkeypatch):
     assert "cancelled" not in sent["row"] and "open" not in sent["row"]
     assert sent["row"]["open_trades"] == 0
     assert sent["row"]["period_start"].startswith("1970-01-01")
+
+
+def test_a_backtest_run_carries_its_confidence_bands(monkeypatch):
+    from src import trade_sim
+
+    sent = {}
+    monkeypatch.setattr(supabase, "_insert", lambda table, row, **kw: sent.update(row=row) or True)
+    bands = [{"low": 70, "high": 74, "trades": 3, "target_rate": 0.33, "win_rate": 0.33, "avg_r_net": 0.2}]
+    supabase.publish_backtest_run({
+        "strategy": "confluence", "strategy_version": "3.4.0", "symbol": "BTCUSDT", "timeframe": "1h",
+        "period_start": 0, "period_end": 3600, "candles": 10, "signals": 2, "skipped": 0, "cost_pct": 0.03,
+        "settings": {}, "calibration": bands, **trade_sim.summarize([]),
+    })
+    assert sent["row"]["calibration"] == bands

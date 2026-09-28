@@ -30,10 +30,22 @@ export interface TradeOutcomeView {
   rNet: number | null;
 }
 
+/** How a backtest's trades turned out for calls scored low–high (out of
+ * 100) — backtest_runs.calibration. */
+export interface ConfidenceBand {
+  low: number;
+  high: number;
+  trades: number;
+  targetRate: number | null;
+  winRate: number | null;
+  avgRNet: number | null;
+}
+
 export interface BacktestRunView {
   id: string;
   createdAt: string;
   strategy: TradeSource;
+  strategyVersion: string;
   symbol: string;
   timeframe: string;
   periodStart: string;
@@ -50,6 +62,9 @@ export interface BacktestRunView {
   profitFactor: number | null;
   maxDrawdownR: number;
   worstLosingStreak: number;
+  targetRate: number | null;
+  /** Null on runs saved before migration 0030, and on GUDA SPECIAL's. */
+  calibration: ConfidenceBand[] | null;
 }
 
 export interface OutcomeStats {
@@ -191,6 +206,36 @@ export function recentStats(
     };
   }
   return stats;
+}
+
+// --- dashboard backtest odds -------------------------------------------------------
+
+/** What a BUY/SELL card says about how calls on its timeframe did in the
+ * backtest. For the whole timeframe, not the call's confidence band: in the
+ * Stage 3 backtests the score didn't separate better trades from worse ones
+ * (see calibration on /admin/performance), so a per-score figure would
+ * suggest a difference that isn't there. */
+export interface BacktestOdds {
+  trades: number;
+  targetRate: number;
+  avgRNet: number | null;
+}
+
+/** The backtest figures backtestOdds() reads. */
+export type BacktestOddsSource = Pick<BacktestRunView, "trades" | "targetRate" | "avgRNet">;
+
+/** Below this, a hit rate is mostly luck. */
+export const BACKTEST_ODDS_MIN_TRADES = 30;
+
+export function backtestOddsKey(symbol: string, timeframe: string, strategyVersion: string): string {
+  return `${symbol}|${timeframe}|${strategyVersion}`;
+}
+
+/** `run` must be a backtest of the same engine version as the call;
+ * nothing without one, or with too few trades. */
+export function backtestOdds(run: BacktestOddsSource | undefined): BacktestOdds | null {
+  if (!run || run.trades < BACKTEST_ODDS_MIN_TRADES || run.targetRate === null) return null;
+  return { trades: run.trades, targetRate: run.targetRate, avgRNet: run.avgRNet };
 }
 
 // --- formatting -----------------------------------------------------------------

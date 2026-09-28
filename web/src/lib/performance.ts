@@ -2,8 +2,8 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { DEMO_BACKTEST_RUNS, DEMO_TRADE_OUTCOMES } from "@/lib/demo-data";
-import type { BacktestRunView, TradeOutcomeView } from "@/lib/performance-view";
-import type { Database } from "@/lib/supabase/types";
+import type { BacktestRunView, ConfidenceBand, TradeOutcomeView } from "@/lib/performance-view";
+import type { ConfidenceBandRow, Database } from "@/lib/supabase/types";
 
 type OutcomeRow = Database["public"]["Tables"]["trade_outcomes"]["Row"];
 type BacktestRow = Database["public"]["Tables"]["backtest_runs"]["Row"];
@@ -34,6 +34,7 @@ function toBacktest(r: BacktestRow): BacktestRunView {
     id: r.id,
     createdAt: r.created_at,
     strategy: r.strategy,
+    strategyVersion: r.strategy_version,
     symbol: r.symbol,
     timeframe: r.timeframe,
     periodStart: r.period_start,
@@ -50,7 +51,22 @@ function toBacktest(r: BacktestRow): BacktestRunView {
     profitFactor: r.profit_factor,
     maxDrawdownR: r.max_drawdown_r,
     worstLosingStreak: r.worst_losing_streak,
+    targetRate: r.target_rate,
+    calibration: toBands(r.calibration),
   };
+}
+
+export function toBands(rows: ConfidenceBandRow[] | null): ConfidenceBand[] | null {
+  return rows
+    ? rows.map((b) => ({
+        low: b.low,
+        high: b.high,
+        trades: b.trades,
+        targetRate: b.target_rate,
+        winRate: b.win_rate,
+        avgRNet: b.avg_r_net,
+      }))
+    : null;
 }
 
 /** Tracked trades and backtest runs for /admin/performance. Admin-only
