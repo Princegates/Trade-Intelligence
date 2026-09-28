@@ -218,8 +218,9 @@ export default async function AdminPerformancePage() {
             <CardDescription>
               The same backtests split by the confidence score each call carried. If the score meant something,
               higher bands would reach their target more often and average more R. In the Stage 3 backtests on
-              Bitcoin they didn&apos;t: the bands moved up and down with no pattern, which is why cards describe the
-              score as confluence strength rather than odds. Bands under 30 trades are mostly luck.
+              Bitcoin, calls under 70 did somewhat worse, but above that higher bands did no better: 80+ trailed
+              70–79 on 5m, 15m and 1h. That&apos;s why cards describe the score as confluence strength rather than
+              odds. Bands under 30 trades are mostly luck.
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">

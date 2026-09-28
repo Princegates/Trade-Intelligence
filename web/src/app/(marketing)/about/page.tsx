@@ -402,9 +402,9 @@ export default async function AboutPage() {
                 <CardTitle className="text-base">How the confidence score adds up</CardTitle>
                 <CardDescription>
                   Eight parts, 100 points in total. It&apos;s a checklist of how many things line up, not a
-                  probability of winning, and each card lists its own breakdown in the reasoning. In backtests,
-                  higher-scoring calls haven&apos;t done better than lower-scoring ones, so don&apos;t size up on a
-                  high score.
+                  probability of winning, and each card lists its own breakdown in the reasoning. In backtests, calls
+                  scoring under 70 did somewhat worse, but above that a higher score didn&apos;t mean a better trade,
+                  so don&apos;t size up on a high score.
                 </CardDescription>
               </CardHeader>
               <CardContent>
