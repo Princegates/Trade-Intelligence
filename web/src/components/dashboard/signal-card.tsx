@@ -8,6 +8,7 @@ import { AiTakeDialog } from "@/components/dashboard/ai-take-dialog";
 import { isStale, type SignalView } from "@/lib/signals";
 import { SCALP_TIMEFRAMES, SCALP_WARNING } from "@/lib/signal-view";
 import { LiveStatLine } from "@/components/dashboard/live-stat-line";
+import { PositionSizeDialog } from "@/components/dashboard/position-size-dialog";
 import type { LiveStat } from "@/lib/performance-view";
 
 function verdictVariant(v: string) {
@@ -72,11 +73,14 @@ export function SignalLevels({
   verdict,
   invalidationLevel,
   entryZone,
+  symbol,
 }: {
   levels: NonNullable<SignalView["levels"]>;
   verdict: SignalView["verdict"];
   invalidationLevel: SignalView["invalidationLevel"];
   entryZone: SignalView["entryZone"];
+  /** Given, a directional call gets the position-size calculator. */
+  symbol?: string;
 }) {
   // A partial set is not renderable, and a signal predating the levels
   // migration has none. Showing nothing beats showing "$undefined".
@@ -125,6 +129,11 @@ export function SignalLevels({
           : "These are the prices that would change the call, not predictions that it will reach them."}
         {verdict !== "HOLD" && " Not advice — decide your own position size."}
       </p>
+      {directional && symbol && (
+        <div className="mt-2">
+          <PositionSizeDialog symbol={symbol} entry={entry} stop={stop} target={target} />
+        </div>
+      )}
     </div>
   );
 }
@@ -209,6 +218,7 @@ export function SignalCard({
               verdict={signal.verdict}
               invalidationLevel={signal.invalidationLevel}
               entryZone={signal.entryZone}
+              symbol={signal.symbol}
             />
           )}
 

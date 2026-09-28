@@ -104,6 +104,7 @@ export function GudaSpecialSignalCard({
                   verdict={signal.verdict === "BUY" ? "BUY" : "SELL"}
                   invalidationLevel={null}
                   entryZone={null}
+                  symbol={signal.symbol}
                 />
               )}
 
