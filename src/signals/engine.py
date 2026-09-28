@@ -69,7 +69,7 @@ def _ema_trend(closes):
     return 0, "flat", [f"EMA stack mixed ({stack}) — no clean trend"]
 
 
-def _momentum(closes, candles, swings):
+def _momentum(closes, candles, swings, mode="legacy"):
     """RSI and MACD are both trend-following momentum reads, so they cast
     one vote together, not two — they have to agree to produce a directional
     read; either alone leaves momentum neutral rather than confirming itself
@@ -78,16 +78,30 @@ def _momentum(closes, candles, swings):
     Divergence between price and RSI at the last two comparable swings is
     checked here too, but never adds its own vote: it is only ever a reason
     engine.evaluate can veto a call with (spec section 13).
+
+    `mode` "legacy" reads RSI contrarian: above 70 counts bearish, below 30
+    bullish — which votes against the trend votes exactly when a trend is
+    strongest. "trend" reads it as a regime instead: above 50 bullish,
+    below 50 bearish, agreeing with MACD's side of its signal line (the
+    backtest in src/backtest.py is how to compare the two).
     """
     rsi_series = ind.rsi_series(closes, 14)
     macd_val = ind.macd(closes)
     if not rsi_series and macd_val is None:
-        return {"vote": None, "reasons": ["Momentum: not enough history yet"], "divergence": None}
+        return {"vote": None, "reasons": ["Momentum: not enough history yet"], "divergence": None, "rsi": None}
 
     reasons = []
     rsi_val = rsi_series[-1] if rsi_series else None
     rsi_dir = 0
-    if rsi_val is not None:
+    if rsi_val is not None and mode == "trend":
+        if rsi_val > 50:
+            rsi_dir, note = 1, "above 50 — bullish momentum"
+        elif rsi_val < 50:
+            rsi_dir, note = -1, "below 50 — bearish momentum"
+        else:
+            rsi_dir, note = 0, "at 50 — no momentum either way"
+        reasons.append(f"RSI(14) at {rsi_val:.1f} — {note}")
+    elif rsi_val is not None:
         if rsi_val > 70:
             rsi_dir, note = -1, "overbought (>70)"
         elif rsi_val < 30:
@@ -128,15 +142,18 @@ def _momentum(closes, candles, swings):
         if diverged:
             reasons.append(f"{diverged['kind'].capitalize()} RSI divergence — price and momentum disagree")
 
-    return {"vote": vote, "reasons": reasons, "divergence": diverged}
+    return {"vote": vote, "reasons": reasons, "divergence": diverged, "rsi": rsi_val}
 
 
-def _structure(candles):
+def _structure(candles, lookback=None):
     """Market structure vote: a Break of Structure votes with the trend it
     continues, a Change of Character votes with the reversal it warns of,
     and an unclear bias votes nothing (spec sections 3 and 9 — WAIT when
     structure is unclear)."""
-    swings = struct.swing_points(candles, config.SWING_LOOKBACK)
+    # `lookback` candles either side make a swing: 2 (the default) finds
+    # small ripples as well as real highs and lows; larger finds fewer,
+    # more significant levels to break and to place stops beyond.
+    swings = struct.swing_points(candles, lookback or config.SWING_LOOKBACK)
     highs = [s for s in swings if s["kind"] == "high"]
     lows = [s for s in swings if s["kind"] == "low"]
 
@@ -257,6 +274,9 @@ def _levels(
     reward_to_risk=REWARD_TO_RISK,
     structural_stop=None,
     structural_target=None,
+    min_stop_distance=None,
+    entry_price=None,
+    target_from_risk=False,
 ):
     """Entry, invalidation and target — or, for a HOLD, the two prices that
     would turn it into a call. Without ATR there is no honest way to size
@@ -271,26 +291,35 @@ def _levels(
     derived market structure rather than a stop and target that are always
     the same ratio apart by construction. Falling back to the ATR math when
     either is None (no swings yet, e.g. early history) reproduces exactly
-    today's behavior with zero settings gate needed."""
+    today's behavior with zero settings gate needed.
+
+    `min_stop_distance` (price units) widens any stop closer than that to
+    the entry — a stop inside ordinary noise is hit by noise, and trading
+    costs dwarf the risk it describes. A widened stop's fallback target is
+    re-sized from the wider risk. `entry_price` replaces the candle close
+    as the entry (a limit order at the pullback zone); None keeps it.
+    `target_from_risk` sizes a fallback target from the actual entry-to-stop
+    risk rather than the fixed ATR stop distance."""
     if atr is None or atr <= 0:
         return None
 
     stop_distance = atr * stop_atrs
     target_distance = stop_distance * reward_to_risk
 
-    if verdict == "BUY":
+    if verdict in ("BUY", "SELL"):
+        d = 1 if verdict == "BUY" else -1
+        entry = entry_price if entry_price is not None else price
+        stop = structural_stop if structural_stop is not None else entry - d * stop_distance
+        widened = min_stop_distance is not None and d * (entry - stop) < min_stop_distance
+        if widened:
+            stop = entry - d * min_stop_distance
+        if widened or target_from_risk:
+            target_distance = d * (entry - stop) * reward_to_risk
         return {
-            "entry": price,
-            "stop": structural_stop if structural_stop is not None else price - stop_distance,
-            "target": structural_target if structural_target is not None else price + target_distance,
-            "buy_above": None,
-            "sell_below": None,
-        }
-    if verdict == "SELL":
-        return {
-            "entry": price,
-            "stop": structural_stop if structural_stop is not None else price + stop_distance,
-            "target": structural_target if structural_target is not None else price - target_distance,
+            "entry": entry,
+            "stop": stop,
+            "target": structural_target if structural_target is not None else entry + d * target_distance,
+            "entry_type": "limit" if entry_price is not None else "market",
             "buy_above": None,
             "sell_below": None,
         }
@@ -533,8 +562,8 @@ def evaluate(candles, higher_timeframe_bias=None, settings=None):
     atr_val = ind.atr(candles, 14)
 
     trend_vote, trend_label, trend_reasons = _ema_trend(closes)
-    structure = _structure(candles)
-    momentum = _momentum(closes, candles, structure["swings"])
+    structure = _structure(candles, settings.get("swing_lookback"))
+    momentum = _momentum(closes, candles, structure["swings"], settings.get("momentum_mode", "legacy"))
     pattern = _pattern(candles, trend_label, structure["swings"], atr_val)
     volatility = _volatility(candles, closes, atr_val)
 
@@ -623,6 +652,12 @@ def evaluate(candles, higher_timeframe_bias=None, settings=None):
         ):
             reasons.append("Overridden to HOLD — price has run too far from its entry zone to chase")
             verdict = "HOLD"
+        elif settings.get("rsi_chase_limit") is not None and momentum.get("rsi") is not None and (
+            (verdict == "BUY" and momentum["rsi"] >= settings["rsi_chase_limit"])
+            or (verdict == "SELL" and momentum["rsi"] <= 100 - settings["rsi_chase_limit"])
+        ):
+            reasons.append(f"Overridden to HOLD — RSI at {momentum['rsi']:.0f} is stretched; not chasing this move")
+            verdict = "HOLD"
 
     stop_atrs = settings.get("atr_stop_multiplier", STOP_ATRS)
     reward_to_risk_value = settings.get("reward_to_risk", REWARD_TO_RISK)
@@ -636,8 +671,31 @@ def evaluate(candles, higher_timeframe_bias=None, settings=None):
         there aren't enough swings)."""
         side = "support" if v == "BUY" else "resistance" if v == "SELL" else None
         s_stop = ez.structural_stop(side, closes[-1], struct_levels, atr_val, buffer_atr) if side else None
-        s_target = ez.structural_target(side, struct_levels) if side else None
-        return _levels(v, closes[-1], atr_val, stop_atrs, reward_to_risk_value, s_stop, s_target), side
+        # target_mode "atr": the target is reward_to_risk times the actual
+        # risk, not the nearest opposing swing (which can sit inside noise).
+        s_target = (
+            ez.structural_target(side, struct_levels) if side and settings.get("target_mode") != "atr" else None
+        )
+        min_stop = (
+            atr_val * settings["min_stop_atr"]
+            if settings.get("min_stop_atr") is not None and atr_val
+            else None
+        )
+        # Pullback entry: a limit at the near edge of the entry zone when
+        # price has already left it (the usual case on a breakout candle);
+        # inside the zone, the close is already a pullback entry.
+        limit = None
+        if side and settings.get("entry_mode") == "limit":
+            zone = ez.entry_zone(side, closes[-1], struct_levels, atr_val, zone_width_atr)
+            if zone and not zone["inside_zone"]:
+                edge = zone["zone_high"] if side == "support" else zone["zone_low"]
+                if (side == "support" and edge < closes[-1]) or (side == "resistance" and edge > closes[-1]):
+                    limit = edge
+        levels = _levels(
+            v, closes[-1], atr_val, stop_atrs, reward_to_risk_value, s_stop, s_target, min_stop, limit,
+            target_from_risk=settings.get("target_mode") == "atr",
+        )
+        return levels, side
 
     levels, verdict_side = _resolve(verdict)
 
@@ -654,6 +712,27 @@ def evaluate(candles, higher_timeframe_bias=None, settings=None):
         if _rr_below_minimum(levels, min_rr):
             reasons.append(
                 f"Overridden to HOLD — risk/reward does not clear the configured minimum of 1:{min_rr:g}"
+            )
+            verdict = "HOLD"
+            levels, verdict_side = _resolve(verdict)
+
+    # Cost gate — only when a maximum is set and the caller supplied this
+    # market's round-trip cost (run.py/backtest.py do, from
+    # config.TRADE_COST_PCT). A trade whose fees eat most of what it risks
+    # can't be won by being right about direction.
+    if (
+        verdict != "HOLD"
+        and settings.get("max_cost_to_risk") is not None
+        and settings.get("round_trip_cost_pct") is not None
+        and levels
+    ):
+        risk = abs(levels["entry"] - levels["stop"])
+        cost = levels["entry"] * settings["round_trip_cost_pct"] / 100
+        if risk <= 0 or cost > settings["max_cost_to_risk"] * risk:
+            share = cost / risk * 100 if risk > 0 else float("inf")
+            reasons.append(
+                f"Overridden to HOLD — trading costs would be {share:.0f}% of the risk "
+                f"(limit {settings['max_cost_to_risk'] * 100:.0f}%)"
             )
             verdict = "HOLD"
             levels, verdict_side = _resolve(verdict)

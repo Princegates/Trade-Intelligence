@@ -8,6 +8,7 @@ Usage:
     python -m src.backtest --symbol BTCUSDT --strategy guda_special
     python -m src.backtest --symbol BTCUSDT --timeframes 1h,4h --days 365
     python -m src.backtest --symbol BTCUSDT --setting min_reward_to_risk=2
+    python -m src.backtest --symbol BTCUSDT --variant "base:" --variant "wide: min_stop_atr=1"
     python -m src.backtest --symbol BTCUSDT --publish --summary-file "$GITHUB_STEP_SUMMARY"
 
 Faithful to src/run.py where it matters: the same engine and settings (the
@@ -96,6 +97,7 @@ def confluence_signals(candles, anchor_candles, timeframe, anchor_timeframe, set
                 "entry": levels["entry"],
                 "stop": levels["stop"],
                 "target": levels["target"],
+                "entry_type": levels.get("entry_type", "market"),
                 "confidence": result["confidence"],
             }
     return signals, verdicts
@@ -114,17 +116,19 @@ def guda_special_signals(candles, htf_candles, settings):
     return signals, verdicts
 
 
-def trades_from_signals(candles, signals, cost_pct, max_bars):
+def trades_from_signals(candles, signals, cost_pct, max_bars, fill_window=None, be_at_r=None):
     """Walks the candles once: each candle first moves any open trade on,
     then a signal on that candle opens a trade if none is open. A signal
     while a trade is still open is skipped — one position per strategy,
     market and timeframe, the same limit the live tracker applies, so one
-    move isn't counted several times. Returns (trades, skipped)."""
+    move isn't counted several times. A limit entry waits as pending
+    (which also counts as the open position) for up to `fill_window`
+    candles. Returns (trades, skipped)."""
     trades, skipped, current = [], 0, None
     for candle in candles:
         if current is not None:
             current = trade_sim.advance(current, [candle], max_bars)
-            if current["status"] != trade_sim.OPEN:
+            if current["status"] not in (trade_sim.OPEN, trade_sim.PENDING):
                 trades.append(current)
                 current = None
 
@@ -136,7 +140,8 @@ def trades_from_signals(candles, signals, cost_pct, max_bars):
             continue
         direction = 1 if signal["verdict"] == "BUY" else -1
         opened = trade_sim.open_trade(
-            direction, signal["entry"], signal["stop"], signal["target"], candle["open_time"], cost_pct
+            direction, signal["entry"], signal["stop"], signal["target"], candle["open_time"], cost_pct,
+            pending=signal.get("entry_type") == "limit", fill_window=fill_window, be_at_r=be_at_r,
         )
         if opened is not None:
             current = {**opened, "confidence": signal.get("confidence")}
@@ -273,6 +278,49 @@ def markdown_report(symbol, strategy, rows, cost_pct, settings_note):
     return "\n".join(lines) + "\n"
 
 
+def halves(trades, start, end):
+    """Average R after costs in the older and the newer half of the period —
+    an idea that only works in one half probably isn't an edge."""
+    mid = start + (end - start) / 2
+    older = trade_sim.summarize([t for t in trades if t["signal_time"] < mid])
+    newer = trade_sim.summarize([t for t in trades if t["signal_time"] >= mid])
+    return older["avg_r_net"], newer["avg_r_net"]
+
+
+def comparison_report(symbol, strategy, results, cost_pct):
+    """One row per timeframe per variant, grouped by timeframe."""
+    lines = [
+        f"### {strategy} variants — {symbol}",
+        "",
+        f"Costs: {cost_pct:.2f}% round trip. Same trade rules as the live tracker. "
+        "Halves: average R after costs in the older and newer half of the period.",
+        "",
+        "| Timeframe | Variant | Trades | Unfilled | Win rate | Avg before costs | Avg after costs | Profit factor "
+        "| Total R | Max drawdown | Older half | Newer half |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|",
+    ]
+    for tf in TIMEFRAMES:
+        for name, rows in results:
+            for r in rows:
+                if r["timeframe"] != tf:
+                    continue
+                s = r["stats"]
+                lines.append(
+                    f"| {tf} | {name} | {s['trades']} | {s['cancelled']} | {_fmt_pct(s['win_rate'])} "
+                    f"| {_fmt_r(s['avg_r_gross'])} | {_fmt_r(s['avg_r_net'])} | {_fmt_num(s['profit_factor'])} "
+                    f"| {_fmt_r(s['total_r_net'])} | {_fmt_num(s['max_drawdown_r'], 1)}R "
+                    f"| {_fmt_r(r['halves'][0])} | {_fmt_r(r['halves'][1])} |"
+                )
+    return "\n".join(lines) + "\n"
+
+
+def parse_variant(text):
+    """"name: key=value, key=value" -> (name, {key: value})."""
+    name, _, rest = text.partition(":")
+    pairs = [p.strip() for p in rest.split(",") if p.strip()]
+    return name.strip() or "variant", dict(backtest_guda._parse_setting(p) for p in pairs)
+
+
 def write_trades_csv(path, symbol, strategy, timeframe, trades):
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="") as fh:
@@ -306,6 +354,8 @@ def main():
     parser.add_argument("--source", choices=("auto", "local"), default="auto")
     parser.add_argument("--setting", action="append", default=[], metavar="KEY=VALUE",
                         help="override one engine setting, e.g. min_reward_to_risk=2")
+    parser.add_argument("--variant", action="append", default=[], metavar='"NAME: KEY=VALUE, ..."',
+                        help="compare named setting variations side by side (candles are fetched once)")
     parser.add_argument("--cost-pct", type=float, help="round-trip cost in percent (default from config)")
     parser.add_argument("--out", default="backtest-results", help="directory for the per-trade CSV files")
     parser.add_argument("--summary-file", help="also append the markdown report here (e.g. $GITHUB_STEP_SUMMARY)")
@@ -357,39 +407,59 @@ def main():
         cache[tf] = load_candles(instrument, tf, needs[tf], args.source)
         print(f"  {len(cache[tf])} candles", flush=True)
 
-    rows = []
-    for tf, anchor, start_time in plan:
-        candles = cache[tf]
-        if len(candles) < config.MIN_CANDLES_FOR_SIGNAL:
-            print(f"{tf}: only {len(candles)} candles — skipped")
-            continue
-        started = time.time()
-        if args.strategy == "confluence":
-            signals, verdicts = confluence_signals(candles, cache.get(anchor, []), tf, anchor, settings, start_time)
-        else:
-            warmup = config.CANDLE_FETCH_LIMIT * config.TIMEFRAME_SECONDS[tf]
-            in_range = [c for c in candles if c["open_time"] >= start_time - warmup]
-            signals, verdicts = guda_special_signals(in_range, cache.get(anchor, []), settings)
-        replayed = [c for c in candles if c["open_time"] >= start_time]
-        trades, skipped = trades_from_signals(replayed, signals, cost_pct, max_bars)
-        stats = trade_sim.summarize(trades)
-        rows.append({
-            "timeframe": tf, "start": replayed[0]["open_time"] if replayed else start_time,
-            "end": replayed[-1]["open_time"] if replayed else now, "candles": len(replayed),
-            "signal_count": len(signals), "verdicts": dict(verdicts), "skipped": skipped, "stats": stats,
-        })
-        write_trades_csv(Path(args.out) / f"{args.strategy}-{args.symbol}-{tf}.csv", args.symbol, args.strategy, tf, trades)
-        print(f"{tf}: {len(replayed)} candles, {len(signals)} signals, {stats['trades']} trades, "
-              f"avg {_fmt_r(stats['avg_r_net'])}R after costs ({time.time() - started:.0f}s)", flush=True)
+    variants = [parse_variant(v) for v in args.variant] or [(None, {})]
+    results = []
+    for name, extra in variants:
+        # The engine's cost check needs this market's costs; harmless otherwise.
+        vsettings = {**settings, **extra, "round_trip_cost_pct": cost_pct}
+        fill_window = vsettings.get("fill_window", 5)
+        rows = []
+        for tf, anchor, start_time in plan:
+            candles = cache[tf]
+            if len(candles) < config.MIN_CANDLES_FOR_SIGNAL:
+                print(f"{tf}: only {len(candles)} candles — skipped")
+                continue
+            started = time.time()
+            if args.strategy == "confluence":
+                signals, verdicts = confluence_signals(candles, cache.get(anchor, []), tf, anchor, vsettings, start_time)
+            else:
+                warmup = config.CANDLE_FETCH_LIMIT * config.TIMEFRAME_SECONDS[tf]
+                in_range = [c for c in candles if c["open_time"] >= start_time - warmup]
+                signals, verdicts = guda_special_signals(in_range, cache.get(anchor, []), vsettings)
+            replayed = [c for c in candles if c["open_time"] >= start_time]
+            trades, skipped = trades_from_signals(
+                replayed, signals, cost_pct, max_bars, fill_window, vsettings.get("be_at_r")
+            )
+            stats = trade_sim.summarize(trades)
+            period_start = replayed[0]["open_time"] if replayed else start_time
+            period_end = replayed[-1]["open_time"] if replayed else now
+            rows.append({
+                "timeframe": tf, "start": period_start, "end": period_end, "candles": len(replayed),
+                "signal_count": len(signals), "verdicts": dict(verdicts), "skipped": skipped, "stats": stats,
+                "halves": halves(trades, period_start, period_end),
+            })
+            suffix = f"-{name}" if name else ""
+            write_trades_csv(Path(args.out) / f"{args.strategy}-{args.symbol}-{tf}{suffix}.csv",
+                             args.symbol, args.strategy, tf, trades)
+            print(f"{name + ' ' if name else ''}{tf}: {len(replayed)} candles, {len(signals)} signals, "
+                  f"{stats['trades']} trades, avg {_fmt_r(stats['avg_r_net'])}R after costs "
+                  f"({time.time() - started:.0f}s)", flush=True)
+        results.append((name, rows))
 
-    report = markdown_report(args.symbol, args.strategy, rows, cost_pct, settings_note)
+    if args.variant:
+        report = comparison_report(args.symbol, args.strategy, results, cost_pct)
+    else:
+        report = markdown_report(args.symbol, args.strategy, results[0][1], cost_pct, settings_note)
+    rows = results[0][1]
     print()
     print(report)
     if args.summary_file:
         with open(args.summary_file, "a") as fh:
             fh.write(report + "\n")
 
-    if args.publish:
+    if args.publish and args.variant:
+        print("[info] not publishing: variant comparisons are experiments, not the live settings")
+    if args.publish and not args.variant:
         version = config.STRATEGY_VERSION if args.strategy == "confluence" else config.GUDA_SPECIAL_STRATEGY_VERSION
         for r in rows:
             # The report above is already out; a failed save (e.g. migration

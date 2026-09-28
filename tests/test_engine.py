@@ -516,3 +516,91 @@ def test_event_risk_override_nulls_the_new_structural_fields_but_leaves_market_s
     # by the override, same as every other veto gate.
     assert updated["regime"] == "TRENDING"
     assert updated["market_phase"] == "PULLBACK"
+
+
+# --- Stage 2 options: all off unless their setting is given ------------------------
+
+from src.signals import indicators as ind  # noqa: E402
+
+BUY_NEAR_SUPPORT = {"trend": (1, "up", []), "structure": _structure_with_swings(1, _swings(158.5, 170.0))}
+
+
+def test_levels_widens_a_stop_closer_than_the_minimum():
+    levels = engine._levels("BUY", 100.0, atr=2.0, structural_stop=99.5, structural_target=110.0, min_stop_distance=2.0)
+    assert levels["stop"] == 98.0
+    assert levels["target"] == 110.0
+
+
+def test_a_widened_fallback_target_is_resized_from_the_wider_risk():
+    levels = engine._levels("SELL", 100.0, atr=2.0, min_stop_distance=3.0)
+    assert levels["stop"] == 103.0
+    assert levels["target"] == 100.0 - 3.0 * engine.REWARD_TO_RISK
+
+
+def test_levels_can_take_a_limit_entry():
+    levels = engine._levels("BUY", 100.0, atr=2.0, structural_stop=95.0, structural_target=110.0, entry_price=98.0)
+    assert (levels["entry"], levels["entry_type"]) == (98.0, "limit")
+    assert engine._levels("BUY", 100.0, atr=2.0)["entry_type"] == "market"
+
+
+def test_min_stop_atr_keeps_the_stop_at_least_that_far_from_the_entry():
+    atr = ind.atr(_candles(), 14)
+    tight = _evaluate_with(**BUY_NEAR_SUPPORT)
+    wide = _evaluate_with(settings={"min_stop_atr": 1.0}, **BUY_NEAR_SUPPORT)
+    assert tight["levels"]["entry"] - tight["levels"]["stop"] < atr
+    assert wide["levels"]["entry"] - wide["levels"]["stop"] >= atr - 1e-9
+
+
+def test_the_cost_gate_holds_a_call_whose_fees_eat_the_risk():
+    held = _evaluate_with(settings={"max_cost_to_risk": 0.2, "round_trip_cost_pct": 0.24}, **BUY_NEAR_SUPPORT)
+    assert held["verdict"] == "HOLD"
+    assert any("trading costs" in r for r in held["reasoning"])
+    cheap = _evaluate_with(settings={"max_cost_to_risk": 0.2, "round_trip_cost_pct": 0.01}, **BUY_NEAR_SUPPORT)
+    assert cheap["verdict"] == "BUY"
+
+
+def test_the_cost_gate_needs_both_settings():
+    assert _evaluate_with(settings={"max_cost_to_risk": 0.2}, **BUY_NEAR_SUPPORT)["verdict"] == "BUY"
+
+
+def test_limit_entry_mode_buys_at_the_top_of_the_entry_zone_after_a_breakout():
+    atr = ind.atr(_candles(), 14)
+    result = _evaluate_with(
+        settings={"entry_mode": "limit"}, trend=(1, "up", []), structure=_structure_with_swings(1, _swings(150.0, 170.0))
+    )
+    levels = result["levels"]
+    assert levels["entry_type"] == "limit"
+    assert levels["entry"] == 150.0 + atr * engine.ENTRY_ZONE_WIDTH_ATR
+    assert levels["stop"] < levels["entry"] < levels["target"]
+
+
+def test_trend_momentum_reads_rsi_above_50_as_bullish():
+    # Accelerating, so MACD stays above its signal line (a straight ramp puts them level).
+    closes = [100.0 + 0.05 * i * i for i in range(60)]
+    candles = [{"open_time": i, "open": c, "high": c + 0.2, "low": c - 0.2, "close": c, "volume": 1.0}
+               for i, c in enumerate(closes)]
+    assert engine._momentum(closes, candles, [], mode="trend")["vote"] == 1
+    # The legacy reading calls the same strong uptrend overbought and cancels out against MACD.
+    assert engine._momentum(closes, candles, [], mode="legacy")["vote"] == 0
+
+
+def test_the_chase_limit_holds_a_buy_with_rsi_stretched():
+    stretched = {**NEUTRAL_MOMENTUM, "rsi": 80.0}
+    held = _evaluate_with(settings={"rsi_chase_limit": 75}, momentum=stretched, **BUY_NEAR_SUPPORT)
+    assert held["verdict"] == "HOLD"
+    calm = {**NEUTRAL_MOMENTUM, "rsi": 60.0}
+    assert _evaluate_with(settings={"rsi_chase_limit": 75}, momentum=calm, **BUY_NEAR_SUPPORT)["verdict"] == "BUY"
+
+
+def test_target_mode_atr_sets_the_target_from_the_actual_risk():
+    result = _evaluate_with(settings={"target_mode": "atr", "min_stop_atr": 1.0}, **BUY_NEAR_SUPPORT)
+    levels = result["levels"]
+    risk = levels["entry"] - levels["stop"]
+    assert levels["target"] - levels["entry"] == __import__("pytest").approx(risk * engine.REWARD_TO_RISK)
+
+
+def test_swing_lookback_is_passed_to_structure():
+    seen = []
+    with patch("src.signals.engine.struct.swing_points", side_effect=lambda c, lb: seen.append(lb) or []):
+        engine.evaluate(_candles(), settings={"swing_lookback": 5})
+    assert seen and seen[0] == 5

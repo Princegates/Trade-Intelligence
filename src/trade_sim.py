@@ -19,14 +19,26 @@ thing and can be compared like for like:
 - Costs: a round trip of `cost_pct` percent of the entry price, converted to
   R and subtracted from every trade (src/config.py TRADE_COST_PCT).
 
+Optional, both off unless asked for:
+- A limit entry (`pending=True`): the trade waits as PENDING until a candle
+  trades back to the entry price, filling at that price. On the fill candle
+  the stop is checked but the target isn't (price may not have reached the
+  target after filling). Not filled within `fill_window` candles: CANCELLED,
+  which is not a trade and isn't counted.
+- A breakeven stop (`be_at_r`): once a candle has carried the trade that
+  many R into profit, the stop moves to the entry from the next candle on.
+  R is always measured against the original risk.
+
 Pure — no I/O. Trades are plain dicts so they can be stored as-is.
 """
 
 OPEN = "OPEN"
+PENDING = "PENDING"
+CANCELLED = "CANCELLED"
 CLOSED = ("TARGET", "STOP", "TIMEOUT")
 
 
-def open_trade(direction, entry, stop, target, signal_time, cost_pct):
+def open_trade(direction, entry, stop, target, signal_time, cost_pct, pending=False, fill_window=None, be_at_r=None):
     """A new trade, or None when the levels can't describe one (missing,
     zero risk, or a stop/target on the wrong side of the entry)."""
     if None in (entry, stop, target) or direction not in (1, -1):
@@ -43,7 +55,11 @@ def open_trade(direction, entry, stop, target, signal_time, cost_pct):
         "signal_time": signal_time,
         "last_candle_time": signal_time,
         "bars": 0,
-        "status": OPEN,
+        "status": PENDING if pending else OPEN,
+        "risk": risk,
+        "fill_window": fill_window,
+        "waited": 0,
+        "be_at_r": be_at_r,
         "mfe_r": 0.0,
         "mae_r": 0.0,
         "exit_price": None,
@@ -55,8 +71,14 @@ def open_trade(direction, entry, stop, target, signal_time, cost_pct):
     }
 
 
+def _risk(trade):
+    # Rows stored before `risk` existed never moved their stop, so the
+    # entry-to-stop distance is still the original risk for them.
+    return trade.get("risk") or abs(trade["entry"] - trade["stop"])
+
+
 def _close(trade, status, price, time):
-    risk = abs(trade["entry"] - trade["stop"])
+    risk = _risk(trade)
     r_gross = trade["direction"] * (price - trade["entry"]) / risk
     return {
         **trade,
@@ -73,18 +95,35 @@ def advance(trade, candles, max_bars):
     or before the trade's `last_candle_time` are skipped, so passing the
     same recent history again on every run is safe. A closed trade is
     returned unchanged."""
-    if trade["status"] != OPEN:
+    if trade["status"] not in (OPEN, PENDING):
         return trade
 
     t = dict(trade)
-    d, entry, stop, target = t["direction"], t["entry"], t["stop"], t["target"]
-    risk = abs(entry - stop)
+    d, entry, target = t["direction"], t["entry"], t["target"]
+    risk = _risk(t)
 
     for c in candles:
         if c["open_time"] <= t["last_candle_time"]:
             continue
-        t["bars"] += 1
         t["last_candle_time"] = c["open_time"]
+
+        if t["status"] == PENDING:
+            t["waited"] += 1
+            touched = c["low"] <= entry if d == 1 else c["high"] >= entry
+            if not touched:
+                if t["fill_window"] is not None and t["waited"] >= t["fill_window"]:
+                    return {**t, "status": CANCELLED, "exit_time": c["open_time"]}
+                continue
+            t["status"] = OPEN
+            t["bars"] = 1
+            adverse = entry - c["low"] if d == 1 else c["high"] - entry
+            t["mae_r"] = max(t["mae_r"], adverse / risk)
+            if (c["low"] <= t["stop"]) if d == 1 else (c["high"] >= t["stop"]):
+                return _close(t, "STOP", t["stop"], c["open_time"])
+            continue
+
+        t["bars"] += 1
+        stop = t["stop"]
 
         favorable = c["high"] - entry if d == 1 else entry - c["low"]
         adverse = entry - c["low"] if d == 1 else c["high"] - entry
@@ -102,6 +141,11 @@ def advance(trade, candles, max_bars):
 
         if t["bars"] >= max_bars:
             return _close(t, "TIMEOUT", c["close"], c["open_time"])
+
+        # Takes effect from the next candle: within this one, the order of
+        # the high and low is unknown.
+        if t.get("be_at_r") is not None and t["mfe_r"] >= t["be_at_r"] and t["stop"] != entry:
+            t["stop"] = entry
 
     return t
 
@@ -131,7 +175,8 @@ def summarize(trades):
 
     return {
         "trades": n,
-        "open": sum(1 for t in trades if t["status"] == OPEN),
+        "open": sum(1 for t in trades if t["status"] in (OPEN, PENDING)),
+        "cancelled": sum(1 for t in trades if t["status"] == CANCELLED),
         "wins": sum(1 for r in rs if r > 0),
         "win_rate": sum(1 for r in rs if r > 0) / n if n else None,
         "avg_r_net": sum(rs) / n if n else None,

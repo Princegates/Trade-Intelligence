@@ -137,3 +137,65 @@ def test_summary_of_nothing():
     assert s["trades"] == 0
     assert s["win_rate"] is None
     assert s["profit_factor"] is None
+
+
+# --- limit entries ------------------------------------------------------------
+
+
+def _limit_buy(fill_window=3):
+    # A limit to buy at 100 placed while price is higher; stop 98, target 104.
+    return sim.open_trade(1, 100.0, 98.0, 104.0, 0, 0.0, pending=True, fill_window=fill_window)
+
+
+def test_a_limit_waits_until_price_comes_back_then_fills_at_the_limit():
+    t = sim.advance(_limit_buy(), [_bar(1, 101, 102, 100.5, 101.5), _bar(2, 101.5, 101.6, 99.8, 100.4)], 50)
+    assert t["status"] == sim.OPEN
+    assert t["bars"] == 1
+    later = sim.advance(t, [_bar(3, 100.4, 104.2, 100.2, 104)], 50)
+    assert later["status"] == "TARGET"
+    assert later["r_gross"] == pytest.approx(2.0)
+
+
+def test_a_limit_never_reached_is_cancelled_and_is_not_a_trade():
+    t = sim.advance(_limit_buy(fill_window=2), [_bar(1, 101, 102, 100.5, 101.5), _bar(2, 101.5, 103, 101, 102)], 50)
+    assert t["status"] == sim.CANCELLED
+    s = sim.summarize([t])
+    assert s["trades"] == 0 and s["cancelled"] == 1
+
+
+def test_the_fill_candle_can_stop_the_trade_but_not_reach_the_target():
+    stopped = sim.advance(_limit_buy(), [_bar(1, 101, 101.2, 97.5, 98.5)], 50)
+    assert stopped["status"] == "STOP"
+    assert stopped["r_gross"] == pytest.approx(-1.0)
+    # Dips to the limit and also trades above the target in the same candle: filled, not a win yet.
+    filled = sim.advance(_limit_buy(), [_bar(1, 103, 105, 99.5, 101)], 50)
+    assert filled["status"] == sim.OPEN
+
+
+def test_a_pending_order_counts_as_an_open_position():
+    assert sim.summarize([_limit_buy()])["open"] == 1
+
+
+# --- breakeven stop --------------------------------------------------------------------
+
+
+def test_the_stop_moves_to_breakeven_after_the_trade_reaches_the_trigger():
+    t = sim.open_trade(1, 100.0, 98.0, 104.0, 0, 0.0, be_at_r=1.0)
+    t = sim.advance(t, [_bar(1, 100, 102.2, 99.5, 102), _bar(2, 102, 102.5, 99.9, 100.1)], 50)
+    assert t["status"] == "STOP"
+    assert t["exit_price"] == 100.0
+    assert t["r_gross"] == pytest.approx(0.0)
+
+
+def test_breakeven_takes_effect_from_the_next_candle_only():
+    # Reaches +1R and dips below the entry in the same candle: still the original stop.
+    t = sim.open_trade(1, 100.0, 98.0, 104.0, 0, 0.0, be_at_r=1.0)
+    t = sim.advance(t, [_bar(1, 100, 102.2, 99, 101)], 50)
+    assert t["status"] == sim.OPEN
+    assert t["stop"] == 100.0
+
+
+def test_without_breakeven_the_stop_never_moves():
+    t = sim.advance(_buy(), [_bar(1, 100, 103, 99.5, 102), _bar(2, 102, 102.5, 99.9, 100.1)], 50)
+    assert t["status"] == sim.OPEN
+    assert t["stop"] == 98.0

@@ -24,6 +24,10 @@ on:
         description: "Days of history for every timeframe (blank = 60 for 5m up to 6 years for 1d)"
         type: string
         default: ""
+      variants:
+        description: 'Compare setting variations instead, e.g. "base: ; wide: min_stop_atr=1, target_mode=atr" (never saved)'
+        type: string
+        default: ""
       publish:
         description: "Save results to the admin Performance page"
         type: boolean
@@ -61,10 +65,15 @@ jobs:
           TIMEFRAMES: ${{ inputs.timeframes }}
           DAYS: ${{ inputs.days }}
           PUBLISH: ${{ inputs.publish }}
+          VARIANTS: ${{ inputs.variants }}
         run: |
           args=(--symbol "$SYMBOL" --summary-file "$GITHUB_STEP_SUMMARY")
           if [ -n "$DAYS" ]; then args+=(--days "$DAYS"); fi
           if [ "$PUBLISH" = "true" ]; then args+=(--publish); fi
+          if [ -n "$VARIANTS" ]; then
+            IFS=';' read -ra variant_list <<< "$VARIANTS"
+            for v in "${variant_list[@]}"; do args+=(--variant "$v"); done
+          fi
           if [ "$STRATEGY" = "confluence" ] || [ "$STRATEGY" = "both" ]; then
             python -m src.backtest "${args[@]}" --strategy confluence --timeframes "$TIMEFRAMES"
           fi

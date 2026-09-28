@@ -106,3 +106,27 @@ def test_the_report_has_one_row_per_timeframe():
     ]
     report = backtest.markdown_report("BTCUSDT", "confluence", rows, 0.24, "Settings: database defaults.")
     assert "| 1h | 1970-01-01 → 1970-01-02 | 3 | 2 | 1 | 50% | +0.40 | +0.60 | 0.20R | 1.80 |" in report
+
+
+def test_variants_parse_to_a_name_and_typed_settings():
+    assert backtest.parse_variant("wide: min_stop_atr=1, target_mode=atr, rsi_chase_limit=75") == (
+        "wide", {"min_stop_atr": 1, "target_mode": "atr", "rsi_chase_limit": 75}
+    )
+    assert backtest.parse_variant(" base: ") == ("base", {})
+
+
+def test_halves_split_trades_by_when_they_were_signalled():
+    def closed(signal_time, r):
+        return {"status": "TARGET" if r > 0 else "STOP", "signal_time": signal_time, "exit_time": signal_time + 1,
+                "r_net": r, "r_gross": r, "r_cost": 0.0, "bars": 1}
+
+    older, newer = backtest.halves([closed(10, 2.0), closed(20, -1.0), closed(80, 1.0)], start=0, end=100)
+    assert older == 0.5
+    assert newer == 1.0
+
+
+def test_a_limit_signal_opens_a_pending_trade_that_can_go_unfilled():
+    candles = _flat(8)
+    limit = {**BUY, "entry": 99.0, "stop": 97.0, "target": 103.0, "entry_type": "limit"}
+    trades, _ = backtest.trades_from_signals(candles, {0: limit}, cost_pct=0.0, max_bars=50, fill_window=3)
+    assert [t["status"] for t in trades] == ["CANCELLED"]
