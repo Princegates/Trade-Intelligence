@@ -165,3 +165,51 @@ def test_bands_report_lists_each_band():
                                            "win_rate": 0.3, "avg_r_net": 0.1}]}]
     report = backtest.bands_report([(None, rows)])
     assert "| 1h | — | 70–74 | 12 | 25% | 30% | +0.10 |" in report
+
+
+# --- Twelve Data fetching -------------------------------------------------------------
+
+
+class _Resp:
+    def __init__(self, body):
+        self.body = body
+
+    def json(self):
+        return self.body
+
+
+def _twelvedata(monkeypatch, bodies):
+    calls, sleeps = [], []
+    queue = list(bodies)
+    monkeypatch.setenv("TWELVEDATA_API_KEY", "test")
+    monkeypatch.setattr(backtest.requests, "get", lambda url, params, timeout: calls.append(params) or _Resp(queue.pop(0)))
+    monkeypatch.setattr(backtest.time, "sleep", sleeps.append)
+    monkeypatch.setattr(backtest, "_last_twelvedata_request", 0.0)
+    return calls, sleeps
+
+
+def _values(*days):
+    return {"values": [{"datetime": d, "open": "1", "high": "2", "low": "0.5", "close": "1.5"} for d in days]}
+
+
+def test_a_twelvedata_rate_limit_is_waited_out_not_read_as_no_candles(monkeypatch):
+    limited = {"status": "error", "code": 429, "message": "You have run out of API credits for the current minute."}
+    calls, sleeps = _twelvedata(monkeypatch, [limited, _values("2026-09-01", "2026-09-02")])
+    candles = backtest.fetch_twelvedata("XAU/USD", "1d", 0)
+    assert len(calls) == 2
+    assert 60 in sleeps
+    assert [c["open_time"] for c in candles] == [1788220800, 1788307200]
+
+
+def test_other_twelvedata_errors_are_raised(monkeypatch):
+    _twelvedata(monkeypatch, [{"status": "error", "code": 401, "message": "Invalid API key"}])
+    with __import__("pytest").raises(RuntimeError, match="Invalid API key"):
+        backtest.fetch_twelvedata("XAU/USD", "1d", 0)
+
+
+def test_twelvedata_requests_are_spaced_across_timeframes(monkeypatch):
+    calls, sleeps = _twelvedata(monkeypatch, [_values("2026-09-01"), _values("2026-09-01")])
+    backtest.fetch_twelvedata("XAU/USD", "1d", 0)
+    backtest.fetch_twelvedata("XAU/USD", "4h", 0)
+    assert len(calls) == 2
+    assert sleeps and 0 < sleeps[0] <= backtest.TWELVEDATA_PAUSE_SECONDS

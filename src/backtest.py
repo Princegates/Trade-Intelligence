@@ -65,8 +65,11 @@ ENGINE_DEFAULTS = {
     "max_entry_zone_distance_atr": 1.5,
 }
 
-# Twelve Data's free plan allows 8 requests a minute.
+# Twelve Data's free plan allows 8 requests a minute, shared with the live
+# gold feed, so a backtest spaces its requests out and retries after a
+# minute if the limit is hit anyway.
 TWELVEDATA_PAUSE_SECONDS = 8
+TWELVEDATA_RETRIES = 2
 
 
 # --- replay (pure) --------------------------------------------------------------
@@ -191,24 +194,49 @@ def fetch_binance(symbol, interval, start_time):
     return _closed([by_time[t] for t in sorted(by_time)], interval)
 
 
+_last_twelvedata_request = 0.0
+
+
+def _twelvedata_get(params):
+    """One Twelve Data request, at least TWELVEDATA_PAUSE_SECONDS after the
+    previous one — across timeframes too, not only between one timeframe's
+    pages. If the minute's credits are gone anyway, waits a minute and
+    tries again. Any other error is raised, never read as "no candles"."""
+    global _last_twelvedata_request
+    for attempt in range(TWELVEDATA_RETRIES + 1):
+        wait = _last_twelvedata_request + TWELVEDATA_PAUSE_SECONDS - time.time()
+        if wait > 0:
+            time.sleep(wait)
+        _last_twelvedata_request = time.time()
+        data = requests.get(twelvedata.BASE_URL, params=params, timeout=20).json()
+        if data.get("status") != "error":
+            return data
+        message = data.get("message", "")
+        if "no data is available" in message.lower():
+            return {}
+        if data.get("code") == 429 and attempt < TWELVEDATA_RETRIES:
+            print("  Twelve Data's per-minute limit reached; waiting a minute...", flush=True)
+            time.sleep(60)
+            continue
+        raise RuntimeError(f"Twelve Data: {message or data}")
+    raise AssertionError("unreachable")
+
+
 def fetch_twelvedata(provider_symbol, interval, start_time):
     """Pages backwards from now, 5000 candles a request (Twelve Data's cap),
-    pausing between requests for the free plan's per-minute limit."""
+    spaced for the free plan's per-minute limit."""
     api_key = os.environ.get("TWELVEDATA_API_KEY")
     if not api_key:
         raise SystemExit("TWELVEDATA_API_KEY is not set")
-    by_time, end_date, first = {}, None, True
+    by_time, end_date = {}, None
     while True:
-        if not first:
-            time.sleep(TWELVEDATA_PAUSE_SECONDS)
-        first = False
         params = {
             "symbol": provider_symbol, "interval": twelvedata.INTERVAL_MAP[interval], "outputsize": 5000,
             "timezone": "UTC", "apikey": api_key, "format": "JSON",
         }
         if end_date:
             params["end_date"] = end_date
-        data = requests.get(twelvedata.BASE_URL, params=params, timeout=20).json()
+        data = _twelvedata_get(params)
         values = data.get("values")
         if not values:
             break
@@ -455,7 +483,13 @@ def main():
     cache = {}
     for tf in sorted(needs, key=config.TIMEFRAME_SECONDS.get):
         print(f"fetching {args.symbol} {tf} since {_day(needs[tf])}...", flush=True)
-        cache[tf] = load_candles(instrument, tf, needs[tf], args.source)
+        try:
+            cache[tf] = load_candles(instrument, tf, needs[tf], args.source)
+        except Exception as exc:
+            # One timeframe's failure skips that timeframe, loudly, and the
+            # rest still run.
+            print(f"  [error] {tf} could not be fetched: {exc}", flush=True)
+            cache[tf] = []
         print(f"  {len(cache[tf])} candles", flush=True)
 
     results = []
