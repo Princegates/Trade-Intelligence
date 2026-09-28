@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { plainLanguageSummary } from "@/lib/plain-language";
 import { AiTakeDialog } from "@/components/dashboard/ai-take-dialog";
 import { isStale, type SignalView } from "@/lib/signals";
+import { SCALP_TIMEFRAMES, SCALP_WARNING } from "@/lib/signal-view";
 
 function verdictVariant(v: string) {
   if (v === "BUY") return "success" as const;
@@ -150,6 +151,11 @@ export function SignalCard({ signal, locked = false }: { signal: SignalView; loc
           ${signal.price.toLocaleString(undefined, { maximumFractionDigits: 2 })} &middot;{" "}
           {new Date(signal.generatedAt).toLocaleString()}
         </CardDescription>
+        {SCALP_TIMEFRAMES.includes(signal.timeframe) && (
+          <Badge variant="warning" className="w-fit" title={SCALP_WARNING}>
+            Scalp · higher risk
+          </Badge>
+        )}
       </CardHeader>
       <CardContent className={locked ? "relative" : undefined}>
         <div className={locked ? "pointer-events-none select-none blur-sm" : undefined} aria-hidden={locked}>

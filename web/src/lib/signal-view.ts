@@ -95,6 +95,15 @@ export const ASSET_NAMES: Record<string, string> = {
 
 export const ASSET_ORDER = ["BTCUSDT", "XAUUSD"];
 
+/** Timeframes whose calls are there for scalp traders. Backtested on BTC at
+ * Exness costs they lost about 0.2R a trade on average, where 1h, 4h and
+ * 1d were profitable (see CALL_TIMEFRAMES in src/config.py), so their
+ * cards carry a warning rather than being withdrawn. */
+export const SCALP_TIMEFRAMES = ["5m", "15m"];
+
+export const SCALP_WARNING =
+  "For scalp traders. In testing, 5m and 15m calls lost slightly on average after costs, unlike the 1h, 4h and daily calls. Consider smaller size.";
+
 /** A signal whose run is older than two of its own intervals means the cron
  * has stopped producing. Shown as stale rather than passed off as current. */
 export function isStale(signal: SignalView, now: number = Date.now()): boolean {
