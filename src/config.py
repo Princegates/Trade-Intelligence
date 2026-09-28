@@ -73,7 +73,13 @@ BINANCE_BASE_URL = os.environ.get("BINANCE_BASE_URL") or "https://api.binance.us
 # engine setting switches them on: min_stop_atr, target_mode, swing_lookback,
 # max_cost_to_risk, momentum_mode, rsi_chase_limit and entry_mode (see
 # src/signals/engine.py) — tested with src/backtest.py before any is used.
-STRATEGY_VERSION = "3.2.0"
+#
+# 3.3.0: three of those switched on (config.ENGINE_SETTING_DEFAULTS below):
+# stops at least 1.5 ATR from the entry, targets a multiple of the actual
+# risk, and no call whose trading costs exceed a quarter of its risk. Same
+# votes and gates otherwise; different levels and fewer short-timeframe
+# calls for identical candles.
+STRATEGY_VERSION = "3.3.0"
 
 # GUDA SPECIAL is a second, independent strategy (15m Break & Retest ->
 # Fibonacci retracement -> candlestick confirmation) published alongside
@@ -178,10 +184,23 @@ TRADE_MAX_BARS = {"confluence": 50, "guda_special": 96}
 
 # Engine options (src/signals/engine.py) switched on for every live run and
 # every backtest, on top of the engine's own defaults and under any value
-# an admin has saved in engine_settings. Empty means the engine's defaults
-# as they are; options are added here only once src/backtest.py shows they
-# help, with a STRATEGY_VERSION bump.
-ENGINE_SETTING_DEFAULTS = {}
+# an admin has saved in engine_settings. Options are added here only once
+# src/backtest.py shows they help, with a STRATEGY_VERSION bump.
+#
+# 3.3.0, from the Stage 2 backtests on BTC (5m to 1d, 2 months to 6 years):
+# - min_stop_atr 1.5: stops at the nearest two-candle swing sat 0.3-0.5 ATR
+#   from the entry, inside ordinary noise, and costs ran to 1-10x the risk.
+# - target_mode "atr": the target is reward_to_risk x the actual risk, not
+#   the nearest opposing swing (as noisy as the nearest supporting one).
+#   Tested best at reward_to_risk 3, which is set in engine_settings (the
+#   admin's "Reward:risk"), not here, so the admin setting stays the knob.
+# - max_cost_to_risk 0.25: no call whose round-trip costs exceed a quarter
+#   of its risk — in practice most 5m and 15m calls.
+# Average R per trade after costs went from -1.30 / -0.72 / -0.27 on
+# 1h / 4h / 1d to -0.08 / -0.02 / +0.73, better in both halves of the
+# history. Momentum mode, pullback entries, breakeven stops and bigger
+# swing points were tested too and didn't help, so they stay off.
+ENGINE_SETTING_DEFAULTS = {"min_stop_atr": 1.5, "target_mode": "atr", "max_cost_to_risk": 0.25}
 
 # A feed counts as stale once its newest closed candle is this many intervals
 # overdue. Stale markets get a suppression record instead of a signal, so a

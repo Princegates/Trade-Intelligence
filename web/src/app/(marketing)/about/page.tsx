@@ -84,7 +84,7 @@ const steps = [
   },
   {
     title: "Publish the call with its levels",
-    body: "A surviving call is published with an entry zone, stop, target and invalidation level taken from real support and resistance where it exists, plus a confidence score and the full reasoning.",
+    body: "A surviving call is published with an entry, a stop at least 1.5 ATR away (further if real support or resistance calls for it), a target set at a multiple of that risk, an entry zone and invalidation level, plus a confidence score and the full reasoning.",
   },
 ];
 
@@ -105,6 +105,10 @@ const vetoes = [
     body: "Calls on both markets pause from 30 minutes before to 60 minutes after a scheduled high-impact US release, such as inflation, Fed or jobs data, when spreads and whipsaws spike.",
   },
   { title: "Price already ran away", body: "Price is too far from its entry zone. Chasing it would mean a poor entry." },
+  {
+    title: "Costs too high",
+    body: "Fees and slippage would eat more than a quarter of what the trade risks. This rules out most very short-timeframe calls.",
+  },
   {
     title: "Not enough reward, or confidence",
     body: "The target isn't far enough beyond the stop, or the confidence score falls below the engine's minimum.",
@@ -362,7 +366,7 @@ export default async function AboutPage() {
               the call becomes HOLD and the reasoning names the check, so you always know why.
             </p>
           </div>
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {vetoes.map((v) => (
               <Card key={v.title}>
                 <CardHeader className="p-5">
