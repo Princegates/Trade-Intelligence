@@ -1,7 +1,8 @@
 import { LIVE_STAT_MIN_TRADES, formatR, rTone, type LiveStat } from "@/lib/performance-view";
 
 const EXPLAINER =
-  "Every call on this timeframe is followed as a real trade to its stop or target, after spread costs. " +
+  "Every call this engine version makes on this timeframe is followed as a real trade to its stop or target, " +
+  "after spread costs; an update to the engine starts a fresh record. " +
   "R is the result as a multiple of the amount risked: +1R won as much as the stop would have lost. " +
   "Past results don't guarantee future ones.";
 

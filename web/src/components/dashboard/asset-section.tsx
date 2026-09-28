@@ -12,6 +12,7 @@ import {
   type LiveStat,
 } from "@/lib/performance-view";
 import { ASSET_NAMES, TIMEFRAME_SECONDS } from "@/lib/signals";
+import { GUDA_SPECIAL_STRATEGY_VERSION } from "@/lib/guda-special-version";
 import type { AssetPanelData } from "@/lib/asset-panel";
 
 // Where each asset's own full-detail page lives — used only for the "see
@@ -107,7 +108,9 @@ export function AssetSection({
               <SignalCard
                 signal={s}
                 locked={locked}
-                live={liveStats && { stat: liveStats[liveStatKey("confluence", symbol, s.timeframe)] ?? null }}
+                live={
+                  liveStats && { stat: liveStats[liveStatKey("confluence", symbol, s.timeframe, s.strategyVersion)] ?? null }
+                }
                 odds={
                   oddsSources && s.verdict !== "HOLD"
                     ? backtestOdds(oddsSources[backtestOddsKey(symbol, s.timeframe, s.strategyVersion)])
@@ -118,7 +121,11 @@ export function AssetSection({
                 <GudaSpecialSignalCard
                   signal={gudaSpecial}
                   locked={locked}
-                  live={liveStats && { stat: liveStats[liveStatKey("guda_special", symbol, "15m")] ?? null }}
+                  live={
+                    liveStats && {
+                      stat: liveStats[liveStatKey("guda_special", symbol, "15m", GUDA_SPECIAL_STRATEGY_VERSION)] ?? null,
+                    }
+                  }
                 />
               )}
             </Fragment>

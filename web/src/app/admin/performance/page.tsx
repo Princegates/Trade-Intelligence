@@ -20,13 +20,26 @@ import type { TradeSource } from "@/lib/supabase/types";
 // one trade to the next to mean much; flagged rather than hidden.
 const SMALL_SAMPLE = 30;
 
-function Setup({ source, symbol, timeframe }: { source: TradeSource; symbol: string; timeframe: string }) {
+function Setup({
+  source,
+  symbol,
+  timeframe,
+  version,
+}: {
+  source: TradeSource;
+  symbol: string;
+  timeframe: string;
+  version?: string;
+}) {
   return (
     <div className="whitespace-nowrap">
       <div className="font-medium">
         {ASSET_NAMES[symbol] ?? symbol} {timeframe}
       </div>
-      <div className="text-xs text-muted-foreground">{SOURCE_LABELS[source]}</div>
+      <div className="text-xs text-muted-foreground">
+        {SOURCE_LABELS[source]}
+        {version && ` · ${version.replace(/^guda-special-/, "")}`}
+      </div>
     </div>
   );
 }
@@ -99,7 +112,9 @@ export default async function AdminPerformancePage() {
           <CardDescription>
             {trackingSince ? (
               <>
-                Every call tracked since <LocalTime iso={trackingSince} />.
+                Every call tracked since <LocalTime iso={trackingSince} />, one row per engine version: an older
+                version&apos;s trades were made by different rules (and before 3.4.0, priced at exchange fees
+                rather than Exness spreads), so they don&apos;t count toward the current version&apos;s record.
               </>
             ) : (
               "Every new call is tracked from the moment it's made. Nothing recorded yet."
@@ -127,10 +142,10 @@ export default async function AdminPerformancePage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {groups.map(({ source, symbol, timeframe, stats: s }) => (
-                  <TableRow key={`${source}-${symbol}-${timeframe}`}>
+                {groups.map(({ source, symbol, timeframe, strategyVersion, stats: s }) => (
+                  <TableRow key={`${source}-${symbol}-${timeframe}-${strategyVersion}`}>
                     <TableCell>
-                      <Setup source={source} symbol={symbol} timeframe={timeframe} />
+                      <Setup source={source} symbol={symbol} timeframe={timeframe} version={strategyVersion} />
                     </TableCell>
                     <TableCell>
                       <Count n={s.trades} />
@@ -284,7 +299,7 @@ export default async function AdminPerformancePage() {
                       <LocalTime iso={t.exitTime!} />
                     </TableCell>
                     <TableCell>
-                      <Setup source={t.source} symbol={t.symbol} timeframe={t.timeframe} />
+                      <Setup source={t.source} symbol={t.symbol} timeframe={t.timeframe} version={t.strategyVersion} />
                     </TableCell>
                     <TableCell>
                       <Badge variant={t.direction === 1 ? "success" : "destructive"}>

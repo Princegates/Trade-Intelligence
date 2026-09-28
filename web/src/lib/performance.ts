@@ -14,6 +14,7 @@ function toOutcome(r: OutcomeRow): TradeOutcomeView {
     source: r.source,
     symbol: r.symbol,
     timeframe: r.timeframe,
+    strategyVersion: r.strategy_version,
     signalTime: r.signal_time,
     direction: r.direction,
     entry: r.entry,

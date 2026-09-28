@@ -9,6 +9,7 @@ import type { CalendarEvent } from "@/lib/calendar-view";
 import type { NewsItem } from "@/lib/news-view";
 import type { ActivityView } from "@/lib/activity-log-view";
 import type { BacktestRunView, TradeOutcomeView } from "@/lib/performance-view";
+import { GUDA_SPECIAL_STRATEGY_VERSION } from "@/lib/guda-special-version";
 
 export const DEMO_USER: SessionUser = {
   id: "demo-user",
@@ -553,6 +554,8 @@ const demoTrade = (
     id: `demo-trade-${id}`,
     source: "confluence",
     symbol: "BTCUSDT",
+    // Matches the demo signals' version, so their live-record lines count these.
+    strategyVersion: "demo",
     signalTime: hoursAgo(id * 7 + 10),
     direction: id % 3 === 0 ? -1 : 1,
     entry: 68_000,
@@ -586,8 +589,8 @@ export const DEMO_TRADE_OUTCOMES: TradeOutcomeView[] = [
   demoTrade(8, { timeframe: "15m", status: "STOP", rNet: -2.1, rCost: 1.1 }),
   demoTrade(9, { timeframe: "4h", status: "TARGET", rNet: 1.3, rCost: 0.2 }),
   demoTrade(10, { timeframe: "4h", status: "STOP", rNet: -1.2, rCost: 0.2 }),
-  demoTrade(11, { source: "guda_special", timeframe: "15m", status: "TARGET", rNet: 1.5, rCost: 0.3 }),
-  demoTrade(12, { source: "guda_special", timeframe: "15m", status: "STOP", rNet: -1.3, rCost: 0.3 }),
+  demoTrade(11, { source: "guda_special", strategyVersion: GUDA_SPECIAL_STRATEGY_VERSION, timeframe: "15m", status: "TARGET", rNet: 1.5, rCost: 0.3 }),
+  demoTrade(12, { source: "guda_special", strategyVersion: GUDA_SPECIAL_STRATEGY_VERSION, timeframe: "15m", status: "STOP", rNet: -1.3, rCost: 0.3 }),
   demoTrade(13, { symbol: "XAUUSD", timeframe: "1h", status: "TARGET", rNet: 1.4, rCost: 0.05, entry: 3_700, stop: 3_690, target: 3_715 }),
   // A longer 4h record, so the dashboard's "Last N trades" line has enough
   // trades to show numbers rather than "too few to judge".

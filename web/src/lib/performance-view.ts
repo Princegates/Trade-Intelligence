@@ -16,6 +16,7 @@ export interface TradeOutcomeView {
   source: TradeSource;
   symbol: string;
   timeframe: string;
+  strategyVersion: string;
   signalTime: string;
   direction: 1 | -1;
   entry: number;
@@ -123,27 +124,41 @@ export interface OutcomeGroup {
   source: TradeSource;
   symbol: string;
   timeframe: string;
+  strategyVersion: string;
   stats: OutcomeStats;
 }
 
-function compareGroups(a: { source: string; symbol: string; timeframe: string }, b: typeof a): number {
+function compareGroups(
+  a: { source: string; symbol: string; timeframe: string; strategyVersion?: string },
+  b: typeof a
+): number {
   return (
     a.source.localeCompare(b.source) ||
     a.symbol.localeCompare(b.symbol) ||
-    TIMEFRAME_ORDER.indexOf(a.timeframe) - TIMEFRAME_ORDER.indexOf(b.timeframe)
+    TIMEFRAME_ORDER.indexOf(a.timeframe) - TIMEFRAME_ORDER.indexOf(b.timeframe) ||
+    // Newest engine version first.
+    (b.strategyVersion ?? "").localeCompare(a.strategyVersion ?? "", undefined, { numeric: true })
   );
 }
 
-/** One row per strategy, market and timeframe — the unit a position limit
- * applies to, so the rows never double-count one another's trades. */
+/** One row per strategy, market, timeframe and engine version. Versions
+ * are kept apart because each is a different set of rules (and, before
+ * 3.4.0, different trading costs): an old version's trades say nothing
+ * about how the current one is doing. */
 export function groupOutcomes(rows: TradeOutcomeView[]): OutcomeGroup[] {
   const groups = new Map<string, TradeOutcomeView[]>();
   for (const row of rows) {
-    const key = `${row.source}|${row.symbol}|${row.timeframe}`;
+    const key = `${row.source}|${row.symbol}|${row.timeframe}|${row.strategyVersion}`;
     groups.set(key, [...(groups.get(key) ?? []), row]);
   }
   return [...groups.values()]
-    .map((g) => ({ source: g[0].source, symbol: g[0].symbol, timeframe: g[0].timeframe, stats: summarizeOutcomes(g) }))
+    .map((g) => ({
+      source: g[0].source,
+      symbol: g[0].symbol,
+      timeframe: g[0].timeframe,
+      strategyVersion: g[0].strategyVersion,
+      stats: summarizeOutcomes(g),
+    }))
     .sort(compareGroups);
 }
 
@@ -175,14 +190,17 @@ export interface LiveStat {
 export const LIVE_STAT_MIN_TRADES = 10;
 export const LIVE_STAT_WINDOW = 30;
 
-export function liveStatKey(source: TradeSource, symbol: string, timeframe: string): string {
-  return `${source}|${symbol}|${timeframe}`;
+/** Keyed by engine version too: a card counts only trades from the
+ * version that made its call, not ones an earlier version opened. */
+export function liveStatKey(source: TradeSource, symbol: string, timeframe: string, strategyVersion: string): string {
+  return `${source}|${symbol}|${timeframe}|${strategyVersion}`;
 }
 
-/** The last `limit` closed trades per strategy, market and timeframe,
- * summed up — the only thing about live results that reaches users. */
+/** The last `limit` closed trades per strategy, market, timeframe and
+ * engine version, summed up — the only thing about live results that
+ * reaches users. */
 export function recentStats(
-  rows: Pick<TradeOutcomeView, "source" | "symbol" | "timeframe" | "status" | "rNet" | "exitTime">[],
+  rows: Pick<TradeOutcomeView, "source" | "symbol" | "timeframe" | "strategyVersion" | "status" | "rNet" | "exitTime">[],
   limit: number = LIVE_STAT_WINDOW
 ): Record<string, LiveStat> {
   const closed = rows
@@ -191,7 +209,7 @@ export function recentStats(
 
   const byKey = new Map<string, number[]>();
   for (const r of closed) {
-    const key = liveStatKey(r.source, r.symbol, r.timeframe);
+    const key = liveStatKey(r.source, r.symbol, r.timeframe, r.strategyVersion);
     const rs = byKey.get(key) ?? [];
     if (rs.length < limit) rs.push(r.rNet!);
     byKey.set(key, rs);

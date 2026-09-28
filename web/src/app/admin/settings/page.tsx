@@ -100,7 +100,7 @@ export default async function AdminSettingsPage() {
           <CardTitle>Live results on the dashboard</CardTitle>
           <CardDescription>
             Shows each signal card its own timeframe&apos;s live record — for example &quot;Last 30 trades: 43% won ·
-            +0.12R avg&quot; — from every call tracked as a real trade since tracking began, after spread costs. Users see only these summary
+            +0.12R avg&quot; — from every call the current engine version has made, tracked as a real trade, after spread costs. Users see only these summary
             numbers. Full detail stays on the Performance page.
           </CardDescription>
         </CardHeader>

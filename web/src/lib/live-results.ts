@@ -95,7 +95,7 @@ const getCachedStats = unstable_cache(
     if (!supabase) return {};
     const { data, error } = await supabase
       .from("trade_outcomes")
-      .select("source, symbol, timeframe, status, r_net, exit_time")
+      .select("source, symbol, timeframe, strategy_version, status, r_net, exit_time")
       .neq("status", "OPEN")
       .order("exit_time", { ascending: false })
       .limit(5000);
@@ -105,6 +105,7 @@ const getCachedStats = unstable_cache(
         source: r.source,
         symbol: r.symbol,
         timeframe: r.timeframe,
+        strategyVersion: r.strategy_version,
         status: r.status,
         rNet: r.r_net,
         exitTime: r.exit_time,

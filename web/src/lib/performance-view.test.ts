@@ -17,6 +17,7 @@ const trade = (overrides: Partial<TradeOutcomeView> = {}): TradeOutcomeView => (
   source: "confluence",
   symbol: "BTCUSDT",
   timeframe: "1h",
+  strategyVersion: "3.4.0",
   signalTime: "2026-09-01T00:00:00Z",
   direction: 1,
   entry: 100,
@@ -83,6 +84,16 @@ describe("groupOutcomes", () => {
       "guda_special 15m 1",
     ]);
   });
+
+  it("keeps engine versions apart, newest first", () => {
+    const groups = groupOutcomes([
+      trade({ strategyVersion: "3.1.0" }),
+      trade({ strategyVersion: "3.10.0" }),
+      trade({ strategyVersion: "3.4.0" }),
+      trade({ strategyVersion: "3.4.0" }),
+    ]);
+    expect(groups.map((g) => `${g.strategyVersion} ${g.stats.trades}`)).toEqual(["3.10.0 1", "3.4.0 2", "3.1.0 1"]);
+  });
 });
 
 describe("latestBacktests", () => {
@@ -132,20 +143,23 @@ describe("formatR", () => {
 });
 
 describe("recentStats", () => {
-  it("sums up only the most recent closed trades per strategy, market and timeframe", () => {
+  it("sums up only the most recent closed trades per strategy, market, timeframe and version", () => {
     const rows = [
       ...Array.from({ length: 35 }, (_, i) =>
         trade({ rNet: i < 30 ? 1 : -1, exitTime: `2026-09-${String(28 - Math.floor(i / 2)).padStart(2, "0")}T${i % 2 ? "01" : "02"}:00:00Z` })
       ),
       trade({ status: "OPEN", rNet: null, exitTime: null }),
       trade({ timeframe: "4h", rNet: -1 }),
+      trade({ timeframe: "4h", rNet: 2, strategyVersion: "3.1.0" }),
     ];
     const stats = recentStats(rows, 30);
-    const h1 = stats[liveStatKey("confluence", "BTCUSDT", "1h")];
+    const h1 = stats[liveStatKey("confluence", "BTCUSDT", "1h", "3.4.0")];
     expect(h1.trades).toBe(30);
     expect(h1.winRate).toBe(1); // the 5 oldest (losses) fall outside the window
     expect(h1.avgRNet).toBe(1);
-    expect(stats[liveStatKey("confluence", "BTCUSDT", "4h")]).toEqual({ trades: 1, winRate: 0, avgRNet: -1 });
+    // An older version's trade is counted under its own version only.
+    expect(stats[liveStatKey("confluence", "BTCUSDT", "4h", "3.4.0")]).toEqual({ trades: 1, winRate: 0, avgRNet: -1 });
+    expect(stats[liveStatKey("confluence", "BTCUSDT", "4h", "3.1.0")]).toEqual({ trades: 1, winRate: 1, avgRNet: 2 });
   });
 });
 
