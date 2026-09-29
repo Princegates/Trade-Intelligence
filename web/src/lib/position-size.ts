@@ -1,6 +1,6 @@
-// Position sizing for the "Position size" calculator on signal cards:
-// how big a position risks a chosen share of the account if the stop is
-// hit. Pure, so it's tested without a browser.
+// The "Position size" calculator on signal cards: what a trade of a given
+// lot size would lose at the stop and make at the target, in money and as a
+// share of the account. Pure, so it's tested without a browser.
 
 /** Units per standard lot on Exness (1 BTC, 100 troy ounces of gold), plus
  * the unit's name. Other brokers can differ, which the calculator says. */
@@ -12,50 +12,42 @@ export const CONTRACTS: Record<string, { lotSize: number; unit: string }> = {
 // Exness's smallest lot and lot step.
 export const LOT_STEP = 0.01;
 
-export interface PositionSize {
-  /** Money lost if the stop is hit. */
-  riskAmount: number;
-  /** Size that loses exactly riskAmount at the stop. */
+/** Above this share of the account at the stop, the calculator warns. */
+export const HIGH_RISK_PCT = 2;
+
+export interface LotOutcome {
+  /** How much of the market the lots buy or sell, in the contract's unit. */
   units: number;
-  /** units in lots, rounded down to LOT_STEP so the risk never exceeds the
-   * plan; 0 when even the smallest lot would risk too much. */
-  lots: number;
-  /** What the rounded-down lots actually risk, and make at the target. */
-  lotsRisk: number;
-  lotsReward: number | null;
-  /** Money lost at the stop with the smallest lot, for when lots is 0. */
-  minLotRisk: number;
+  /** Money lost if the stop is hit, and made if the target is. */
+  loss: number;
+  gain: number | null;
+  /** Those as a percent of the balance; null without a balance. */
+  lossPct: number | null;
+  gainPct: number | null;
 }
 
-export function positionSize({
-  balance,
-  riskPct,
+export function lotOutcome({
+  lots,
   entry,
   stop,
   target,
   lotSize,
+  balance,
 }: {
-  balance: number;
-  riskPct: number;
+  lots: number;
   entry: number;
   stop: number;
   target: number | null;
   lotSize: number;
-}): PositionSize | null {
+  balance: number | null;
+}): LotOutcome | null {
   const stopDistance = Math.abs(entry - stop);
-  if (!(balance > 0) || !(riskPct > 0) || !(stopDistance > 0) || !(lotSize > 0)) return null;
+  if (!(lots > 0) || !(stopDistance > 0) || !(lotSize > 0)) return null;
 
-  const riskAmount = (balance * riskPct) / 100;
-  const units = riskAmount / stopDistance;
-  // The small epsilon keeps 0.03 lots from flooring to 0.02 on float noise.
-  const lots = Math.floor(units / lotSize / LOT_STEP + 1e-9) * LOT_STEP;
-  const lotUnits = lots * lotSize;
-  return {
-    riskAmount,
-    units,
-    lots,
-    lotsRisk: lotUnits * stopDistance,
-    lotsReward: target === null ? null : lotUnits * Math.abs(target - entry),
-    minLotRisk: LOT_STEP * lotSize * stopDistance,
-  };
+  const units = lots * lotSize;
+  const loss = units * stopDistance;
+  const gain = target === null ? null : units * Math.abs(target - entry);
+  const pct = (amount: number | null) =>
+    amount !== null && balance !== null && balance > 0 ? (amount / balance) * 100 : null;
+  return { units, loss, gain, lossPct: pct(loss), gainPct: pct(gain) };
 }

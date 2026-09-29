@@ -1,34 +1,34 @@
 import { describe, expect, it } from "vitest";
-import { positionSize } from "./position-size";
+import { lotOutcome } from "./position-size";
 
-describe("positionSize", () => {
-  it("sizes a gold position to lose the chosen share at the stop", () => {
-    // $1,000 at 1% = $10; a $5 stop -> 2 oz = 0.02 lots of 100 oz.
-    const p = positionSize({ balance: 1000, riskPct: 1, entry: 4100, stop: 4095, target: 4115, lotSize: 100 })!;
-    expect(p.riskAmount).toBe(10);
-    expect(p.units).toBe(2);
-    expect(p.lots).toBeCloseTo(0.02);
-    expect(p.lotsRisk).toBeCloseTo(10);
-    expect(p.lotsReward).toBeCloseTo(30);
+describe("lotOutcome", () => {
+  it("prices a gold trade: 0.01 lots is 1 oz", () => {
+    // A $5 stop and $15 target on 0.02 lots (2 oz), on a $1,000 account.
+    const o = lotOutcome({ lots: 0.02, entry: 4100, stop: 4095, target: 4115, lotSize: 100, balance: 1000 })!;
+    expect(o.units).toBeCloseTo(2);
+    expect(o.loss).toBeCloseTo(10);
+    expect(o.gain).toBeCloseTo(30);
+    expect(o.lossPct).toBeCloseTo(1);
+    expect(o.gainPct).toBeCloseTo(3);
   });
 
-  it("rounds lots down so the risk never exceeds the plan", () => {
-    // $50 over a $1,500 BTC stop = 0.0333 BTC -> 0.03 lots, risking $45.
-    const p = positionSize({ balance: 5000, riskPct: 1, entry: 84000, stop: 82500, target: null, lotSize: 1 })!;
-    expect(p.lots).toBeCloseTo(0.03);
-    expect(p.lotsRisk).toBeCloseTo(45);
-    expect(p.lotsReward).toBeNull();
+  it("prices a Bitcoin sell: 0.01 lots is 0.01 BTC", () => {
+    // Stop $1,710 above the entry: 0.01 BTC loses $17.10, 21% of an $80 account.
+    const o = lotOutcome({ lots: 0.01, entry: 84290, stop: 86000, target: 79160, lotSize: 1, balance: 80 })!;
+    expect(o.loss).toBeCloseTo(17.1);
+    expect(o.gain).toBeCloseTo(51.3);
+    expect(o.lossPct).toBeCloseTo(21.375);
   });
 
-  it("reports zero lots, and what the smallest lot would risk, when the account is too small", () => {
-    const p = positionSize({ balance: 100, riskPct: 1, entry: 84000, stop: 82500, target: null, lotSize: 1 })!;
-    expect(p.lots).toBe(0);
-    expect(p.minLotRisk).toBeCloseTo(15);
+  it("gives money without percentages when there's no balance or target", () => {
+    const o = lotOutcome({ lots: 0.1, entry: 100, stop: 90, target: null, lotSize: 1, balance: null })!;
+    expect(o.loss).toBeCloseTo(1);
+    expect(o.gain).toBeNull();
+    expect(o.lossPct).toBeNull();
   });
 
-  it("works for sells and refuses nonsense", () => {
-    expect(positionSize({ balance: 1000, riskPct: 2, entry: 100, stop: 110, target: 70, lotSize: 1 })!.units).toBe(2);
-    expect(positionSize({ balance: 0, riskPct: 1, entry: 100, stop: 90, target: null, lotSize: 1 })).toBeNull();
-    expect(positionSize({ balance: 1000, riskPct: 1, entry: 100, stop: 100, target: null, lotSize: 1 })).toBeNull();
+  it("refuses nonsense", () => {
+    expect(lotOutcome({ lots: 0, entry: 100, stop: 90, target: null, lotSize: 1, balance: 100 })).toBeNull();
+    expect(lotOutcome({ lots: 0.01, entry: 100, stop: 100, target: null, lotSize: 1, balance: 100 })).toBeNull();
   });
 });
