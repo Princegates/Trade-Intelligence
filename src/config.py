@@ -216,6 +216,15 @@ CALL_TIMEFRAMES = ("5m", "15m", "1h", "4h", "1d")
 # 1h / 4h / 1d to -0.08 / -0.02 / +0.73, better in both halves of the
 # history. Momentum mode, pullback entries, breakeven stops and bigger
 # swing points were tested too and didn't help, so they stay off.
+#
+# Stage 3 (2026-09-28, BTC 5m-1d at Exness costs): also tested and not
+# adopted, none helping consistently across timeframes and both halves of
+# the history — volatility-regime gates (max_atr_ratio 1.5/2,
+# min_atr_ratio 0.8), a longer-run stop floor (min_stop_baseline_atr
+# 1/1.5), a weekly anchor for 4h/1d (1d fell from +0.76R to +0.34R), and a
+# crowded-funding veto (max_crowded_funding 0.03/0.05/0.1; only a year of
+# funding history reachable, so 4h/1d were barely tested). The one change
+# that held up was the admin's minimum confidence at 70 rather than 65.
 ENGINE_SETTING_DEFAULTS = {"min_stop_atr": 1.5, "target_mode": "atr", "max_cost_to_risk": 0.25}
 
 # A feed counts as stale once its newest closed candle is this many intervals

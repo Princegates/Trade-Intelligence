@@ -52,7 +52,9 @@ def _binance(start_time):
 
 
 def _kraken(symbol):
-    """Kraken Futures, hourly; the whole history in one response."""
+    """Kraken Futures, hourly, in one response — but only about the last
+    year (8,860 rates on 2026-09-28), so a longer backtest runs mostly
+    without funding."""
 
     def fetch(start_time):
         resp = requests.get(
