@@ -4,6 +4,7 @@
 // up. None of this is persisted; edits in demo mode are visual-only.
 
 import type { SessionUser } from "@/lib/auth";
+import type { ConfidenceBreakdown, RangeZone, VolatilityRegime } from "@/lib/signal-view";
 import type { LifecycleState, SettingsCategory } from "@/lib/supabase/types";
 import type { CalendarEvent } from "@/lib/calendar-view";
 import type { NewsItem } from "@/lib/news-view";
@@ -55,6 +56,10 @@ export interface DemoSignal {
   invalidationLevel: number | null;
   entryZone: { low: number; high: number } | null;
   lifecycle: { state: LifecycleState; enteredAt: string } | null;
+  volatilityRegime: VolatilityRegime | null;
+  fib: { direction: 1 | -1; f50: number; f61_8: number; f72: number; f78_6: number } | null;
+  priceRange: { positionPct: number; zone: RangeZone } | null;
+  confidenceBreakdown: ConfidenceBreakdown | null;
 }
 
 const now = () => new Date().toISOString();
@@ -89,9 +94,17 @@ type DemoSignalSeed = Omit<
   | "invalidationLevel"
   | "entryZone"
   | "lifecycle"
+  | "volatilityRegime"
+  | "fib"
+  | "priceRange"
+  | "confidenceBreakdown"
 > & {
   patterns?: string[];
   aiCommentary?: string;
+  volatilityRegime?: VolatilityRegime;
+  fib?: DemoSignal["fib"];
+  priceRange?: DemoSignal["priceRange"];
+  confidenceBreakdown?: ConfidenceBreakdown;
 };
 
 const DEMO_SIGNAL_SEEDS: DemoSignalSeed[] = [
@@ -109,7 +122,26 @@ const DEMO_SIGNAL_SEEDS: DemoSignalSeed[] = [
       "MACD 42.10 above signal line (30.80) — bullish",
       "BOS at 68150.00 — price confirms the prevailing uptrend",
       "ATR(14) at 62.40 — typical move per candle, used to size the levels below",
+      "Confidence 78/100 — confluence strength, not a win rate: trend 20/20, structure 15/20, pullback 11/15, S/R 7/10, candle 8/10, ATR/volatility 10/10, momentum 7/10, liquidity 5/5",
     ],
+    // Sample Core Market Intelligence context, so the dashboard's demo
+    // preview actually shows what these new fields look like rendered —
+    // every other demo signal below is left null, same minimal-churn
+    // precedent every prior phase's demo-data addition already followed.
+    volatilityRegime: "NORMAL",
+    fib: { direction: 1, f50: 68050.0, f61_8: 67990.3, f72: 67942.0, f78_6: 67906.6 },
+    priceRange: { positionPct: 62.0, zone: "PREMIUM" },
+    confidenceBreakdown: {
+      total: 78,
+      trend: { score: 20, max: 20 },
+      structure: { score: 15, max: 20 },
+      pullback: { score: 11, max: 15 },
+      support_resistance: { score: 7, max: 10 },
+      candle: { score: 8, max: 10 },
+      volatility: { score: 10, max: 10 },
+      momentum: { score: 7, max: 10 },
+      liquidity: { score: 5, max: 5 },
+    },
   },
   {
     symbol: "BTCUSDT",
@@ -193,6 +225,10 @@ const DEMO_SIGNAL_SEEDS: DemoSignalSeed[] = [
       "BOS at 2379.00 — price confirms the prevailing uptrend",
       "ATR(14) at 5.40 — typical move per candle, used to size the levels below",
     ],
+    // A second sample, deliberately HIGH this time, so the conditional
+    // header badge (only shown for HIGH/EXTREME) has a demo case too.
+    volatilityRegime: "HIGH",
+    priceRange: { positionPct: 18.0, zone: "DISCOUNT" },
   },
   {
     symbol: "XAUUSD",
@@ -223,6 +259,10 @@ export const DEMO_SIGNALS: DemoSignal[] = DEMO_SIGNAL_SEEDS.map((s) => ({
   invalidationLevel: null,
   entryZone: null,
   lifecycle: null,
+  volatilityRegime: s.volatilityRegime ?? null,
+  fib: s.fib ?? null,
+  priceRange: s.priceRange ?? null,
+  confidenceBreakdown: s.confidenceBreakdown ?? null,
 }));
 
 // Mirrors GudaSpecialSignalView's shape independently, same reasoning
@@ -252,6 +292,8 @@ export interface DemoGudaSpecialSignal {
   levels: { entry: number; stop: number; target: number } | null;
   riskReward: number | null;
   regime: string | null;
+  volatilityRegime: VolatilityRegime | null;
+  priceRange: { positionPct: number; zone: RangeZone } | null;
 }
 
 // One example, mirroring DEMO_SIGNAL_SEEDS' hand-written style — GUDA
@@ -283,6 +325,8 @@ export const DEMO_GUDA_SPECIAL_SIGNALS: DemoGudaSpecialSignal[] = [
     levels: { entry: 68180.5, stop: 67540.0, target: 69461.5 },
     riskReward: 2.0,
     regime: "TRENDING",
+    volatilityRegime: "NORMAL",
+    priceRange: { positionPct: 54.0, zone: "EQUILIBRIUM" },
   },
 ];
 

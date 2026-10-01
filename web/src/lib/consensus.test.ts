@@ -25,6 +25,10 @@ function signal(timeframe: string, verdict: SignalView["verdict"], minutesAgo = 
     invalidationLevel: null,
     entryZone: null,
     lifecycle: null,
+    volatilityRegime: null,
+    fib: null,
+    priceRange: null,
+    confidenceBreakdown: null,
   };
 }
 

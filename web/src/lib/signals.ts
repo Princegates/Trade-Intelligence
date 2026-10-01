@@ -72,7 +72,31 @@ function toView(row: SignalRow, aiCommentary: string | null = null, lifecycle: S
     invalidationLevel: row.invalidation_level ?? null,
     entryZone: toEntryZone(row),
     lifecycle,
+    volatilityRegime: (row.volatility_regime as SignalView["volatilityRegime"]) ?? null,
+    fib: toFib(row),
+    priceRange: toPriceRange(row),
+    confidenceBreakdown: (row.confidence_breakdown as SignalView["confidenceBreakdown"]) ?? null,
   };
+}
+
+/** Same "only usable as a complete set" reasoning as toLevels()/toEntryZone()
+ * above — fib_direction/fib_50/etc. are either all populated together (a
+ * confirmed swing leg was available) or all null (none was). */
+function toFib(row: SignalRow): SignalView["fib"] {
+  const direction = row.fib_direction ?? null;
+  const f50 = row.fib_50 ?? null;
+  const f61_8 = row.fib_61_8 ?? null;
+  const f72 = row.fib_72 ?? null;
+  const f78_6 = row.fib_78_6 ?? null;
+  if (direction === null || f50 === null || f61_8 === null || f72 === null || f78_6 === null) return null;
+  return { direction, f50, f61_8, f72, f78_6 };
+}
+
+function toPriceRange(row: SignalRow): SignalView["priceRange"] {
+  const positionPct = row.range_position_pct ?? null;
+  const zone = row.range_zone ?? null;
+  if (positionPct === null || zone === null) return null;
+  return { positionPct, zone: zone as NonNullable<SignalView["priceRange"]>["zone"] };
 }
 
 /** Same "only usable as a complete set" reasoning as toLevels() above — a

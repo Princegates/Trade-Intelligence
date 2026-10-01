@@ -34,6 +34,16 @@ function htfFilterOutcomeVariant(o: NonNullable<GudaSpecialSignalView["htfFilter
   return "outline" as const; // NEUTRAL
 }
 
+/** Same convention as SignalCard's own volatilityRegimeVariant — only
+ * HIGH/EXTREME ever reach the header badge. */
+function volatilityRegimeVariant(regime: NonNullable<GudaSpecialSignalView["volatilityRegime"]>) {
+  return regime === "EXTREME" ? ("destructive" as const) : ("warning" as const); // HIGH
+}
+
+function rangeZoneLabel(zone: NonNullable<GudaSpecialSignalView["priceRange"]>["zone"]) {
+  return zone.replace("_", " ").toLowerCase();
+}
+
 const money = (n: number) => `$${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
 /** GUDA SPECIAL's dashboard card — deliberately a separate component from
@@ -78,6 +88,15 @@ export function GudaSpecialSignalCard({
           <p className="text-sm text-muted-foreground">
             {money(signal.price)} &middot; {new Date(signal.generatedAt).toLocaleString()}
           </p>
+        )}
+        {signal?.volatilityRegime && (signal.volatilityRegime === "HIGH" || signal.volatilityRegime === "EXTREME") && (
+          <Badge
+            variant={volatilityRegimeVariant(signal.volatilityRegime)}
+            className="w-fit"
+            title="Current ATR against this market's own longer-run average — a wider stop and more caution on entry timing, not a reason to skip the call on its own."
+          >
+            {signal.volatilityRegime === "EXTREME" ? "Extreme" : "High"} volatility
+          </Badge>
         )}
         {live && <LiveStatLine stat={live.stat} />}
       </CardHeader>
@@ -131,6 +150,21 @@ export function GudaSpecialSignalCard({
                       <span>
                         Fibonacci zone: {money(signal.fib.f50)} (50%) – {money(signal.fib.f78_6)} (78.6%)
                       </span>
+                    </li>
+                  )}
+                  {signal.priceRange && (
+                    <li className="flex gap-2">
+                      <span className="select-none text-border">&bull;</span>
+                      <span>
+                        Price position: {rangeZoneLabel(signal.priceRange.zone)} ({signal.priceRange.positionPct.toFixed(0)}%
+                        of the impulse leg) — context, not a signal on its own
+                      </span>
+                    </li>
+                  )}
+                  {signal.volatilityRegime && (
+                    <li className="flex gap-2">
+                      <span className="select-none text-border">&bull;</span>
+                      <span>Volatility: {signal.volatilityRegime.toLowerCase()}, vs. this market&apos;s own longer-run average</span>
                     </li>
                   )}
                   {signal.retracementQuality && (

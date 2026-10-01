@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { DEMO_GUDA_SPECIAL_SIGNALS } from "@/lib/demo-data";
 import { GUDA_SPECIAL_STRATEGY_VERSION } from "@/lib/guda-special-version";
+import type { RangeZone, VolatilityRegime } from "@/lib/signal-view";
 import type { Database } from "@/lib/supabase/types";
 
 /** GUDA SPECIAL's own signal shape — deliberately not SignalView. The
@@ -36,6 +37,13 @@ export interface GudaSpecialSignalView {
   levels: { entry: number; stop: number; target: number } | null;
   riskReward: number | null;
   regime: string | null;
+  /** Core Market Intelligence context shared with the confluence engine
+   * (src/signals/volatility_regime.py, src/signals/price_range.py, read
+   * over this setup's own already-tracked impulse leg). No separate
+   * Fibonacci field here — GUDA SPECIAL's own `fib` above already carries
+   * that for the same leg. */
+  volatilityRegime: VolatilityRegime | null;
+  priceRange: { positionPct: number; zone: RangeZone } | null;
 }
 
 type GudaSpecialSignalRow = Database["public"]["Tables"]["guda_special_signals"]["Row"];
@@ -54,6 +62,11 @@ function toGudaSpecialView(row: GudaSpecialSignalRow): GudaSpecialSignalView {
   const levels =
     row.entry !== null && row.stop !== null && row.target !== null
       ? { entry: row.entry, stop: row.stop, target: row.target }
+      : null;
+
+  const priceRange =
+    row.range_position_pct !== null && row.range_zone !== null
+      ? { positionPct: row.range_position_pct, zone: row.range_zone as RangeZone }
       : null;
 
   return {
@@ -80,6 +93,8 @@ function toGudaSpecialView(row: GudaSpecialSignalRow): GudaSpecialSignalView {
     levels,
     riskReward: row.risk_reward,
     regime: row.regime,
+    volatilityRegime: row.volatility_regime as VolatilityRegime | null,
+    priceRange,
   };
 }
 

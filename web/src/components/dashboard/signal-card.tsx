@@ -46,6 +46,22 @@ function lifecycleVariant(state: string) {
   return "outline" as const; // WAIT
 }
 
+/** Same local-function-per-file convention as the variants above. Only
+ * HIGH/EXTREME ever reach a header badge (see the `!stale &&` check at the
+ * call site) — LOW/NORMAL is the unremarkable common case and stays in the
+ * technical-details drawer instead, so the header doesn't carry a badge on
+ * every single card. */
+function volatilityRegimeVariant(regime: NonNullable<SignalView["volatilityRegime"]>) {
+  return regime === "EXTREME" ? ("destructive" as const) : ("warning" as const); // HIGH
+}
+
+/** EQUILIBRIUM reuses "outline" — a neutral read, not favorable or
+ * cautionary either way. The other four mirror marketPhaseVariant's own
+ * color language rather than inventing a new one. */
+function rangeZoneLabel(zone: NonNullable<SignalView["priceRange"]>["zone"]) {
+  return zone.replace("_", " ").toLowerCase();
+}
+
 const money = (n: number) => `$${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
 function Row({ label, value, hint }: { label: string; value: string; hint: string }) {
@@ -198,6 +214,15 @@ export function SignalCard({
             Scalp · higher risk
           </Badge>
         )}
+        {!stale && signal.volatilityRegime && (signal.volatilityRegime === "HIGH" || signal.volatilityRegime === "EXTREME") && (
+          <Badge
+            variant={volatilityRegimeVariant(signal.volatilityRegime)}
+            className="w-fit"
+            title="Current ATR against this market's own longer-run average — a wider stop and more caution on entry timing, not a reason to skip the call on its own."
+          >
+            {signal.volatilityRegime === "EXTREME" ? "Extreme" : "High"} volatility
+          </Badge>
+        )}
         {live && <LiveStatLine stat={live.stat} />}
       </CardHeader>
       <CardContent className={locked ? "relative" : undefined}>
@@ -275,6 +300,30 @@ export function SignalCard({
                   <span className="select-none text-border">&bull;</span>
                   <span>
                     Lifecycle: {signal.lifecycle.state} since {new Date(signal.lifecycle.enteredAt).toLocaleString()}
+                  </span>
+                </li>
+              )}
+              {signal.volatilityRegime && (
+                <li className="flex gap-2">
+                  <span className="select-none text-border">&bull;</span>
+                  <span>Volatility: {signal.volatilityRegime.toLowerCase()}, vs. this market&apos;s own longer-run average</span>
+                </li>
+              )}
+              {signal.priceRange && (
+                <li className="flex gap-2">
+                  <span className="select-none text-border">&bull;</span>
+                  <span>
+                    Price position: {rangeZoneLabel(signal.priceRange.zone)} ({signal.priceRange.positionPct.toFixed(0)}% of
+                    its recent swing range) — context, not a signal on its own
+                  </span>
+                </li>
+              )}
+              {signal.fib && (
+                <li className="flex gap-2">
+                  <span className="select-none text-border">&bull;</span>
+                  <span>
+                    Fibonacci ({signal.fib.direction === 1 ? "bullish" : "bearish"} leg): 50% {money(signal.fib.f50)} ·
+                    61.8% {money(signal.fib.f61_8)} · 78.6% {money(signal.fib.f78_6)}
                   </span>
                 </li>
               )}

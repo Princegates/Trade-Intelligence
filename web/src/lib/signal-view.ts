@@ -5,6 +5,34 @@
 
 import type { LifecycleState, SuppressionReason, Verdict } from "@/lib/supabase/types";
 
+/** LOW/NORMAL/HIGH/EXTREME — current ATR against a longer-run baseline.
+ * Shared by both strategies (see src/signals/volatility_regime.py). Market
+ * context, never itself a verdict. */
+export type VolatilityRegime = "LOW" | "NORMAL" | "HIGH" | "EXTREME";
+
+/** Where price sits within a reference swing leg, in five bands. Shared by
+ * both strategies (src/signals/price_range.py). Per the engine's own
+ * contract, never interpreted as a buy/sell signal on its own — context,
+ * same as regime/marketPhase below. */
+export type RangeZone = "DEEP_DISCOUNT" | "DISCOUNT" | "EQUILIBRIUM" | "PREMIUM" | "DEEP_PREMIUM";
+
+/** The same eight confidence categories the reasoning text already states
+ * in prose (see src/signals/engine.py::_confidence), as a structured shape
+ * instead — kept snake_case to match the jsonb column verbatim rather than
+ * adding a translation layer for an internal, not-yet-rendered-distinctly
+ * shape (the numbers are already visible in `reasoning`). */
+export interface ConfidenceBreakdown {
+  total: number;
+  trend: { score: number; max: number };
+  structure: { score: number; max: number };
+  pullback: { score: number; max: number };
+  support_resistance: { score: number; max: number };
+  candle: { score: number; max: number };
+  volatility: { score: number; max: number };
+  momentum: { score: number; max: number };
+  liquidity: { score: number; max: number };
+}
+
 export interface SignalView {
   symbol: string;
   timeframe: string;
@@ -63,6 +91,24 @@ export interface SignalView {
    * all (src/signals/lifecycle.py::tracks()). See src/signals/
    * lifecycle.py for what each state means. */
   lifecycle: { state: LifecycleState; enteredAt: string } | null;
+  /** Core Market Intelligence context (src/signals/volatility_regime.py) —
+   * populated even on HOLD, same "describes the market" contract as regime/
+   * marketPhase above. Null without enough candle history for the
+   * longer-run ATR baseline. */
+  volatilityRegime: VolatilityRegime | null;
+  /** Fibonacci retracement levels of the most recently confirmed swing leg
+   * (src/signals/fibonacci.py, shared with GUDA SPECIAL) — informational
+   * only, never an automatic entry signal. Null without a confirmed swing
+   * leg to measure from. Named `fib` (not `fibonacci`) to match
+   * GudaSpecialSignalView's own field shape. */
+  fib: { direction: 1 | -1; f50: number; f61_8: number; f72: number; f78_6: number } | null;
+  /** Premium/discount position over that same swing leg (src/signals/
+   * price_range.py). Null alongside `fib` — same leg, same availability. */
+  priceRange: { positionPct: number; zone: RangeZone } | null;
+  /** Structured version of the confidence breakdown reasoning already
+   * states in prose — see ConfidenceBreakdown above. Null on HOLD, same
+   * contract as confidence itself. */
+  confidenceBreakdown: ConfidenceBreakdown | null;
 }
 
 export interface SuppressionView {
