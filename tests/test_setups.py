@@ -154,6 +154,12 @@ def test_advance_invalidates_on_a_swept_break():
     assert result["setup"]["state"] == "INVALIDATED"
     assert "closed back through" in result["setup"]["invalidation_reason"]
     assert result["signal"]["verdict"] == "NO_TRADE"
+    # Volatility regime is always computable (just needs candles + ATR), so
+    # it populates even on an early NO_TRADE before any impulse is known —
+    # the range/premium-discount read needs that impulse leg, so it's None.
+    assert result["signal"]["volatility_regime"] == "NORMAL"
+    assert result["signal"]["range_position_pct"] is None
+    assert result["signal"]["range_zone"] is None
 
 
 def test_advance_expires_after_the_configured_candle_count():
@@ -299,6 +305,12 @@ def test_happy_path_publishes_a_buy():
     assert signal["target"] == 104.0
     assert signal["confirmation_pattern"] == "Bullish Engulfing"
     assert signal["reasoning"]
+    # Core Market Intelligence context, shared with the confluence engine
+    # (src/signals/volatility_regime.py, src/signals/price_range.py) —
+    # read over the same impulse leg Fibonacci is already measured from.
+    assert signal["volatility_regime"] == "NORMAL"
+    assert signal["range_zone"] == "DEEP_PREMIUM"
+    assert signal["range_position_pct"] == 190.0
 
 
 def test_happy_path_publishes_a_sell():

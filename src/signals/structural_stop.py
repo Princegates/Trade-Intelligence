@@ -7,7 +7,15 @@ GUDA SPECIAL's stop is anchored to the confirmation-candle FORMATION
 itself (spec: "SL = lowest low of the formation" for a Morning Star, "SL =
 relevant confirmation structure low" for an Engulfing) — a different,
 setup-specific anchor, not "nearest level to price."
+
+Every function here delegates to src/signals/risk_engine.py (the
+centralized stop/target module the architecture audit asked for) — kept
+here, under their original names, purely so every existing caller/test
+keeps working unmodified. The math is identical to before risk_engine.py
+existed.
 """
+
+from . import risk_engine as rk
 
 
 def stop_from_formation(formation_candles, direction, buffer_atr, atr_val, anchor_level=None):
@@ -22,45 +30,28 @@ def stop_from_formation(formation_candles, direction, buffer_atr, atr_val, ancho
     break-and-retest trade's thesis only fails once price is back through
     that level. A stop tucked under the formation but above the level
     would get taken out by an ordinary retest wick that never broke the
-    thesis at all."""
-    if atr_val is None or atr_val <= 0:
-        return None
-    buffer = atr_val * buffer_atr
-    if direction == 1:
-        extreme = min(c["low"] for c in formation_candles)
-        if anchor_level is not None:
-            extreme = min(extreme, anchor_level)
-        return extreme - buffer
-    extreme = max(c["high"] for c in formation_candles)
-    if anchor_level is not None:
-        extreme = max(extreme, anchor_level)
-    return extreme + buffer
+    thesis at all. See risk_engine.stop_from_formation."""
+    return rk.stop_from_formation(formation_candles, direction, buffer_atr, atr_val, anchor_level)
 
 
 def sanity_check(entry, stop, atr_val, max_risk_distance_atr, min_stop_distance_atr):
     """Whether a computed stop is structurally sensible, before any target
     is even derived from it. Returns (ok, reason) — reason is None when ok.
     Rejects a stop that's inside ordinary noise (too close) or one that's
-    unacceptably far (too much risk for one trade)."""
-    if atr_val is None or atr_val <= 0:
-        return False, "no ATR available to size the stop"
-    risk_atr = abs(entry - stop) / atr_val
-    if risk_atr < min_stop_distance_atr:
-        return False, f"stop is only {risk_atr:.2f} ATR away — inside normal noise"
-    if risk_atr > max_risk_distance_atr:
-        return False, f"stop is {risk_atr:.2f} ATR away — too far for an acceptable risk"
-    return True, None
+    unacceptably far (too much risk for one trade). See
+    risk_engine.sanity_check."""
+    return rk.sanity_check(entry, stop, atr_val, max_risk_distance_atr, min_stop_distance_atr)
 
 
 def target_from_rr(entry, stop, rr_multiple, direction):
-    """TP = entry +/- (risk x rr_multiple), never a fixed pip target."""
-    risk = abs(entry - stop)
-    return entry + risk * rr_multiple if direction == 1 else entry - risk * rr_multiple
+    """TP = entry +/- (risk x rr_multiple), never a fixed pip target. See
+    risk_engine.target_from_risk_reward."""
+    return rk.target_from_risk_reward(entry, stop, rr_multiple, direction)
 
 
 def target_conflict(swings, entry, target, direction):
     """Whether a confirmed swing level sits between entry and target that
     could block price before it ever reaches the target. Never moves the
-    target to dodge this — callers decide whether to flag or reject."""
-    lo, hi = (entry, target) if entry < target else (target, entry)
-    return any(lo < s["price"] < hi for s in swings)
+    target to dodge this — callers decide whether to flag or reject. See
+    risk_engine.target_conflict."""
+    return rk.target_conflict(swings, entry, target, direction)

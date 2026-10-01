@@ -17,7 +17,8 @@ produces a structured NO_TRADE signal, never silence.
 """
 
 from . import candle_quality, confluence, entry_zone as ez, fibonacci, htf_filter, impulse as imp
-from . import patterns as pat, retest, structural_stop, structure as struct, indicators as ind
+from . import patterns as pat, price_range, retest, structural_stop, structure as struct
+from . import indicators as ind, volatility_regime as vol_regime
 
 CONFIRMATION_PATTERNS = {
     1: {"Bullish Engulfing", "Morning Star"},
@@ -82,15 +83,21 @@ def advance_setup(setup, candles, htf_candles, timeframe_seconds, settings=None,
     latest = candles[-1]
     atr_val = ind.atr(candles, 14)
 
+    # Volatility-regime context (src/signals/volatility_regime.py, the
+    # same shared classifier the confluence engine now also populates) —
+    # informational only, computed once here and threaded through every
+    # exit path below, never read by any of this function's own gates.
+    vol_regime_label = vol_regime.classify(atr_val, ind.atr(candles, 100))
+
     # Universal override 1: the break failed — price closed back through
     # the level it broke. Checked before anything else, at any stage.
     if imp.single_level_swept(latest, bos_level, direction):
-        return _invalidated(setup, latest, "price closed back through the broken structure level")
+        return _invalidated(setup, latest, "price closed back through the broken structure level", vol_regime_label)
 
     # Universal override 2: the setup has run out of time.
     elapsed_candles = (latest["open_time"] - setup["bos_candle_time"]) / timeframe_seconds
     if elapsed_candles >= settings.get("setup_expiry_candles", 20):
-        return _expired(setup, latest)
+        return _expired(setup, latest, vol_regime_label)
 
     swings = struct.swing_points(candles, settings.get("swing_lookback", 2))
 
@@ -132,7 +139,7 @@ def advance_setup(setup, candles, htf_candles, timeframe_seconds, settings=None,
         settings.get("fib_valid_min", 0.5), settings.get("fib_valid_max", 0.786), settings.get("fib_deep_max", 0.886),
     )
     if quality == "FAILED":
-        return _invalidated(setup, latest, "price retraced beyond the impulse origin")
+        return _invalidated(setup, latest, "price retraced beyond the impulse origin", vol_regime_label)
     if quality != "VALID":
         return _unchanged(setup, "AWAITING_RETRACEMENT")
 
@@ -173,14 +180,14 @@ def advance_setup(setup, candles, htf_candles, timeframe_seconds, settings=None,
         formation_candles, direction, settings.get("structural_stop_buffer_atr", 0.25), atr_val, anchor_level=bos_level
     )
     if stop is None:
-        return _invalidated(setup, latest, "no ATR available to size the stop")
+        return _invalidated(setup, latest, "no ATR available to size the stop", vol_regime_label)
 
     ok, reason = structural_stop.sanity_check(
         entry, stop, atr_val,
         settings.get("max_stop_distance_atr", 3.0), settings.get("min_stop_distance_atr", 0.3),
     )
     if not ok:
-        return _invalidated(setup, latest, reason)
+        return _invalidated(setup, latest, reason, vol_regime_label)
 
     # Room to pay: the nearest structure price has to get through (the
     # impulse's own extreme, or any swing formed since the break) must sit
@@ -199,7 +206,7 @@ def advance_setup(setup, candles, htf_candles, timeframe_seconds, settings=None,
     conflict = structural_stop.target_conflict(swings, entry, target, direction)
     policy = settings.get("target_conflict_policy", "downgrade")
     if conflict and policy == "reject":
-        return _invalidated(setup, latest, "major structure sits between entry and target")
+        return _invalidated(setup, latest, "major structure sits between entry and target", vol_regime_label)
 
     # Entry-extension filter: if price has already run too far from the
     # ideal Fib entry, wait for a better price rather than chasing —
@@ -211,14 +218,14 @@ def advance_setup(setup, candles, htf_candles, timeframe_seconds, settings=None,
     htf_bias = confluence.higher_timeframe_bias(htf_candles) if htf_candles else None
     htf_result = htf_filter.evaluate(direction, htf_bias, settings.get("htf_filter_mode", "downgrade"))
     if htf_result["outcome"] == "REJECTED":
-        return _invalidated(setup, latest, htf_result["reason"])
+        return _invalidated(setup, latest, htf_result["reason"], vol_regime_label)
 
     # A CHoCH setup already trades against this timeframe's own structure;
     # with the 1H against it too, it's counter-trend on both — vetoed
     # whatever htf_filter_mode says. A BOS (with-trend) setup keeps the
     # admin's configured mode.
     if setup["bos_kind"] == "CHoCH" and htf_result["outcome"] == "DOWNGRADED":
-        return _invalidated(setup, latest, f"counter-trend change of character with the 1H bias ({htf_bias}) against it")
+        return _invalidated(setup, latest, f"counter-trend change of character with the 1H bias ({htf_bias}) against it", vol_regime_label)
 
     # Inside a high-impact release's risk window (gold only — see
     # config.EVENT_RISK_CURRENCY), hold rather than publish: the same rule
@@ -258,6 +265,8 @@ def advance_setup(setup, candles, htf_candles, timeframe_seconds, settings=None,
         "target": target,
         "risk_reward": rr,
         "regime": regime,
+        "volatility_regime": vol_regime_label,
+        **_range_fields(setup["impulse_start_price"], setup["impulse_end_price"], entry),
         "reasoning": reasoning,
     }
     return {"setup": {**setup, "state": "PUBLISHED"}, "signal": signal}
@@ -296,22 +305,35 @@ def _unchanged(setup, state):
     return {"setup": {**setup, "state": state}, "signal": None}
 
 
-def _invalidated(setup, latest, reason):
+def _range_fields(impulse_start, impulse_end, price):
+    """Premium/discount range position (src/signals/price_range.py) over
+    the setup's own measured impulse leg — the same leg Fibonacci is
+    already read against. None/None before the impulse is measured yet
+    (early invalidations/NO_TRADE outcomes have no leg to measure from)."""
+    if impulse_start is None or impulse_end is None:
+        return {"range_position_pct": None, "range_zone": None}
+    rng = price_range.analyze(max(impulse_start, impulse_end), min(impulse_start, impulse_end), price)
+    if rng is None:
+        return {"range_position_pct": None, "range_zone": None}
+    return {"range_position_pct": rng["position_pct"], "range_zone": rng["zone"]}
+
+
+def _invalidated(setup, latest, reason, vol_regime_label=None):
     return {
         "setup": {**setup, "state": "INVALIDATED", "invalidation_reason": reason},
-        "signal": _no_trade_signal(setup, latest, reason),
+        "signal": _no_trade_signal(setup, latest, reason, vol_regime_label),
     }
 
 
-def _expired(setup, latest):
+def _expired(setup, latest, vol_regime_label=None):
     reason = "setup expired with no resolution"
     return {
         "setup": {**setup, "state": "EXPIRED", "invalidation_reason": reason},
-        "signal": _no_trade_signal(setup, latest, reason),
+        "signal": _no_trade_signal(setup, latest, reason, vol_regime_label),
     }
 
 
-def _no_trade_signal(setup, latest, reason):
+def _no_trade_signal(setup, latest, reason, vol_regime_label=None):
     return {
         "verdict": "NO_TRADE",
         "price": latest["close"],
@@ -338,5 +360,7 @@ def _no_trade_signal(setup, latest, reason):
         "target": None,
         "risk_reward": None,
         "regime": None,
+        "volatility_regime": vol_regime_label,
+        **_range_fields(setup.get("impulse_start_price"), setup.get("impulse_end_price"), latest["close"]),
         "reasoning": f"NO TRADE — {reason}",
     }

@@ -1,6 +1,7 @@
 """SQLite storage. The .db file itself is committed to the repo by the cron
 job, so history is just `git log` on data/trade_intelligence.db."""
 
+import json
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
@@ -46,6 +47,15 @@ CREATE TABLE IF NOT EXISTS signals (
     invalidation_level REAL,
     entry_zone_low REAL,
     entry_zone_high REAL,
+    volatility_regime TEXT,
+    confidence_breakdown TEXT,
+    fib_50 REAL,
+    fib_61_8 REAL,
+    fib_72 REAL,
+    fib_78_6 REAL,
+    fib_direction INTEGER,
+    range_position_pct REAL,
+    range_zone TEXT,
     UNIQUE(symbol, timeframe, candle_time, strategy_version)
 );
 
@@ -95,6 +105,15 @@ ADDED_COLUMNS = {
         "invalidation_level": "REAL",
         "entry_zone_low": "REAL",
         "entry_zone_high": "REAL",
+        "volatility_regime": "TEXT",
+        "confidence_breakdown": "TEXT",
+        "fib_50": "REAL",
+        "fib_61_8": "REAL",
+        "fib_72": "REAL",
+        "fib_78_6": "REAL",
+        "fib_direction": "INTEGER",
+        "range_position_pct": "REAL",
+        "range_zone": "TEXT",
     },
 }
 
@@ -192,19 +211,37 @@ def record_signal(
     invalidation_level=None,
     entry_zone_low=None,
     entry_zone_high=None,
+    volatility_regime=None,
+    confidence_breakdown=None,
+    fibonacci=None,
+    price_range=None,
 ):
     """Insert-only. A published signal is never rewritten (FR-SIG-004), so a
     re-run over the same closed candle is ignored rather than overwriting the
-    original call. Returns True when a new signal was stored."""
+    original call. Returns True when a new signal was stored.
+
+    `confidence_breakdown` is a dict (src/signals/engine.py's structured
+    confidence breakdown) or None — SQLite has no native jsonb, so it's
+    stored as a JSON string; nothing in this codebase reads it back out of
+    SQLite (it's a disposable per-run scratch copy, not the durable store —
+    see Supabase's publish_signal for the jsonb column real consumers
+    read). `fibonacci`/`price_range` are the dicts engine.evaluate()
+    returns under those keys, unpacked into their own flat columns here to
+    match Supabase's shape."""
     levels = levels or {}
+    fibonacci = fibonacci or {}
+    price_range = price_range or {}
+    fib_levels = fibonacci.get("levels") or {}
     with connect() as conn:
         cur = conn.execute(
             """INSERT OR IGNORE INTO signals
                (symbol, timeframe, generated_at, candle_time, price, verdict, score,
                 confidence, evidence_count, strategy_version, reasoning, patterns,
                 entry, stop, target, buy_above, sell_below, confluence_bias,
-                regime, market_phase, invalidation_level, entry_zone_low, entry_zone_high)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                regime, market_phase, invalidation_level, entry_zone_low, entry_zone_high,
+                volatility_regime, confidence_breakdown, fib_50, fib_61_8, fib_72, fib_78_6,
+                fib_direction, range_position_pct, range_zone)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 symbol,
                 timeframe,
@@ -229,6 +266,15 @@ def record_signal(
                 invalidation_level,
                 entry_zone_low,
                 entry_zone_high,
+                volatility_regime,
+                json.dumps(confidence_breakdown) if confidence_breakdown is not None else None,
+                fib_levels.get("fib_50"),
+                fib_levels.get("fib_61_8"),
+                fib_levels.get("fib_72"),
+                fib_levels.get("fib_78_6"),
+                fibonacci.get("direction"),
+                price_range.get("position_pct"),
+                price_range.get("zone"),
             ),
         )
         return cur.rowcount == 1

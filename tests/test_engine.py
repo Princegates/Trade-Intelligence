@@ -384,6 +384,76 @@ def test_structure_early_return_includes_break_event_and_trend_bias_keys():
     assert result["trend_bias"] is None
 
 
+# --- Core Market Intelligence context: volatility_regime, fibonacci,
+# price_range, confidence_breakdown ------------------------------------------
+#
+# All four are informational/explainable context, never read by any veto
+# gate above — populated the same regardless of what verdict survives
+# (same "describes the market, not the call" precedent regime/market_phase
+# already follow), except confidence_breakdown, which — like confidence
+# itself — only exists for a surviving directional call.
+
+
+def test_volatility_regime_populates_even_on_hold():
+    # Needs 101+ candles for the ATR(100) baseline — the module default
+    # _candles(60) is enough for every other category but not this one.
+    result = _evaluate_with(candles=_candles(120))
+    assert result["verdict"] == "HOLD"
+    assert result["volatility_regime"] in ("LOW", "NORMAL", "HIGH", "EXTREME")
+
+
+def test_volatility_regime_is_none_without_enough_history_for_the_baseline():
+    result = _evaluate_with()
+    assert result["volatility_regime"] is None
+
+
+def test_fibonacci_and_price_range_are_none_without_a_swing_leg():
+    # NEUTRAL_STRUCTURE's swings list is empty — no high/low pair to
+    # measure a leg from.
+    result = _evaluate_with()
+    assert result["fibonacci"] is None
+    assert result["price_range"] is None
+
+
+def test_fibonacci_and_price_range_populate_from_the_most_recent_swing_leg():
+    result = _evaluate_with(trend=(1, "up", []), structure=_structure_with_swings(1, _swings(150.0, 170.0)))
+    assert result["fibonacci"]["direction"] == 1
+    assert result["fibonacci"]["levels"]["fib_50"] == 160.0
+    assert result["price_range"]["high"] == 170.0
+    assert result["price_range"]["low"] == 150.0
+    assert result["price_range"]["zone"] in ("DEEP_DISCOUNT", "DISCOUNT", "EQUILIBRIUM", "PREMIUM", "DEEP_PREMIUM")
+
+
+def test_confidence_breakdown_populates_alongside_confidence():
+    result = _evaluate_with(trend=(1, "up", []), structure=_structure_with_swings(1, _swings(150.0, 170.0)))
+    assert result["verdict"] == "BUY"
+    assert result["confidence"] is not None
+    breakdown = result["confidence_breakdown"]
+    assert breakdown["total"] == round(result["confidence"] * 100)
+    assert set(breakdown) == {
+        "total", "trend", "structure", "pullback", "support_resistance",
+        "candle", "volatility", "momentum", "liquidity",
+    }
+    assert breakdown["trend"]["max"] == 20
+
+
+def test_confidence_breakdown_is_none_on_hold():
+    result = _evaluate_with()
+    assert result["verdict"] == "HOLD"
+    assert result["confidence_breakdown"] is None
+
+
+def test_confidence_breakdown_is_none_when_confidence_gate_overrides_to_hold():
+    result = _evaluate_with(
+        trend=(1, "up", []),
+        structure=_structure_with_swings(1, _swings(150.0, 170.0)),
+        settings={"min_confidence_threshold": 101},
+    )
+    assert result["verdict"] == "HOLD"
+    assert result["confidence"] is None
+    assert result["confidence_breakdown"] is None
+
+
 def test_entry_zone_gate_is_inert_without_a_configured_maximum():
     result = _evaluate_with(
         trend=(1, "up", []),

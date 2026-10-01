@@ -114,8 +114,22 @@ def publish_signal(
     invalidation_level=None,
     entry_zone_low=None,
     entry_zone_high=None,
+    volatility_regime=None,
+    confidence_breakdown=None,
+    fibonacci=None,
+    price_range=None,
 ):
+    """`fibonacci`/`price_range` are the dicts engine.evaluate() returns
+    under those keys (src/signals/engine.py's
+    _fibonacci_and_range_context()) — flattened into their own columns
+    here, same "unpack the dict the caller already has" shape `levels`
+    already uses above. `confidence_breakdown` is passed straight through
+    as a dict; requests' own JSON encoding (see _insert) serializes it
+    into the jsonb column natively, no manual encoding needed."""
     levels = levels or {}
+    fibonacci = fibonacci or {}
+    price_range = price_range or {}
+    fib_levels = fibonacci.get("levels") or {}
     return _insert(
         "signals",
         {
@@ -142,6 +156,15 @@ def publish_signal(
             "invalidation_level": invalidation_level,
             "entry_zone_low": entry_zone_low,
             "entry_zone_high": entry_zone_high,
+            "volatility_regime": volatility_regime,
+            "confidence_breakdown": confidence_breakdown,
+            "fib_50": fib_levels.get("fib_50"),
+            "fib_61_8": fib_levels.get("fib_61_8"),
+            "fib_72": fib_levels.get("fib_72"),
+            "fib_78_6": fib_levels.get("fib_78_6"),
+            "fib_direction": fibonacci.get("direction"),
+            "range_position_pct": price_range.get("position_pct"),
+            "range_zone": price_range.get("zone"),
         },
         on_conflict=SIGNAL_IDENTITY,
     )
@@ -628,10 +651,18 @@ def publish_guda_special_signal(
     target=None,
     risk_reward=None,
     regime=None,
+    volatility_regime=None,
+    range_position_pct=None,
+    range_zone=None,
 ):
     """Published output — BUY/SELL or a structured NO_TRADE, always exactly
     one row per resolved setup (default ignore-duplicates, same
-    never-rewrite contract as publish_signal)."""
+    never-rewrite contract as publish_signal). volatility_regime/
+    range_position_pct/range_zone are Core Market Intelligence context
+    shared with the confluence engine (src/signals/volatility_regime.py,
+    src/signals/price_range.py) — GUDA SPECIAL already has its own
+    Fibonacci columns (fib_50 etc., below) from its own pipeline, so no
+    new Fibonacci columns are needed here."""
     return _insert(
         "guda_special_signals",
         {
@@ -667,6 +698,9 @@ def publish_guda_special_signal(
             "target": target,
             "risk_reward": risk_reward,
             "regime": regime,
+            "volatility_regime": volatility_regime,
+            "range_position_pct": range_position_pct,
+            "range_zone": range_zone,
         },
         on_conflict=GUDA_SPECIAL_SIGNAL_IDENTITY,
     )

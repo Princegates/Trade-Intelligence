@@ -17,7 +17,8 @@ project runs on. See README for what that leaves out and why.
 import math
 
 from .. import config
-from . import confluence, divergence, entry_zone as ez, indicators as ind, patterns as pat, structure as struct
+from . import confluence, divergence, entry_zone as ez, fibonacci as fib, indicators as ind
+from . import patterns as pat, price_range, structure as struct, volatility_regime as vol_regime
 
 BUY_THRESHOLD = config.BUY_THRESHOLD
 SELL_THRESHOLD = -config.BUY_THRESHOLD
@@ -215,6 +216,48 @@ def _structure(candles, lookback=None):
     }
 
 
+def _swing_leg(swings):
+    """The most recently confirmed swing high and swing low, read as one
+    impulse leg for the Fibonacci/range context below — informational
+    only, never fed into the vote/gate chain above or below it. The more
+    recently confirmed of the two anchors the leg's direction: a fresh
+    high after the last low reads as a bullish leg (retracement measured
+    down from it), and vice versa. None without at least one of each."""
+    highs = [s for s in swings if s["kind"] == "high"]
+    lows = [s for s in swings if s["kind"] == "low"]
+    if not highs or not lows:
+        return None
+    last_high, last_low = highs[-1], lows[-1]
+    if last_high["index"] > last_low["index"]:
+        return last_low["price"], last_high["price"], 1
+    return last_high["price"], last_low["price"], -1
+
+
+def _fibonacci_and_range_context(swings, price, atr_val):
+    """Fibonacci retracement levels and premium/discount range position
+    for the most recent confirmed swing leg (spec: a universal Fibonacci
+    engine and a Range/Premium-Discount engine "available to every
+    strategy, signal generator... chart, dashboard, backtesting engine").
+
+    Both read from src/signals/fibonacci.py and src/signals/price_range.py
+    — shared modules GUDA SPECIAL's own pipeline already uses for the
+    first, and that nothing in the codebase provided before this for the
+    second. Purely additive market-context data: never read by any veto
+    gate above, never changes a verdict, populated the same regardless of
+    what verdict survives (same "describes the market, not the call"
+    precedent regime/market_phase already follow). None without a
+    confirmed swing leg to measure from."""
+    leg = _swing_leg(swings)
+    if leg is None:
+        return None, None
+    impulse_start, impulse_end, direction = leg
+    fib_levels = fib.levels(impulse_start, impulse_end, direction)
+    fib_zone = fib.retracement_zone(fib_levels, price, atr_val)
+    fibonacci_context = {"direction": direction, "levels": fib_levels, "zone": fib_zone}
+    range_context = price_range.analyze(max(impulse_start, impulse_end), min(impulse_start, impulse_end), price)
+    return fibonacci_context, range_context
+
+
 def _pattern(candles, trend_label, swings, atr_val):
     """Candlestick confirmation, gated on context (spec section 4): a shape
     only counts as a vote when it is directional AND sits at a level from
@@ -383,6 +426,7 @@ def _override_to_hold(result, candles, reason):
     # untouched: they describe the market, not this call, and are
     # unaffected by every other veto gate the same way.
     result["confidence"] = None
+    result["confidence_breakdown"] = None
     result["verdict"] = "HOLD"
     result["levels"] = _levels("HOLD", candles[-1]["close"], atr_val)
     result["invalidation_level"] = None
@@ -498,16 +542,23 @@ def _liquidity_score(verdict, swept, points=5):
 
 
 def _confidence(verdict, votes, structure, volatility, higher_bias, price, atr_val, tolerance, zone_result):
-    """Returns (confidence, reasoning_lines). confidence is None with no
-    reasoning for a HOLD — there's no live call left to be confident
-    about, whether HOLD was the original verdict or a gate overrode it.
+    """Returns (confidence, reasoning_lines, breakdown). confidence and
+    breakdown are None with no reasoning for a HOLD — there's no live call
+    left to be confident about, whether HOLD was the original verdict or a
+    gate overrode it.
+
+    `breakdown` is the same eight category scores the reasoning text below
+    already spells out, as a structured dict instead of prose — the
+    explainable-signal format the spec asks for ("a transparent confluence
+    assessment", not just a number) for any UI/API consumer that wants the
+    numbers programmatically rather than parsed back out of a sentence.
 
     `zone_result` is the caller's already-computed entry_zone.entry_zone()
     result for this call's side (src/signals/entry_zone.py) — reused here
     rather than re-derived, since evaluate() needs it for the same call's
     stop/target/invalidation fields anyway."""
     if verdict == "HOLD":
-        return None, []
+        return None, [], None
 
     direction = 1 if verdict == "BUY" else -1
     swings = structure.get("swings") or []
@@ -540,7 +591,18 @@ def _confidence(verdict, votes, structure, volatility, higher_bias, price, atr_v
         f"candle {candle_points:.0f}/10, ATR/volatility {atr_points:.0f}/10, "
         f"momentum {momentum_points:.0f}/10, liquidity {liquidity_points:.0f}/5"
     ]
-    return rounded_total / 100.0, reasoning
+    breakdown = {
+        "total": rounded_total,
+        "trend": {"score": round(trend_points, 1), "max": 20},
+        "structure": {"score": round(structure_points, 1), "max": 20},
+        "pullback": {"score": round(pullback_points, 1), "max": 15},
+        "support_resistance": {"score": round(sr_points, 1), "max": 10},
+        "candle": {"score": round(candle_points, 1), "max": 10},
+        "volatility": {"score": round(atr_points, 1), "max": 10},
+        "momentum": {"score": round(momentum_points, 1), "max": 10},
+        "liquidity": {"score": round(liquidity_points, 1), "max": 5},
+    }
+    return rounded_total / 100.0, reasoning, breakdown
 
 
 def _rr_below_minimum(levels, min_rr):
@@ -618,14 +680,25 @@ def evaluate(candles, higher_timeframe_bias=None, settings=None, funding=None):
     regime = structure["regime"]
     market_phase_label = ez.market_phase(regime, structure["break_event"], phase_zone)
 
-    # Volatility regime: this market's current ATR against its own longer-
-    # run ATR. Only computed when an option below uses it.
-    baseline_atr = (
-        ind.atr(candles, int(settings.get("atr_baseline_period") or ATR_BASELINE_PERIOD))
-        if any(settings.get(k) is not None for k in ("max_atr_ratio", "min_atr_ratio", "min_stop_baseline_atr"))
-        else None
-    )
+    # This market's current ATR against its own longer-run ATR. Used by the
+    # optional max_atr_ratio/min_atr_ratio gates below (unchanged — they
+    # still only fire when an admin has actually set one), and now also by
+    # the always-on volatility_regime label a few lines down: that's a
+    # genuine, small, deliberate cost change (one more ATR(100) computed on
+    # every call, not just when those two settings are present) made so the
+    # regime label is available on every signal, per the spec's own "must
+    # be available to the risk engine and strategy engine" requirement —
+    # not something a strategy should have to opt into just to read it.
+    baseline_atr = ind.atr(candles, int(settings.get("atr_baseline_period") or ATR_BASELINE_PERIOD))
     atr_ratio = atr_val / baseline_atr if atr_val and baseline_atr else None
+    volatility_regime_label = vol_regime.classify(atr_val, baseline_atr)
+
+    # Fibonacci retracement + range/premium-discount context for the most
+    # recent confirmed swing leg — informational only (see
+    # _fibonacci_and_range_context's own docstring), computed the same way
+    # regardless of verdict, same "describes the market" precedent as
+    # regime/market_phase above.
+    fibonacci_context, range_context = _fibonacci_and_range_context(structure["swings"], closes[-1], atr_val)
 
     votes = {"trend": trend_vote, "momentum": momentum["vote"], "structure": structure["vote"], "pattern": pattern["vote"]}
     evidence = sum(1 for v in votes.values() if v is not None)
@@ -808,7 +881,7 @@ def evaluate(candles, higher_timeframe_bias=None, settings=None, funding=None):
     # "Confidence scoring" block above _vote_score for what this number is
     # and, just as importantly, what it is not.
     confidence_zone = ez.entry_zone(verdict_side, closes[-1], struct_levels, atr_val, zone_width_atr) if verdict_side else None
-    confidence, confidence_reasons = _confidence(
+    confidence, confidence_reasons, confidence_breakdown = _confidence(
         verdict,
         votes,
         structure,
@@ -832,6 +905,7 @@ def evaluate(candles, higher_timeframe_bias=None, settings=None, funding=None):
             verdict = "HOLD"
             levels, verdict_side = _resolve(verdict)
             confidence = None
+            confidence_breakdown = None
 
     # Call-specific structural fields — None on HOLD, matching the existing
     # entry/stop/target null-for-HOLD contract (unlike regime/market_phase
@@ -849,6 +923,7 @@ def evaluate(candles, higher_timeframe_bias=None, settings=None, funding=None):
         "reasoning": reasons,
         "evidence_count": evidence,
         "confidence": confidence,
+        "confidence_breakdown": confidence_breakdown,
         "patterns": pattern["names"],
         "levels": levels,
         "regime": regime,
@@ -856,4 +931,7 @@ def evaluate(candles, higher_timeframe_bias=None, settings=None, funding=None):
         "invalidation_level": invalidation_level_val,
         "entry_zone_low": entry_zone_low,
         "entry_zone_high": entry_zone_high,
+        "volatility_regime": volatility_regime_label,
+        "fibonacci": fibonacci_context,
+        "price_range": range_context,
     }

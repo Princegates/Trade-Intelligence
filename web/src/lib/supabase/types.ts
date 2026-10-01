@@ -124,6 +124,18 @@ export interface Database {
           invalidation_level: number | null;
           entry_zone_low: number | null;
           entry_zone_high: number | null;
+          // Core Market Intelligence upgrade (0031): shared context, never
+          // read by any gate — see src/signals/{volatility_regime,
+          // price_range}.py and engine.py's _fibonacci_and_range_context.
+          volatility_regime: string | null;
+          confidence_breakdown: Record<string, unknown> | null;
+          fib_50: number | null;
+          fib_61_8: number | null;
+          fib_72: number | null;
+          fib_78_6: number | null;
+          fib_direction: 1 | -1 | null;
+          range_position_pct: number | null;
+          range_zone: string | null;
         };
         Insert: {
           id?: number;
@@ -150,6 +162,15 @@ export interface Database {
           invalidation_level?: number | null;
           entry_zone_low?: number | null;
           entry_zone_high?: number | null;
+          volatility_regime?: string | null;
+          confidence_breakdown?: Record<string, unknown> | null;
+          fib_50?: number | null;
+          fib_61_8?: number | null;
+          fib_72?: number | null;
+          fib_78_6?: number | null;
+          fib_direction?: 1 | -1 | null;
+          range_position_pct?: number | null;
+          range_zone?: string | null;
         };
         // Published signals are immutable; 0002 drops the update policy.
         Update: never;
@@ -191,6 +212,13 @@ export interface Database {
           risk_reward: number | null;
           regime: string | null;
           confidence_score: number | null;
+          // Core Market Intelligence upgrade (0031): shared with the
+          // confluence engine — see src/signals/volatility_regime.py and
+          // src/signals/price_range.py. No new fib_* columns here: GUDA
+          // SPECIAL already has its own above, from its own pipeline.
+          volatility_regime: string | null;
+          range_position_pct: number | null;
+          range_zone: string | null;
         };
         Insert: {
           id?: number;
@@ -227,6 +255,9 @@ export interface Database {
           risk_reward?: number | null;
           regime?: string | null;
           confidence_score?: number | null;
+          volatility_regime?: string | null;
+          range_position_pct?: number | null;
+          range_zone?: string | null;
         };
         // Append-only — 0020's trigger rejects update/delete on every role.
         Update: never;

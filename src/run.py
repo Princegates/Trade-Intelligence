@@ -218,6 +218,16 @@ def process(instrument, timeframe, now, events=(), engine_settings=None):
         "invalidation_level": result["invalidation_level"],
         "entry_zone_low": result["entry_zone_low"],
         "entry_zone_high": result["entry_zone_high"],
+        # .get(), not [...]: every real engine.evaluate() call always
+        # includes these (Core Market Intelligence context, additive as of
+        # this field's introduction), but pre-existing tests mock evaluate()
+        # with a hand-built dict that predates them — .get() keeps those
+        # mocks valid without needing every one updated for fields they
+        # don't care about testing.
+        "volatility_regime": result.get("volatility_regime"),
+        "confidence_breakdown": result.get("confidence_breakdown"),
+        "fibonacci": result.get("fibonacci"),
+        "price_range": result.get("price_range"),
     }
 
     stored = db.record_signal(symbol, timeframe, **signal)

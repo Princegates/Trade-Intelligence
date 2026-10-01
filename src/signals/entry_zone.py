@@ -14,7 +14,15 @@ falling into a SELL-shaped branch.
 `levels` throughout is the dict returned by `structure.nearest_levels()` —
 computed once per `evaluate()` call and threaded through, not re-derived
 per-helper.
+
+`structural_stop`/`structural_target` delegate to src/signals/
+risk_engine.py (the centralized stop/target module the architecture audit
+asked for) — kept here, under their original names, purely so every
+existing caller/test keeps working unmodified. The math is identical to
+before risk_engine.py existed.
 """
+
+from . import risk_engine as rk
 
 
 def structural_stop(side, price, levels, atr_val, buffer_atr):
@@ -22,23 +30,16 @@ def structural_stop(side, price, levels, atr_val, buffer_atr):
     by a fraction of ATR so ordinary noise doesn't clip it. None when
     there's no level on that side yet or ATR is unavailable — the caller's
     ATR-fixed-ratio fallback takes over, exactly as it does today when
-    there aren't enough swings."""
-    if atr_val is None or atr_val <= 0:
-        return None
-    level = levels.get(side)
-    if level is None:
-        return None
-    buffer = atr_val * buffer_atr
-    return level - buffer if side == "support" else level + buffer
+    there aren't enough swings. See risk_engine.stop_from_nearest_level."""
+    return rk.stop_from_nearest_level(side, price, levels, atr_val, buffer_atr)
 
 
 def structural_target(side, levels):
     """The opposing structural level — deliberately NOT a multiple of the
     stop distance. Risk and reward now come from independent real levels,
     so risk/reward genuinely varies per signal instead of being fixed by
-    settings alone."""
-    opposite = "resistance" if side == "support" else "support"
-    return levels.get(opposite)
+    settings alone. See risk_engine.target_from_nearest_level."""
+    return rk.target_from_nearest_level(side, levels)
 
 
 def invalidation_level(side, levels):
