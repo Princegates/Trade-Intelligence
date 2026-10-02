@@ -37,6 +37,11 @@ interface DashboardShellProps {
 }
 
 const SIDEBAR_PINNED_KEY = "sidebar-pinned";
+// Tabs shown directly in the mobile bottom bar; anything past this count
+// (Profile/Settings on the 6-item dashboard nav, most of the 8-item admin
+// nav) is reached through the "More" tab, which opens the same drawer the
+// bar replaces as the primary mobile nav entry point.
+const BOTTOM_BAR_PRIMARY_COUNT = 4;
 
 function initials(name: string | null, email: string) {
   const source = name?.trim() || email;
@@ -65,6 +70,8 @@ export function DashboardShell({ title, nav, user, children }: DashboardShellPro
   const inAdminArea = pathname.startsWith("/admin");
   const fullAccess = hasFullAccess(user);
   const remaining = daysRemaining(user);
+  const primaryMobileNav = nav.slice(0, BOTTOM_BAR_PRIMARY_COUNT);
+  const hasOverflowNav = nav.length > BOTTOM_BAR_PRIMARY_COUNT;
 
   useLayoutEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -175,7 +182,11 @@ export function DashboardShell({ title, nav, user, children }: DashboardShellPro
         <div className="fixed inset-0 z-50 flex md:hidden">
           <div className="absolute inset-0 bg-black/50" onClick={() => setMobileOpen(false)} />
           <aside className="relative z-10 flex w-64 flex-col bg-card/80 backdrop-blur-xl">
-            <button className="absolute right-3 top-4 p-1" onClick={() => setMobileOpen(false)} aria-label="Close menu">
+            <button
+              className="absolute right-2 top-3 flex size-10 items-center justify-center rounded-md"
+              onClick={() => setMobileOpen(false)}
+              aria-label="Close menu"
+            >
               <X className="size-5" />
             </button>
             {renderSidebarContent(false, false)}
@@ -183,12 +194,50 @@ export function DashboardShell({ title, nav, user, children }: DashboardShellPro
         </div>
       )}
 
+      {/* Bottom tab bar replaces the hamburger as the primary mobile nav
+          entry point — faster one-handed reach than a corner button, and a
+          more familiar phone pattern than a slide-out drawer for the few
+          links someone actually taps every day. Each tab spans a full
+          column of the bar's height/width, so the touch target is the
+          whole column, not just the icon+label glyph. The drawer isn't
+          gone — "More" still opens it, for everything past the first
+          few items. */}
+      <nav
+        className="fixed inset-x-0 bottom-0 z-30 flex border-t border-border bg-card/90 backdrop-blur-xl md:hidden"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        {primaryMobileNav.map((item) => {
+          const active = pathname === item.href;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[11px] font-medium transition-colors",
+                active ? "text-primary" : "text-muted-foreground"
+              )}
+            >
+              {item.icon}
+              {item.label}
+            </Link>
+          );
+        })}
+        {hasOverflowNav && (
+          <button
+            type="button"
+            onClick={() => setMobileOpen(true)}
+            className="flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[11px] font-medium text-muted-foreground transition-colors"
+            aria-label="More navigation options"
+          >
+            <Menu className="size-4" />
+            More
+          </button>
+        )}
+      </nav>
+
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-16 items-center justify-between border-b border-border px-4 sm:px-6">
           <div className="flex items-center gap-3">
-            <button className="p-1 md:hidden" onClick={() => setMobileOpen(true)} aria-label="Open menu">
-              <Menu className="size-5" />
-            </button>
             <h1 className="text-lg font-semibold">{title}</h1>
             {connected && (
               <span
@@ -271,7 +320,10 @@ export function DashboardShell({ title, nav, user, children }: DashboardShellPro
           </div>
         </header>
 
-        <main className="flex-1 p-4 sm:p-6">{children}</main>
+        {/* Extra bottom padding below md clears the fixed bottom tab bar
+            (~56px + the safe-area inset it reserves) so the last bit of
+            page content is never hidden behind it. */}
+        <main className="flex-1 p-4 max-md:pb-24 sm:p-6">{children}</main>
       </div>
 
       <ChatWidget fullAccess={fullAccess} />

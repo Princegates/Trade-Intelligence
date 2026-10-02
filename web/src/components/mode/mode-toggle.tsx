@@ -14,7 +14,7 @@ export function ModeToggle({ className }: { className?: string }) {
       aria-label={mode === "dark" ? "Switch to day mode" : "Switch to night mode"}
       title={mode === "dark" ? "Switch to day mode" : "Switch to night mode"}
       className={cn(
-        "inline-flex size-9 items-center justify-center rounded-full border border-border bg-card text-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+        "inline-flex size-10 items-center justify-center rounded-full border border-border bg-card text-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
         className
       )}
     >

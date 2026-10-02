@@ -16,15 +16,25 @@ const PANEL_WIDTH = 352; // 22rem
 const PANEL_HEIGHT = 448; // 28rem
 const MARGIN = 16;
 const DRAG_THRESHOLD = 6; // px of movement before a pointer-down counts as a drag, not a click
+// DashboardShell's fixed bottom tab bar is md:hidden — matches Tailwind's
+// default md breakpoint. Reserved so the FAB's default spot and drag
+// bounds never land underneath it (~56px bar + safe-area-inset-bottom,
+// rounded up).
+const MOBILE_NAV_BREAKPOINT = 768;
+const MOBILE_NAV_RESERVE = 72;
 
 interface Point {
   x: number;
   y: number;
 }
 
+function bottomReserve(): number {
+  return typeof window !== "undefined" && window.innerWidth < MOBILE_NAV_BREAKPOINT ? MOBILE_NAV_RESERVE : 0;
+}
+
 function clampToViewport(pos: Point): Point {
   const maxX = Math.max(MARGIN, window.innerWidth - FAB_SIZE - MARGIN);
-  const maxY = Math.max(MARGIN, window.innerHeight - FAB_SIZE - MARGIN);
+  const maxY = Math.max(MARGIN, window.innerHeight - FAB_SIZE - MARGIN - bottomReserve());
   return { x: Math.min(Math.max(pos.x, MARGIN), maxX), y: Math.min(Math.max(pos.y, MARGIN), maxY) };
 }
 
@@ -38,7 +48,10 @@ function defaultPosition(): Point {
  * partly off-screen just because the bubble was moved into a corner. */
 function panelPosition(fab: Point): Point {
   const spaceAbove = fab.y - MARGIN;
-  const y = spaceAbove >= PANEL_HEIGHT ? fab.y - PANEL_HEIGHT - 12 : Math.min(fab.y + FAB_SIZE + 12, window.innerHeight - PANEL_HEIGHT - MARGIN);
+  const y =
+    spaceAbove >= PANEL_HEIGHT
+      ? fab.y - PANEL_HEIGHT - 12
+      : Math.min(fab.y + FAB_SIZE + 12, window.innerHeight - PANEL_HEIGHT - MARGIN - bottomReserve());
   const preferredX = fab.x + FAB_SIZE - PANEL_WIDTH;
   const x = Math.min(Math.max(preferredX, MARGIN), window.innerWidth - PANEL_WIDTH - MARGIN);
   return { x, y: Math.max(MARGIN, y) };
