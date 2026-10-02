@@ -100,64 +100,119 @@ export default async function AdminLogsPage({ searchParams }: PageProps<"/admin/
           </p>
         ) : (
           <>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Time</TableHead>
-                  <TableHead>Who</TableHead>
-                  <TableHead>Action</TableHead>
-                  <TableHead>Details</TableHead>
-                  <TableHead>From</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((row) => {
-                  const details = formatDetails(row.details);
-                  const target = row.targetLabel ?? row.targetId;
-                  return (
-                    <TableRow key={row.id} className="align-top">
-                      <TableCell className="text-muted-foreground">
+            <div className="hidden md:block">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Time</TableHead>
+                    <TableHead>Who</TableHead>
+                    <TableHead>Action</TableHead>
+                    <TableHead>Details</TableHead>
+                    <TableHead>From</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rows.map((row) => {
+                    const details = formatDetails(row.details);
+                    const target = row.targetLabel ?? row.targetId;
+                    return (
+                      <TableRow key={row.id} className="align-top">
+                        <TableCell className="text-muted-foreground">
+                          <LocalTime iso={row.createdAt} />
+                        </TableCell>
+                        <TableCell>
+                          {row.actorEmail ? (
+                            <Link
+                              href={`/admin/logs${filtersToQuery(filters, { q: row.actorEmail, page: 1 })}`}
+                              className="font-medium hover:underline"
+                              title="Show only this person's activity"
+                            >
+                              {row.actorEmail}
+                            </Link>
+                          ) : (
+                            <span className="text-muted-foreground">Unknown</span>
+                          )}
+                          <div className="mt-1">
+                            {row.actorRole === "admin" ? (
+                              <Badge variant="outline">Admin</Badge>
+                            ) : !row.actorId ? (
+                              <span className="text-xs text-muted-foreground">Not signed in</span>
+                            ) : null}
+                          </div>
+                        </TableCell>
+                        <TableCell className="min-w-48">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span>{actionLabel(row.action)}</span>
+                            {row.outcome === "failure" && <Badge variant="destructive">Failed</Badge>}
+                          </div>
+                          {target && <div className="mt-1 text-xs text-muted-foreground">{target}</div>}
+                        </TableCell>
+                        <TableCell className="min-w-56 text-xs text-muted-foreground">
+                          {details.length === 0 ? "—" : details.map((line) => <div key={line}>{line}</div>)}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                          <div>{row.ip ?? "—"}</div>
+                          {row.userAgent && <div title={row.userAgent}>{describeUserAgent(row.userAgent)}</div>}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="divide-y divide-border md:hidden">
+              {rows.map((row) => {
+                const details = formatDetails(row.details);
+                const target = row.targetLabel ?? row.targetId;
+                return (
+                  <div key={row.id} className="space-y-2 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-xs text-muted-foreground">
                         <LocalTime iso={row.createdAt} />
-                      </TableCell>
-                      <TableCell>
-                        {row.actorEmail ? (
-                          <Link
-                            href={`/admin/logs${filtersToQuery(filters, { q: row.actorEmail, page: 1 })}`}
-                            className="font-medium hover:underline"
-                            title="Show only this person's activity"
-                          >
-                            {row.actorEmail}
-                          </Link>
-                        ) : (
-                          <span className="text-muted-foreground">Unknown</span>
-                        )}
-                        <div className="mt-1">
-                          {row.actorRole === "admin" ? (
-                            <Badge variant="outline">Admin</Badge>
-                          ) : !row.actorId ? (
-                            <span className="text-xs text-muted-foreground">Not signed in</span>
-                          ) : null}
-                        </div>
-                      </TableCell>
-                      <TableCell className="min-w-48">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span>{actionLabel(row.action)}</span>
-                          {row.outcome === "failure" && <Badge variant="destructive">Failed</Badge>}
-                        </div>
-                        {target && <div className="mt-1 text-xs text-muted-foreground">{target}</div>}
-                      </TableCell>
-                      <TableCell className="min-w-56 text-xs text-muted-foreground">
-                        {details.length === 0 ? "—" : details.map((line) => <div key={line}>{line}</div>)}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                        <div>{row.ip ?? "—"}</div>
-                        {row.userAgent && <div title={row.userAgent}>{describeUserAgent(row.userAgent)}</div>}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                      </span>
+                      {row.outcome === "failure" && <Badge variant="destructive">Failed</Badge>}
+                    </div>
+
+                    <div>
+                      <span className="font-medium">{actionLabel(row.action)}</span>
+                      {target && <div className="text-xs text-muted-foreground">{target}</div>}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 text-sm">
+                      {row.actorEmail ? (
+                        <Link
+                          href={`/admin/logs${filtersToQuery(filters, { q: row.actorEmail, page: 1 })}`}
+                          className="font-medium hover:underline"
+                        >
+                          {row.actorEmail}
+                        </Link>
+                      ) : (
+                        <span className="text-muted-foreground">Unknown</span>
+                      )}
+                      {row.actorRole === "admin" ? (
+                        <Badge variant="outline">Admin</Badge>
+                      ) : !row.actorId ? (
+                        <span className="text-xs text-muted-foreground">Not signed in</span>
+                      ) : null}
+                    </div>
+
+                    {details.length > 0 && (
+                      <div className="space-y-0.5 text-xs text-muted-foreground">
+                        {details.map((line) => (
+                          <div key={line}>{line}</div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="text-xs text-muted-foreground">
+                      {row.ip ?? "—"}
+                      {row.userAgent && ` · ${describeUserAgent(row.userAgent)}`}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
 
             <div className="flex flex-col gap-3 border-t border-border px-6 py-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
               <span>

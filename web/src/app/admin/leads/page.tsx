@@ -23,35 +23,56 @@ export default async function AdminLeadsPage() {
         {leads.length === 0 ? (
           <p className="p-6 text-sm text-muted-foreground">No leads yet.</p>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Kind</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Note</TableHead>
-                <TableHead>Received</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+          <>
+            <div className="hidden md:block">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Kind</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Note</TableHead>
+                    <TableHead>Received</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {leads.map((lead) => (
+                    <TableRow key={lead.id}>
+                      <TableCell>
+                        <Badge variant="outline">{kindLabel(lead.kind)}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium">{lead.name || "—"}</div>
+                        <div className="text-muted-foreground">{lead.email}</div>
+                      </TableCell>
+                      <TableCell className="max-w-xs text-muted-foreground">{lead.note || "—"}</TableCell>
+                      <TableCell className="text-muted-foreground">{new Date(lead.createdAt).toLocaleDateString()}</TableCell>
+                      <TableCell>
+                        <LeadHandledToggle leadId={lead.id} handled={lead.handled} />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="divide-y divide-border md:hidden">
               {leads.map((lead) => (
-                <TableRow key={lead.id}>
-                  <TableCell>
+                <div key={lead.id} className="space-y-2 p-4">
+                  <div className="flex items-start justify-between gap-3">
                     <Badge variant="outline">{kindLabel(lead.kind)}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="font-medium">{lead.name || "—"}</div>
-                    <div className="text-muted-foreground">{lead.email}</div>
-                  </TableCell>
-                  <TableCell className="max-w-xs text-muted-foreground">{lead.note || "—"}</TableCell>
-                  <TableCell className="text-muted-foreground">{new Date(lead.createdAt).toLocaleDateString()}</TableCell>
-                  <TableCell>
                     <LeadHandledToggle leadId={lead.id} handled={lead.handled} />
-                  </TableCell>
-                </TableRow>
+                  </div>
+                  <div>
+                    <div className="font-medium">{lead.name || "—"}</div>
+                    <div className="text-sm text-muted-foreground">{lead.email}</div>
+                  </div>
+                  {lead.note && <p className="text-sm text-muted-foreground">{lead.note}</p>}
+                  <div className="text-xs text-muted-foreground">{new Date(lead.createdAt).toLocaleDateString()}</div>
+                </div>
               ))}
-            </TableBody>
-          </Table>
+            </div>
+          </>
         )}
       </CardContent>
     </Card>
