@@ -513,6 +513,7 @@ export interface Database {
           created_at: string;
           redeemed_at: string | null;
           expires_at: string | null;
+          access_days: number | null;
         };
         Insert: {
           id?: string;
@@ -522,6 +523,7 @@ export interface Database {
           created_at?: string;
           redeemed_at?: string | null;
           expires_at?: string | null;
+          access_days?: number | null;
         };
         Update: {
           id?: string;
@@ -531,6 +533,7 @@ export interface Database {
           created_at?: string;
           redeemed_at?: string | null;
           expires_at?: string | null;
+          access_days?: number | null;
         };
         Relationships: [];
       };

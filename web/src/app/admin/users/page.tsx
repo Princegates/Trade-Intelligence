@@ -10,6 +10,7 @@ import { DeleteUserButton } from "@/components/admin/delete-user-button";
 import { listUsers } from "@/lib/users";
 import { hasFullAccess, daysRemaining } from "@/lib/access";
 import { requireAdmin } from "@/lib/auth";
+import { getAccessPolicy } from "@/lib/access-policy";
 
 function initials(name: string | null, email: string) {
   const source = name?.trim() || email;
@@ -22,7 +23,7 @@ function initials(name: string | null, email: string) {
 }
 
 export default async function AdminUsersPage() {
-  const [admin, users] = await Promise.all([requireAdmin(), listUsers()]);
+  const [admin, users, { trialDays }] = await Promise.all([requireAdmin(), listUsers(), getAccessPolicy()]);
 
   return (
     <Card>
@@ -70,7 +71,7 @@ export default async function AdminUsersPage() {
                         <Badge variant={fullAccess ? "outline" : "warning"}>
                           {fullAccess ? `${remaining}d left` : "Basic view"}
                         </Badge>
-                        <AccessCodeButton userId={u.id} name={u.fullName || u.email} />
+                        <AccessCodeButton userId={u.id} name={u.fullName || u.email} defaultDays={trialDays} />
                       </div>
                     )}
                   </TableCell>

@@ -51,3 +51,33 @@ export async function notifyAdminsOfNewLead(
     html: `<p>${label} from ${namePart}.</p>${notePart}`,
   });
 }
+
+/** Emails a freshly admin-generated access code straight to the person it
+ * was issued for — on top of, not instead of, the existing "admin copies
+ * it and sends it out of band" flow (see actions/users.ts#generateAccessCode
+ * and components/admin/access-code-button.tsx): with no email provider
+ * configured this silently no-ops like every other sendEmail call, so the
+ * code is still shown to the admin to copy and send manually either way.
+ * Unlike the admin-notification helpers above, this returns whether the
+ * email actually went out, so the admin UI can tell the two cases apart. */
+export async function notifyUserOfAccessCode(
+  email: string,
+  fullName: string | null,
+  code: string,
+  expiresAt: string,
+  accessDays: number
+): Promise<boolean> {
+  const greeting = fullName ? escapeHtml(fullName) : "there";
+  const expiry = new Date(expiresAt).toLocaleString();
+  const days = accessDays === 1 ? "1 day" : `${accessDays} days`;
+
+  return sendEmail({
+    to: [email],
+    subject: "Your SignalsVault AI access code",
+    html: `<p>Hi ${greeting},</p>
+<p>An admin generated an access code for your account:</p>
+<p style="font-size:22px;font-weight:700;letter-spacing:3px;">${escapeHtml(code)}</p>
+<p>Enter it on your <a href="${SITE_URL}/dashboard/settings">account settings</a> page to unlock full access for ${days}.</p>
+<p>This code expires ${escapeHtml(expiry)} if it isn't redeemed before then.</p>`,
+  });
+}

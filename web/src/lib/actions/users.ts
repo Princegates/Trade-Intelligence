@@ -1,5 +1,6 @@
 "use server";
 
+import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -8,6 +9,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { actorOf, logActivity } from "@/lib/activity-log";
 import { diffFields } from "@/lib/activity-log-view";
 import { getAccessPolicy } from "@/lib/access-policy";
+import { notifyUserOfAccessCode } from "@/lib/notifications";
 import type { Role } from "@/lib/supabase/types";
 
 export async function setUserRole(userId: string, role: Role) {
@@ -73,25 +75,44 @@ function generateCode(): string {
   return `${part()}-${part()}`;
 }
 
+// Same 1-365 bound actions/access.ts's dayCountSchema already applies to
+// the site-wide trialDays/codeExpiryDays settings — this is the same kind
+// of input (a day count an admin types in), just scoped to one code.
+const accessDaysSchema = z.coerce.number().int().min(1, "Must be at least 1 day.").max(365, "Must be 365 days or fewer.");
+
 export interface AccessCodeResult {
   error?: string;
   code?: string;
   expiresAt?: string;
+  accessDays?: number;
+  /** Whether notifyUserOfAccessCode actually sent the email — distinct from
+   * `error`, since a code can generate successfully with no email provider
+   * configured. The admin still sees the code either way to send manually. */
+  emailSent?: boolean;
 }
 
 /** Generates a one-time, per-person unlock code the admin sends the user
- * out of band (there is no in-app way to view someone else's code — see
- * 0011_trial_access.sql). Any earlier unredeemed code for the same person
- * is invalidated first, so only the most recently issued code ever works.
- * The code itself expires after the site's codeExpiryDays setting
- * (0013_access_code_expiry.sql) if it's never redeemed. */
-export async function generateAccessCode(userId: string): Promise<AccessCodeResult> {
+ * out of band (there is no in-app way to view someone else's code again —
+ * see 0011_trial_access.sql) and also emails directly to them, best-effort
+ * (see notifyUserOfAccessCode). Any earlier unredeemed code for the same
+ * person is invalidated first, so only the most recently issued code ever
+ * works. The code itself expires after the site's codeExpiryDays setting
+ * (0013_access_code_expiry.sql) if it's never redeemed — a separate thing
+ * from `accessDays`, which is how many days of *access* redeeming it grants
+ * this specific person, chosen by the admin per code rather than always
+ * using the site-wide trialDays default (0035_access_code_custom_days.sql). */
+export async function generateAccessCode(userId: string, accessDays: number): Promise<AccessCodeResult> {
   const admin = await requireAdmin();
+
+  const parsedDays = accessDaysSchema.safeParse(accessDays);
+  if (!parsedDays.success) return { error: parsedDays.error.issues[0]?.message ?? "Invalid number of days." };
 
   if (!isSupabaseConfigured()) return { error: "Demo mode: codes aren't persisted." };
 
   const supabase = await createClient();
   if (!supabase) return { error: "Could not connect to Supabase." };
+
+  const { data: target } = await supabase.from("profiles").select("email, full_name").eq("id", userId).maybeSingle();
 
   await supabase.from("access_codes").delete().eq("user_id", userId).is("redeemed_at", null);
 
@@ -101,7 +122,7 @@ export async function generateAccessCode(userId: string): Promise<AccessCodeResu
 
   const { error } = await supabase
     .from("access_codes")
-    .insert({ user_id: userId, code, created_by: admin.id, expires_at: expiresAt });
+    .insert({ user_id: userId, code, created_by: admin.id, expires_at: expiresAt, access_days: parsedDays.data });
   if (error) return { error: error.message };
 
   // The code itself stays out of the log — anyone reading the log could
@@ -110,11 +131,16 @@ export async function generateAccessCode(userId: string): Promise<AccessCodeResu
     action: "admin.access_code_generated",
     actor: actorOf(admin),
     target: { type: "user", id: userId },
-    details: { code_expires: expiresAt.slice(0, 10) },
+    details: { code_expires: expiresAt.slice(0, 10), access_days: parsedDays.data },
   });
 
   revalidatePath("/admin/users");
-  return { code, expiresAt };
+
+  const emailSent = target?.email
+    ? await notifyUserOfAccessCode(target.email, target.full_name, code, expiresAt, parsedDays.data)
+    : false;
+
+  return { code, expiresAt, accessDays: parsedDays.data, emailSent };
 }
 
 function generateTemporaryPassword(): string {
