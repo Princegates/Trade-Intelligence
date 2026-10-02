@@ -129,19 +129,42 @@ export function DashboardShell({ title, nav, user, children }: DashboardShellPro
 
   return (
     <div className="flex min-h-screen">
+      {/* Ambient glow behind the sidebar — without it, the sidebar's blur
+          has nothing but flat page background to blur (bg-card and
+          bg-background sit only ~2 percentage points apart in lightness in
+          every theme), so the "glass" panel reads as solid even though the
+          opacity/blur are genuinely applied. This gives it something real
+          to show through at all times, not just while hover-expanded or on
+          the mobile drawer (where it already overlaps visible content).
+          Negative z-index: paints above the page's own flat background,
+          below every normal-flow and positioned element. */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-y-0 left-0 -z-10 w-96 bg-gradient-to-b from-primary/60 via-primary/25 to-transparent blur-2xl"
+      />
+
       {/* This wrapper reserves the sidebar's docked width in the flex layout
           (16rem pinned, 4rem as a rail) — the aside itself is absolutely
           positioned inside it so hovering an unpinned rail can grow it over
           the main content instead of pushing/reflowing everything else on
           every mouse-in/out. */}
       <div className={cn("relative hidden shrink-0 transition-[width] duration-200 ease-in-out md:block", pinned ? "w-64" : "w-16")}>
+        {/* bg-card and bg-background sit only ~2 percentage points apart in
+            lightness in every theme (see themes.css), so when this panel is
+            docked next to plain page background — nothing patterned or
+            colored behind it to actually blur — opacity alone reads as
+            solid. The shadow (always on, not just while hover-expanded)
+            and border are what read as "a distinct floating layer" there;
+            the blur/opacity genuinely shows once something IS behind it
+            (hover-expanded over page content, or the mobile drawer over
+            the dimmed backdrop). */}
         <aside
           onMouseEnter={() => setHovering(true)}
           onMouseLeave={() => setHovering(false)}
           className={cn(
-            "absolute inset-y-0 left-0 z-20 flex flex-col border-r border-border bg-card/70 backdrop-blur-xl transition-[width] duration-150 ease-in-out",
+            "absolute inset-y-0 left-0 z-20 flex flex-col border-r border-border bg-card/60 shadow-lg backdrop-blur-xl backdrop-saturate-150 transition-[width] duration-150 ease-in-out",
             expanded ? "w-64" : "w-16",
-            !pinned && hovering && "shadow-xl"
+            !pinned && hovering && "shadow-2xl"
           )}
         >
           {renderSidebarContent(!expanded, true)}
