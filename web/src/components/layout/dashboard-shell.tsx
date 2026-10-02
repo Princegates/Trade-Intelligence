@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, type ReactNode } from "react";
-import { LayoutDashboard, LogOut, Menu, ShieldCheck, X } from "lucide-react";
+import { useLayoutEffect, useState, type ReactNode } from "react";
+import { LayoutDashboard, LogOut, Menu, PanelLeftClose, PanelLeftOpen, ShieldCheck, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +36,8 @@ interface DashboardShellProps {
   children: ReactNode;
 }
 
+const SIDEBAR_COLLAPSED_KEY = "sidebar-collapsed";
+
 function initials(name: string | null, email: string) {
   const source = name?.trim() || email;
   return source
@@ -49,50 +51,92 @@ function initials(name: string | null, email: string) {
 export function DashboardShell({ title, nav, user, children }: DashboardShellProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  // Starts expanded, matching what the server renders — the stored
+  // preference isn't available during SSR, so it's applied as a one-time
+  // hydration correction below, same trick ModeProvider uses for the
+  // signed-in theme/mode choice.
+  const [collapsed, setCollapsed] = useState(false);
   const { connected } = useSignalsRealtime();
   const inAdminArea = pathname.startsWith("/admin");
   const fullAccess = hasFullAccess(user);
   const remaining = daysRemaining(user);
 
-  const SidebarContent = (
-    <>
-      <Link href="/" className="px-4 py-5">
-        <BrandMark />
-      </Link>
-      <nav className="flex flex-1 flex-col gap-1 px-3">
-        {nav.map((item) => {
-          const active = pathname === item.href;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => setMobileOpen(false)}
-              className={cn(
-                "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-              )}
-            >
-              {item.icon}
-              {item.label}
-            </Link>
-          );
-        })}
-      </nav>
-    </>
-  );
+  useLayoutEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCollapsed(window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true");
+  }, []);
+
+  function toggleCollapsed() {
+    const next = !collapsed;
+    setCollapsed(next);
+    window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
+  }
+
+  function renderSidebarContent(rail: boolean, showCollapseToggle: boolean) {
+    return (
+      <>
+        <Link href="/" className={cn("flex items-center px-4 py-5", rail && "justify-center px-2")}>
+          <BrandMark compact={rail} />
+        </Link>
+        <nav className="flex flex-1 flex-col gap-1 px-3">
+          {nav.map((item) => {
+            const active = pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setMobileOpen(false)}
+                title={rail ? item.label : undefined}
+                className={cn(
+                  "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  rail && "justify-center px-2",
+                  active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                )}
+              >
+                {item.icon}
+                {!rail && item.label}
+              </Link>
+            );
+          })}
+        </nav>
+        {showCollapseToggle && (
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            title={rail ? "Expand sidebar" : "Collapse sidebar"}
+            aria-label={rail ? "Expand sidebar" : "Collapse sidebar"}
+            className={cn(
+              "mx-3 mb-3 flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+              rail && "justify-center px-2"
+            )}
+          >
+            {rail ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+            {!rail && "Collapse"}
+          </button>
+        )}
+      </>
+    );
+  }
 
   return (
     <div className="flex min-h-screen">
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-card md:flex">{SidebarContent}</aside>
+      <aside
+        className={cn(
+          "hidden shrink-0 flex-col border-r border-border bg-card/70 backdrop-blur-xl transition-[width] duration-200 ease-in-out md:flex",
+          collapsed ? "w-16" : "w-64"
+        )}
+      >
+        {renderSidebarContent(collapsed, true)}
+      </aside>
 
       {mobileOpen && (
         <div className="fixed inset-0 z-50 flex md:hidden">
           <div className="absolute inset-0 bg-black/50" onClick={() => setMobileOpen(false)} />
-          <aside className="relative z-10 flex w-64 flex-col bg-card">
+          <aside className="relative z-10 flex w-64 flex-col bg-card/80 backdrop-blur-xl">
             <button className="absolute right-3 top-4 p-1" onClick={() => setMobileOpen(false)} aria-label="Close menu">
               <X className="size-5" />
             </button>
-            {SidebarContent}
+            {renderSidebarContent(false, false)}
           </aside>
         </div>
       )}
