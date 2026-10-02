@@ -32,6 +32,8 @@ export const ACTIVITY_ACTIONS = {
   "admin.user_approved": "Approved a user",
   "admin.user_approval_revoked": "Revoked a user's approval",
   "admin.user_role_changed": "Changed a user's role",
+  "admin.user_password_reset": "Reset a user's password",
+  "admin.user_deleted": "Deleted a user",
   "admin.access_code_generated": "Generated an access code",
   "admin.lead_marked_handled": "Marked a lead handled",
   "admin.lead_reopened": "Reopened a lead",

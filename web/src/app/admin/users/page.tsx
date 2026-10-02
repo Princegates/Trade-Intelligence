@@ -5,8 +5,11 @@ import { Badge } from "@/components/ui/badge";
 import { RoleSelect } from "@/components/admin/role-select";
 import { ApprovalToggle } from "@/components/admin/approval-toggle";
 import { AccessCodeButton } from "@/components/admin/access-code-button";
+import { ResetPasswordButton } from "@/components/admin/reset-password-button";
+import { DeleteUserButton } from "@/components/admin/delete-user-button";
 import { listUsers } from "@/lib/users";
 import { hasFullAccess, daysRemaining } from "@/lib/access";
+import { requireAdmin } from "@/lib/auth";
 
 function initials(name: string | null, email: string) {
   const source = name?.trim() || email;
@@ -19,7 +22,7 @@ function initials(name: string | null, email: string) {
 }
 
 export default async function AdminUsersPage() {
-  const users = await listUsers();
+  const [admin, users] = await Promise.all([requireAdmin(), listUsers()]);
 
   return (
     <Card>
@@ -37,6 +40,7 @@ export default async function AdminUsersPage() {
               <TableHead>Access</TableHead>
               <TableHead>Trial</TableHead>
               <TableHead>Role</TableHead>
+              <TableHead>Account</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -72,6 +76,12 @@ export default async function AdminUsersPage() {
                   </TableCell>
                   <TableCell>
                     <RoleSelect userId={u.id} role={u.role} />
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <ResetPasswordButton userId={u.id} name={u.fullName || u.email} />
+                      <DeleteUserButton userId={u.id} name={u.fullName || u.email} isSelf={u.id === admin.id} />
+                    </div>
                   </TableCell>
                 </TableRow>
               );

@@ -8,10 +8,19 @@ import { updatePassword, type ProfileFormState } from "@/lib/actions/profile";
 
 const initialState: ProfileFormState = {};
 
-export function PasswordForm() {
+type PasswordAction = (prev: ProfileFormState, formData: FormData) => Promise<ProfileFormState>;
+
+/** `action` defaults to the normal self-service change (updatePassword) —
+ * /change-password passes changeForcedPassword instead, which redirects to
+ * /dashboard on success rather than returning {success:true}, so this
+ * component never needs to know which flow it's in beyond that prop. */
+export function PasswordForm({ action = updatePassword, currentPasswordLabel = "Current password" }: {
+  action?: PasswordAction;
+  currentPasswordLabel?: string;
+}) {
   const formRef = useRef<HTMLFormElement>(null);
   const [state, formAction, pending] = useActionState(async (prev: ProfileFormState, formData: FormData) => {
-    const result = await updatePassword(prev, formData);
+    const result = await action(prev, formData);
     if (result.success) formRef.current?.reset();
     return result;
   }, initialState);
@@ -19,7 +28,7 @@ export function PasswordForm() {
   return (
     <form ref={formRef} action={formAction} className="space-y-4">
       <div className="space-y-2">
-        <Label htmlFor="currentPassword">Current password</Label>
+        <Label htmlFor="currentPassword">{currentPasswordLabel}</Label>
         <Input id="currentPassword" name="currentPassword" type="password" autoComplete="current-password" required />
       </div>
       <div className="space-y-2">

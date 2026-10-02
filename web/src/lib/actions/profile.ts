@@ -1,8 +1,9 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth";
+import { getSessionUser, requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { actorOf, logActivity } from "@/lib/activity-log";
@@ -98,4 +99,57 @@ export async function updatePassword(_prevState: ProfileFormState, formData: For
 
   logActivity({ action: "account.password_changed", actor: actorOf(user) });
   return { success: true };
+}
+
+/** The forced-change counterpart to updatePassword above, for
+ * /change-password only. Deliberately calls getSessionUser() rather than
+ * requireUser() — requireUser() redirects anyone with must_change_password
+ * set straight back to /change-password, so calling it from the action
+ * this exact page's form submits to would loop (same reasoning /pending's
+ * own page already documents for the same reason). "Current password"
+ * here is the temporary one the admin issued; re-authenticating with it
+ * first is the same safety property updatePassword's own re-auth gives —
+ * a session alone (even one newly started with the temp password)
+ * shouldn't be enough on its own if the field is left blank or guessed. */
+export async function changeForcedPassword(_prevState: ProfileFormState, formData: FormData): Promise<ProfileFormState> {
+  const user = await getSessionUser();
+  if (!user) redirect("/login");
+  if (!user.mustChangePassword) redirect("/dashboard"); // nothing forced here anymore
+
+  const parsed = passwordSchema.safeParse({
+    currentPassword: formData.get("currentPassword"),
+    newPassword: formData.get("newPassword"),
+    confirmPassword: formData.get("confirmPassword"),
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input." };
+
+  if (!isSupabaseConfigured()) return { error: DEMO_MESSAGE };
+
+  const supabase = await createClient();
+  if (!supabase) return { error: "Could not connect to Supabase." };
+
+  const { error: reauthError } = await supabase.auth.signInWithPassword({
+    email: user.email,
+    password: parsed.data.currentPassword,
+  });
+  if (reauthError) {
+    logActivity({
+      action: "account.password_changed",
+      actor: actorOf(user),
+      outcome: "failure",
+      details: { reason: "Temporary password was incorrect" },
+    });
+    return { error: "That temporary password is incorrect." };
+  }
+
+  const { error } = await supabase.auth.updateUser({ password: parsed.data.newPassword });
+  if (error) {
+    logActivity({ action: "account.password_changed", actor: actorOf(user), outcome: "failure", details: { reason: error.message } });
+    return { error: error.message };
+  }
+
+  await supabase.from("profiles").update({ must_change_password: false }).eq("id", user.id);
+
+  logActivity({ action: "account.password_changed", actor: actorOf(user), details: { forced: true } });
+  redirect("/dashboard");
 }

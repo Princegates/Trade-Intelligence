@@ -14,6 +14,7 @@ export default async function PendingPage() {
 
   const user = await getSessionUser();
   if (!user) redirect("/login");
+  if (user.mustChangePassword) redirect("/change-password");
   if (user.approved || user.role === "admin") redirect("/dashboard");
 
   return (

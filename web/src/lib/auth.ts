@@ -15,6 +15,11 @@ export interface SessionUser {
    * null or past means basic view (latest signal only). Ignored for admins,
    * who always have full access — see src/lib/access.ts#hasFullAccess. */
   fullAccessUntil: string | null;
+  /** Set by an admin password reset; forces a stop at /change-password
+   * before the dashboard/admin area is reachable, regardless of role. See
+   * requireUser()/requireAdmin() below and src/lib/actions/profile.ts#
+   * changeForcedPassword. */
+  mustChangePassword: boolean;
 }
 
 /** Current signed-in user + profile role, or null. In demo mode (no
@@ -34,7 +39,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name, role, approved, full_access_until")
+    .select("full_name, role, approved, full_access_until, must_change_password")
     .eq("id", user.id)
     .single();
 
@@ -47,29 +52,37 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     // than admit by default if the signup trigger somehow hasn't run yet.
     approved: profile?.approved ?? false,
     fullAccessUntil: profile?.full_access_until ?? null,
+    mustChangePassword: profile?.must_change_password ?? false,
   };
 }
 
 /** Require a signed-in, admin-approved user; redirects a signed-out visitor
- * to /login and an unapproved one to /pending. Admins always pass,
- * regardless of their own `approved` flag. In demo mode, returns a mock
- * signed-in user so /dashboard is browsable without setup. */
+ * to /login, an unapproved one to /pending, and one an admin has reset the
+ * password for to /change-password — checked before the approval gate
+ * since a forced change applies regardless of role or approval state.
+ * Admins otherwise always pass, regardless of their own `approved` flag.
+ * In demo mode, returns a mock signed-in user so /dashboard is browsable
+ * without setup. */
 export async function requireUser(): Promise<SessionUser> {
   if (!isSupabaseConfigured()) return DEMO_USER;
 
   const user = await getSessionUser();
   if (!user) redirect("/login");
+  if (user.mustChangePassword) redirect("/change-password");
   if (!user.approved && user.role !== "admin") redirect("/pending");
   return user;
 }
 
-/** Require a signed-in admin; redirects non-admins to /dashboard and signed-out
- * visitors to /login. In demo mode, returns a mock admin so /admin is browsable. */
+/** Require a signed-in admin; redirects non-admins to /dashboard, signed-out
+ * visitors to /login, and one an admin has reset the password for to
+ * /change-password (an admin isn't exempt from their own reset). In demo
+ * mode, returns a mock admin so /admin is browsable. */
 export async function requireAdmin(): Promise<SessionUser> {
   if (!isSupabaseConfigured()) return DEMO_ADMIN;
 
   const user = await getSessionUser();
   if (!user) redirect("/login");
+  if (user.mustChangePassword) redirect("/change-password");
   if (user.role !== "admin") redirect("/dashboard");
   return user;
 }

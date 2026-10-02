@@ -20,6 +20,7 @@ export const DEMO_USER: SessionUser = {
   approved: true,
   // Mid-trial in the demo, same as a freshly-approved real account would be.
   fullAccessUntil: new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString(),
+  mustChangePassword: false,
 };
 
 export const DEMO_ADMIN: SessionUser = {
@@ -29,6 +30,7 @@ export const DEMO_ADMIN: SessionUser = {
   role: "admin",
   approved: true,
   fullAccessUntil: null,
+  mustChangePassword: false,
 };
 
 export interface DemoSignal {

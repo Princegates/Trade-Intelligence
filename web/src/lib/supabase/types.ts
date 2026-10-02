@@ -47,6 +47,7 @@ export interface Database {
           approved: boolean;
           full_access_until: string | null;
           created_at: string;
+          must_change_password: boolean;
         };
         Insert: {
           id: string;
@@ -56,6 +57,7 @@ export interface Database {
           approved?: boolean;
           full_access_until?: string | null;
           created_at?: string;
+          must_change_password?: boolean;
         };
         Update: {
           id?: string;
@@ -65,6 +67,7 @@ export interface Database {
           approved?: boolean;
           full_access_until?: string | null;
           created_at?: string;
+          must_change_password?: boolean;
         };
         Relationships: [];
       };
