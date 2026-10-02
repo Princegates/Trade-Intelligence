@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLayoutEffect, useState, type ReactNode } from "react";
-import { LayoutDashboard, LogOut, Menu, PanelLeftClose, PanelLeftOpen, ShieldCheck, X } from "lucide-react";
+import { LayoutDashboard, LogOut, Menu, Pin, PinOff, ShieldCheck, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -36,7 +36,7 @@ interface DashboardShellProps {
   children: ReactNode;
 }
 
-const SIDEBAR_COLLAPSED_KEY = "sidebar-collapsed";
+const SIDEBAR_PINNED_KEY = "sidebar-pinned";
 
 function initials(name: string | null, email: string) {
   const source = name?.trim() || email;
@@ -51,11 +51,16 @@ function initials(name: string | null, email: string) {
 export function DashboardShell({ title, nav, user, children }: DashboardShellProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
-  // Starts expanded, matching what the server renders — the stored
-  // preference isn't available during SSR, so it's applied as a one-time
-  // hydration correction below, same trick ModeProvider uses for the
-  // signed-in theme/mode choice.
-  const [collapsed, setCollapsed] = useState(false);
+  // Starts pinned (expanded), matching what the server renders — the
+  // stored preference isn't available during SSR, so it's applied as a
+  // one-time hydration correction below, same trick ModeProvider uses for
+  // the signed-in theme/mode choice.
+  const [pinned, setPinned] = useState(true);
+  // Purely transient (never persisted) — true while the pointer is over an
+  // unpinned sidebar, which is what actually drives the hover-to-expand
+  // rail. Has no effect while pinned.
+  const [hovering, setHovering] = useState(false);
+  const expanded = pinned || hovering;
   const { connected } = useSignalsRealtime();
   const inAdminArea = pathname.startsWith("/admin");
   const fullAccess = hasFullAccess(user);
@@ -63,16 +68,16 @@ export function DashboardShell({ title, nav, user, children }: DashboardShellPro
 
   useLayoutEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setCollapsed(window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true");
+    setPinned(window.localStorage.getItem(SIDEBAR_PINNED_KEY) !== "false");
   }, []);
 
-  function toggleCollapsed() {
-    const next = !collapsed;
-    setCollapsed(next);
-    window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
+  function togglePinned() {
+    const next = !pinned;
+    setPinned(next);
+    window.localStorage.setItem(SIDEBAR_PINNED_KEY, String(next));
   }
 
-  function renderSidebarContent(rail: boolean, showCollapseToggle: boolean) {
+  function renderSidebarContent(rail: boolean, showPinToggle: boolean) {
     return (
       <>
         <Link href="/" className={cn("flex items-center px-4 py-5", rail && "justify-center px-2")}>
@@ -99,19 +104,19 @@ export function DashboardShell({ title, nav, user, children }: DashboardShellPro
             );
           })}
         </nav>
-        {showCollapseToggle && (
+        {showPinToggle && (
           <button
             type="button"
-            onClick={toggleCollapsed}
-            title={rail ? "Expand sidebar" : "Collapse sidebar"}
-            aria-label={rail ? "Expand sidebar" : "Collapse sidebar"}
+            onClick={togglePinned}
+            title={pinned ? "Unpin sidebar (collapses to icons, expands on hover)" : "Pin sidebar open"}
+            aria-label={pinned ? "Unpin sidebar" : "Pin sidebar"}
             className={cn(
               "mx-3 mb-3 flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
               rail && "justify-center px-2"
             )}
           >
-            {rail ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
-            {!rail && "Collapse"}
+            {pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
+            {!rail && (pinned ? "Unpin" : "Pin")}
           </button>
         )}
       </>
@@ -120,14 +125,24 @@ export function DashboardShell({ title, nav, user, children }: DashboardShellPro
 
   return (
     <div className="flex min-h-screen">
-      <aside
-        className={cn(
-          "hidden shrink-0 flex-col border-r border-border bg-card/70 backdrop-blur-xl transition-[width] duration-200 ease-in-out md:flex",
-          collapsed ? "w-16" : "w-64"
-        )}
-      >
-        {renderSidebarContent(collapsed, true)}
-      </aside>
+      {/* This wrapper reserves the sidebar's docked width in the flex layout
+          (16rem pinned, 4rem as a rail) — the aside itself is absolutely
+          positioned inside it so hovering an unpinned rail can grow it over
+          the main content instead of pushing/reflowing everything else on
+          every mouse-in/out. */}
+      <div className={cn("relative hidden shrink-0 transition-[width] duration-200 ease-in-out md:block", pinned ? "w-64" : "w-16")}>
+        <aside
+          onMouseEnter={() => setHovering(true)}
+          onMouseLeave={() => setHovering(false)}
+          className={cn(
+            "absolute inset-y-0 left-0 z-20 flex flex-col border-r border-border bg-card/70 backdrop-blur-xl transition-[width] duration-150 ease-in-out",
+            expanded ? "w-64" : "w-16",
+            !pinned && hovering && "shadow-xl"
+          )}
+        >
+          {renderSidebarContent(!expanded, true)}
+        </aside>
+      </div>
 
       {mobileOpen && (
         <div className="fixed inset-0 z-50 flex md:hidden">
