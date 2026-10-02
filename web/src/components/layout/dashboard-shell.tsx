@@ -80,9 +80,28 @@ export function DashboardShell({ title, nav, user, children }: DashboardShellPro
   function renderSidebarContent(rail: boolean, showPinToggle: boolean) {
     return (
       <>
-        <Link href="/" className={cn("flex items-center px-4 py-5", rail && "justify-center px-2")}>
-          <BrandMark compact={rail} />
-        </Link>
+        {/* Pin toggle sits right next to the logo, not at the bottom of the
+            nav list — a flex-1 nav column leaves a lot of empty space above
+            a bottom-anchored button on pages with few nav items, which made
+            it easy to miss entirely. Keeping it in the header means it's
+            always the first thing visible, in both rail and expanded
+            widths. */}
+        <div className={cn("flex items-center gap-1 px-4 py-5", rail && "flex-col gap-2 px-2")}>
+          <Link href="/" className="flex min-w-0 flex-1 items-center">
+            <BrandMark compact={rail} />
+          </Link>
+          {showPinToggle && (
+            <button
+              type="button"
+              onClick={togglePinned}
+              title={pinned ? "Unpin sidebar (collapses to icons, expands on hover)" : "Pin sidebar open"}
+              aria-label={pinned ? "Unpin sidebar" : "Pin sidebar"}
+              className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            >
+              {pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
+            </button>
+          )}
+        </div>
         <nav className="flex flex-1 flex-col gap-1 px-3">
           {nav.map((item) => {
             const active = pathname === item.href;
@@ -104,21 +123,6 @@ export function DashboardShell({ title, nav, user, children }: DashboardShellPro
             );
           })}
         </nav>
-        {showPinToggle && (
-          <button
-            type="button"
-            onClick={togglePinned}
-            title={pinned ? "Unpin sidebar (collapses to icons, expands on hover)" : "Pin sidebar open"}
-            aria-label={pinned ? "Unpin sidebar" : "Pin sidebar"}
-            className={cn(
-              "mx-3 mb-3 flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
-              rail && "justify-center px-2"
-            )}
-          >
-            {pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
-            {!rail && (pinned ? "Unpin" : "Pin")}
-          </button>
-        )}
       </>
     );
   }
