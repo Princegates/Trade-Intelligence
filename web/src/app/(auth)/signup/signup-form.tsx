@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useActionState } from "react";
+import { MailCheck } from "lucide-react";
 import { signup, type AuthFormState } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,8 +11,45 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 
 const initialState: AuthFormState = {};
 
+/** A successful signup that needs email confirmation (data.session is null
+ * — the Supabase-project default) used to leave the form sitting there with
+ * a one-line gray "check your email" note easy to miss, reading as "nothing
+ * happened" rather than "go check your inbox." Replacing the whole card
+ * with a dedicated state — same shape as /pending's own "waiting on
+ * something outside this page" screen — makes that the only thing left to
+ * read, not one more line competing with the form still above it. */
+function CheckEmailCard({ email }: { email?: string }) {
+  return (
+    <Card>
+      <CardHeader>
+        <MailCheck className="size-8 text-primary" />
+        <CardTitle className="mt-2">Check your email</CardTitle>
+        <CardDescription>
+          We sent a confirmation link{email ? <> to <span className="text-foreground">{email}</span></> : ""}.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Click the link in that email to activate your account, then come back and log in. No account exists
+          to sign in with until it&apos;s confirmed — nothing else to do here in the meantime.
+        </p>
+        <Button asChild className="w-full">
+          <Link href="/login">Go to login</Link>
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function SignupForm() {
   const [state, formAction, pending] = useActionState(signup, initialState);
+
+  // Keyed on `email`, not `info` — demo mode (Supabase unconfigured) also
+  // returns an `info` message, but no email was ever sent for it to be
+  // about, and the form itself is what explains that case (see the info
+  // line below, inside the form). Only the real email-confirmation success
+  // path sets `email`.
+  if (state.email) return <CheckEmailCard email={state.email} />;
 
   return (
     <Card>

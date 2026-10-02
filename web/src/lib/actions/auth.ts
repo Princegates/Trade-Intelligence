@@ -10,6 +10,11 @@ import { logActivity } from "@/lib/activity-log";
 export interface AuthFormState {
   error?: string;
   info?: string;
+  /** Set alongside `info` on a successful signup that needs email
+   * confirmation — the form echoes it back in the "check your email"
+   * state so the user sees which address to check, same as /pending
+   * shows the signed-in user's own email. */
+  email?: string;
 }
 
 const credentialsSchema = z.object({
@@ -107,7 +112,7 @@ export async function signup(_prevState: AuthFormState, formData: FormData): Pro
   // returns a session and the user is signed in immediately.
   if (data.session) redirect("/dashboard");
 
-  return { info: "Check your email to confirm your account before signing in." };
+  return { info: "Check your email to confirm your account before signing in.", email: parsed.data.email };
 }
 
 export async function signOut() {
