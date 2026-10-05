@@ -16,6 +16,16 @@ permissions:
   # Read-only: nothing is written back to the repository any more.
   contents: read
 
+# Fires every 5 minutes, but queued runs have been observed waiting 10-15
+# minutes for a runner before — without this, a stale queued run just sits
+# there competing for a slot until GitHub cancels it, instead of yielding to
+# whichever trigger is actually newest. Safe to cancel in progress: each run
+# only fetches current market data and computes signals from it, so a
+# superseded run's output would already be stale by the time it finished.
+concurrency:
+  group: poll
+  cancel-in-progress: true
+
 jobs:
   poll:
     runs-on: ubuntu-latest
