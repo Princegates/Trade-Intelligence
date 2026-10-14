@@ -5,6 +5,7 @@ import { getSiteAppearance } from "@/lib/site-appearance";
 import { SITE_NAME, SITE_DESCRIPTION, SITE_URL } from "@/lib/site";
 import { ModeProvider } from "@/components/mode/mode-provider";
 import { ModeScript } from "@/components/mode/mode-script";
+import { CookieConsentBanner } from "@/components/cookie-consent-banner";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -69,6 +70,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       </head>
       <body className="min-h-full flex flex-col">
         <ModeProvider defaultMode={defaultMode}>{children}</ModeProvider>
+        <CookieConsentBanner />
         <Analytics />
       </body>
     </html>

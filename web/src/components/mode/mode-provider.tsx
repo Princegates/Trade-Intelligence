@@ -1,7 +1,8 @@
 "use client";
 
-import { createContext, useContext, useLayoutEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useState, type ReactNode } from "react";
 import { MODE_COOKIE, isMode, type Mode } from "@/lib/themes";
+import { hasNonEssentialConsent, onConsentChange } from "@/lib/cookie-consent";
 
 interface ModeContextValue {
   mode: Mode;
@@ -35,9 +36,24 @@ export function ModeProvider({ defaultMode, children }: { defaultMode: Mode; chi
 
   const applyMode = (next: Mode) => {
     setModeState(next);
-    writeCookie(MODE_COOKIE, next);
+    // ti-mode is the one non-essential cookie this app sets (see
+    // /cookie-policy) — only persisted once the visitor has accepted it in
+    // CookieConsentBanner. Declined or not-yet-answered still applies the
+    // mode for this render/session, it just won't survive a reload.
+    if (hasNonEssentialConsent()) writeCookie(MODE_COOKIE, next);
     document.documentElement.setAttribute("data-mode", next);
   };
+
+  // If the visitor accepts cookies *after* already picking a mode this
+  // session, persist whatever's currently applied right then — otherwise
+  // their choice would silently not survive the reload they'd expect it
+  // to. Only when it actually differs from the server-rendered default,
+  // though — accepting the banner without ever touching ModeToggle
+  // shouldn't itself write a cookie recording "the default," since that's
+  // already what a visitor with no cookie at all sees anyway.
+  useEffect(() => onConsentChange(() => {
+    if (hasNonEssentialConsent() && mode !== defaultMode) writeCookie(MODE_COOKIE, mode);
+  }), [mode, defaultMode]);
 
   useLayoutEffect(() => {
     const stored = readCookie(MODE_COOKIE);

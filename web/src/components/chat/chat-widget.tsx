@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { ChatMascot } from "@/components/chat/chat-mascot";
 import { AdminWhatsAppLink } from "@/components/account/admin-whatsapp-link";
 import { sendChatMessage } from "@/lib/actions/chat";
+import { hasNonEssentialConsent } from "@/lib/cookie-consent";
 import type { ChatTurn } from "@/lib/gemini-chat";
 
 const STORAGE_KEY = "ti-chat-fab-pos";
@@ -134,7 +135,10 @@ export function ChatWidget({ fullAccess }: { fullAccess: boolean }) {
     if (drag?.moved) {
       // A real drag ended — save the new spot, don't toggle the panel.
       setPos((p) => {
-        if (p) {
+        // Declined/not-yet-answered still lets the drag apply for this
+        // session, it just won't be remembered next visit — see
+        // /cookie-policy.
+        if (p && hasNonEssentialConsent()) {
           try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
           } catch {

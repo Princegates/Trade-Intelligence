@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 // actually needs already live in the unguarded sibling modules.
 import { affectedInstruments, isSameUtcDay, isWithinWindow, sortByTime, type CalendarEvent } from "@/lib/calendar-view";
 import { ASSET_NAMES } from "@/lib/signal-view";
+import { hasNonEssentialConsent } from "@/lib/cookie-consent";
 
 const STORAGE_KEY = "ti-econ-calendar-collapsed";
 
@@ -121,10 +122,15 @@ export function EventCalendar({ events, now }: { events: CalendarEvent[]; now: n
   function toggle() {
     setCollapsed((prev) => {
       const next = !prev;
-      try {
-        localStorage.setItem(STORAGE_KEY, String(next));
-      } catch {
-        // Ignore — the preference just won't persist across reloads.
+      // Declined/not-yet-answered still collapses/expands for this
+      // session, it just won't be remembered next visit — see
+      // /cookie-policy.
+      if (hasNonEssentialConsent()) {
+        try {
+          localStorage.setItem(STORAGE_KEY, String(next));
+        } catch {
+          // Ignore — the preference just won't persist across reloads.
+        }
       }
       return next;
     });

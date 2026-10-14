@@ -6,6 +6,7 @@ import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, Dialog
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CONTRACTS, HIGH_RISK_PCT, LOT_STEP, lotOutcome } from "@/lib/position-size";
+import { hasNonEssentialConsent } from "@/lib/cookie-consent";
 
 // Balance and lot size are remembered in this browser only, as a convenience.
 const STORAGE_KEY = "position-size:v2";
@@ -30,6 +31,9 @@ function readSaved(): { balance: string; lots: string } {
 }
 
 function save(balance: string, lots: string) {
+  // Declined/not-yet-answered still lets the calculator work for this
+  // session, it just won't be remembered next visit — see /cookie-policy.
+  if (!hasNonEssentialConsent()) return;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ balance, lots }));
   } catch {

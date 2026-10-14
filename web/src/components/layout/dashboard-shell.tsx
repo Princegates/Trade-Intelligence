@@ -21,6 +21,7 @@ import { useSignalsRealtime } from "@/lib/use-signals-realtime";
 import { ModeToggle } from "@/components/mode/mode-toggle";
 import { hasFullAccess, daysRemaining } from "@/lib/access";
 import { ChatWidget } from "@/components/chat/chat-widget";
+import { hasNonEssentialConsent } from "@/lib/cookie-consent";
 import type { Role } from "@/lib/supabase/types";
 
 export interface NavItem {
@@ -81,7 +82,9 @@ export function DashboardShell({ title, nav, user, children }: DashboardShellPro
   function togglePinned() {
     const next = !pinned;
     setPinned(next);
-    window.localStorage.setItem(SIDEBAR_PINNED_KEY, String(next));
+    // Declined/not-yet-answered still applies the choice for this session,
+    // it just won't be remembered next visit — see /cookie-policy.
+    if (hasNonEssentialConsent()) window.localStorage.setItem(SIDEBAR_PINNED_KEY, String(next));
   }
 
   function renderSidebarContent(rail: boolean, showPinToggle: boolean) {
